@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+message: If you use this software, please cite it using these metadata.
+title: Open Data Framework
+authors:
+  - family-names: Pavlov
+    given-names: Mykyta
+    email: mykytapavlov@users.noreply.github.com
+  - family-names: Polovnikov
+    given-names: Illia
+    email: polovnikov.illia@gmail.com
+version: 0.0.1
+license: MIT
+repository-code: "https://github.com/opendataframework/opendataframework"

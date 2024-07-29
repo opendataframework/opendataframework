@@ -1,0 +1,29 @@
+repos:
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v2.3.0
+  hooks:
+    - id: check-yaml
+      exclude: mkdocs.yml
+    - id: end-of-file-fixer
+    - id: trailing-whitespace
+    - id: check-json
+
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.5.1
+  hooks:
+    - id: ruff
+      args: [--fix, --exit-non-zero-on-fix, --show-fixes]
+    - id: ruff-format
+
+- repo: https://github.com/econchick/interrogate
+  rev: 1.7.0
+  hooks:
+    - id: interrogate
+      args: [--fail-under=100, --verbose]
+
+- repo: https://github.com/PyCQA/bandit
+  rev: 1.7.9
+  hooks:
+    - id: bandit
+      args: ["-c", "pyproject.toml"]
+      additional_dependencies: ["bandit[toml]"]
