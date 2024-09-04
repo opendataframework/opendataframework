@@ -1,0 +1,15 @@
+version: "3.9"
+services:
+  project_name_texlive:
+    profiles: ["utility"]
+    image: project_name:texlive
+    container_name: project_name_texlive
+    hostname: project_name-texlive
+    tty: true
+    build:
+      context: ./utility/texlive
+      args:
+        texlive_version: "latest"
+    working_dir: /usr/src/app
+    networks:
+      - project_name_default

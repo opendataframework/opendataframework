@@ -1,0 +1,15 @@
+version: "3.9"
+services:
+  project_name_superset:
+    profiles: ["analytics"]
+    image: project_name:superset
+    container_name: project_name_superset
+    hostname: project_name-superset
+    build:
+      context: ./analytics/superset
+    ports:
+      - 8088:8088
+    networks:
+      - project_name_default
+    env_file:
+      - ./analytics/superset/.env

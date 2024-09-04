@@ -5,3 +5,5 @@ __pycache__
 .coverage
 .DS_Store
 todo.md
+/temp
+/data

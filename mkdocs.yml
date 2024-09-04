@@ -22,6 +22,17 @@ theme:
       toggle:
         icon: material/toggle-switch-off-outline
         name: Switch to light mode
+  logo: images/logo.svg
+  favicon: images/logo.svg
+
+plugins:
+  - termynal:
+      title: "shell"
+      buttons: "macos"
+      prompt_literal_start:
+        - "$"
+        - ">"
+        - ">>>"
 
 extra:
   social:

@@ -1,0 +1,23 @@
+{
+    "name": "project_name",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": ".",
+        "args": {
+            "PYTHON_VERSION": "3.12.4"
+        }
+    },
+    "customizations": {
+        "vscode": {
+            "settings": {},
+            "extensions": [
+                "ms-python.python"
+            ]
+        }
+    },
+    "workspaceMount": "source=${localWorkspaceFolder},target=/project_name,type=bind",
+    "workspaceFolder": "/project_name",
+    "mounts": [
+        "source=${localWorkspaceFolder}/../../../data,target=/project_name/data,type=bind,consistency=cached"
+    ]
+}

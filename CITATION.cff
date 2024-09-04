@@ -8,6 +8,6 @@ authors:
   - family-names: Polovnikov
     given-names: Illia
     email: polovnikov.illia@gmail.com
-version: 0.0.1
+version: 0.0.2
 license: MIT
 repository-code: "https://github.com/opendataframework/opendataframework"

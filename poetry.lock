@@ -979,6 +979,24 @@ files = [
 ]
 
 [[package]]
+name = "termynal"
+version = "0.12.1"
+description = "A lightweight and modern animated terminal window"
+category = "dev"
+optional = false
+python-versions = ">=3.8.1,<4.0.0"
+files = [
+    {file = "termynal-0.12.1-py3-none-any.whl", hash = "sha256:8420fc7ddc9daa5733c5aa370e7d2567a0e9299caa6e47fe8b5efd228fdffc47"},
+    {file = "termynal-0.12.1.tar.gz", hash = "sha256:48842b5066eee25d5efef570b776bbc7e2875fca547c38c39e73fec1bb562fa9"},
+]
+
+[package.dependencies]
+markdown = "*"
+
+[package.extras]
+mkdocs = ["mkdocs (>=1.4,<2.0)"]
+
+[[package]]
 name = "typer"
 version = "0.12.3"
 description = "Typer, build great CLIs. Easy to code. Based on Python type hints."
@@ -1095,4 +1113,4 @@ watchmedo = ["PyYAML (>=3.10)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "25894e7fd511a030df00df4a9ab48d406cc9600e42668c5cfc2c849ba9f6c3f0"
+content-hash = "7526cf498d69f236be33f8891f6578594c5cfbed449bccaafaf3e1fcddbb09cc"

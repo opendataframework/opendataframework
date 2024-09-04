@@ -1,0 +1,16 @@
+version: "3.9"
+services:
+  project_name_postgres:
+    profiles: ["storage"]
+    image: project_name:postgres
+    container_name: project_name_postgres
+    hostname: project_name-postgres
+    build:
+      context: ./
+      dockerfile: storage/postgres/Dockerfile
+    ports:
+      - 5432:5432
+    networks:
+      - project_name_default
+    env_file:
+      - storage/postgres/.env

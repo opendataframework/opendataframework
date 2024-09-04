@@ -1,0 +1,43 @@
+{
+    "name": "project_name",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": ".",
+        "args": {
+            "R_VERSION": "4.4.1",
+            "CRAN_MIRROR": "https://cran.rstudio.com/"
+        }
+    },
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "r.rpath.linux": "/usr/local/bin/R",
+                "r.rterm.linux": "/usr/local/bin/radian",
+                "files.associations": {
+                    "*.Rmd": "rmd"
+                },
+                "r.alwaysUseActiveTerminal": true,
+                "r.bracketedPaste": true,
+                "r.sessionWatcher": true,
+                "r.plot.useHttpgd": true,
+                "r.lsp.diagnostics": false
+            },
+            "extensions": [
+                "rdebugger.r-debugger",
+                "reditorsupport.r",
+                "quarto.quarto",
+                "redhat.vscode-yaml",
+                "ms-azuretools.vscode-docker",
+                "ms-vscode-remote.remote-containers",
+                "ms-python.python",
+                "ms-toolsai.jupyter"
+            ]
+        }
+    },
+    "postStartCommand": "radian",
+    "workspaceMount": "source=${localWorkspaceFolder},target=/project_name,type=bind",
+    "workspaceFolder": "/project_name",
+    "mounts": [
+        "source=${localWorkspaceFolder}/../../../data,target=/project_name/data,type=bind,consistency=cached"
+    ]
+}
