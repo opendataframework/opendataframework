@@ -24,6 +24,8 @@ theme:
         name: Switch to light mode
   logo: images/logo.svg
   favicon: images/logo.svg
+  icon:
+    repo: fontawesome/brands/git-alt
 
 plugins:
   - termynal:
@@ -58,5 +60,7 @@ markdown_extensions:
       emoji_index: !!python/name:material.extensions.emoji.twemoji
       emoji_generator: !!python/name:materialx.emoji.to_svg
 
+repo_url: https://github.com/opendataframework/opendataframework
+repo_name: opendataframework
 copyright: |
   &copy; 2024 <a href="https://github.com/opendataframework/opendataframework"  target="_blank" rel="noopener">opendataframework</a>
