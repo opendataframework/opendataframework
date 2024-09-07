@@ -28,6 +28,7 @@ theme:
     repo: fontawesome/brands/git-alt
 
 plugins:
+  - search
   - termynal:
       title: "shell"
       buttons: "macos"
