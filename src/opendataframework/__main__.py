@@ -106,6 +106,7 @@ class Component:
     POSTGRES: str = "postgres"
 
     # UTILITY
+    NGINX = 'nginx'
     TEXLIVE = "texlive"
 
 
@@ -121,7 +122,7 @@ COMPONENTS = {
     Layer.DEVCONTAINERS: [Component.PYTHON, Component.R],
     Layer.API: [Component.API_POSTGRES],
     Layer.STORAGE: [Component.POSTGRES],
-    Layer.UTILITY: [Component.TEXLIVE],
+    Layer.UTILITY: [Component.NGINX, Component.TEXLIVE],
 }
 
 DEPENDENCIES = {
@@ -140,6 +141,7 @@ DESCRIPTIONS = {
     # STORAGE
     Component.POSTGRES: "Advanced Relational Database",
     # UTILITY
+    Component.NGINX: 'HTTP and reverse proxy server',
     Component.TEXLIVE: "TeX Live is intended to be a straightforward way to get up and running with the TeX document production system",  # noqa
 }
 
@@ -151,6 +153,8 @@ PORTS = {
     Component.API_POSTGRES: "8000",
     # STORAGE
     Component.POSTGRES: "5432",
+    # UTILITY
+    Component.NGINX: "80"
 }
 
 
@@ -209,6 +213,14 @@ LAYOUTS = {Layout.CUSTOM, Layout.RESEARCH}
 
 
 PROFILES = {Profile.CUSTOM, Profile.RESEARCH}
+
+
+BADGES = {
+    Layer.ANALYTICS: 'badge badge-info gap-2',
+    Layer.API: 'badge badge-accent gap-2',
+    Layer.STORAGE: 'badge badge-warning gap-2',
+    Layer.UTILITY: 'badge badge-secondary gap-2'
+}
 
 
 class Field:
@@ -1398,6 +1410,118 @@ class Utility:
         """Create Utility layer instance."""
         self.project = project
 
+    def nginx(self):
+        """Configure Analytics `NGINX` component."""
+        from_path = os.path.join(SRC_PATH, Layer.UTILITY, Component.NGINX)
+        if not os.path.exists(from_path):
+            raise ValueError(f"{from_path} does not exist")
+
+        to_path = os.path.join(
+            self.project.path, PLATFORM_FOLDER, Layer.UTILITY, Component.NGINX
+        )
+        if os.path.exists(to_path):
+            raise ValueError(f"{to_path} already exists")
+
+        entities = self.project.settings.get("entities", {})
+
+        for plural_name, settings in entities.items():
+            components = settings["layers"].get(Layer.UTILITY, {})
+            if Component.NGINX not in components:
+                continue
+
+            if os.path.exists(to_path):
+                raise ValueError(f"{to_path} already exists")
+
+            shutil.copytree(
+                from_path,
+                to_path,
+                ignore=shutil.ignore_patterns(*IGNORE_PATTERNS),
+            )
+
+            break
+        
+        if not os.path.exists(to_path):
+            return
+        
+        Project.replace(
+            os.path.join(to_path, "docker-compose.yaml"),
+            PROJECT_NAME,
+            self.project.settings["project"],
+        )
+
+        ports = self.project.settings.get("ports", {})
+
+        Project.replace(
+            os.path.join(to_path, "docker-compose.yaml"),
+            f"{PORTS[Component.NGINX]}:",
+            f"{ports[Component.NGINX]}:",
+        )
+
+        host = 'http://localhost'
+        target_path = os.path.join(to_path, 'static', 'index.html')
+
+        Project.replace(
+            target_path, 
+            PROJECT_NAME, 
+            self.project.settings["project"]
+        )
+
+        with open(target_path, 'r') as file:
+            filedata = file.read()
+        
+        header = filedata.split('<tbody>')[0]
+        template, _ = filedata.split('<tbody>')[1].split('</tbody>')
+        footer = filedata.split('</tbody>')[1]
+
+        lines = [header]
+        
+        for component, port in ports.items():
+            
+            layer = None
+            for current_layer, components in COMPONENTS.items():
+                if component in components:
+                    layer = current_layer
+                    break
+            if not layer:
+                continue
+            
+            tr = template.replace(
+                'class="badge badge-info gap-2">layer_name', 
+                f'class="{BADGES[layer]}">{layer}'
+            )
+            tr = tr.replace("component_name", f"{component}")
+            tr = tr.replace("http://host:port/", f"{host}:{port}/")
+            lines.append(tr)
+        
+        entities = self.project.settings.get("entities", {})
+
+        for plural_name, settings in entities.items():
+            layers = settings.get("layers", {})
+
+            if Component.NGINX not in layers.get(Layer.UTILITY, {}):
+                continue
+            
+            for layer, components in layers.items():
+                for component in components:
+                    port = components[component].get("port")
+                    if not port:
+                        continue
+
+                    tr = template.replace(
+                        'class="badge badge-info gap-2">layer_name', 
+                        f'class="{BADGES[layer]}">{layer}'
+                    )
+                    tr = tr.replace("component_name", f"{component} | {plural_name}")
+                    tr = tr.replace("http://host:port/", f"{host}:{port}/")
+                    lines.append(tr)
+        
+        lines.append(footer)
+        filedata = '\n'.join(lines)
+        with open(target_path, 'w') as file:
+            file.write(filedata)
+
+        rprint(f"{to_path}[green] created[/green]")
+
     def texlive(self):
         """Configure Analytics `TEXLIVE` component."""
         from_path = os.path.join(SRC_PATH, Layer.UTILITY, Component.TEXLIVE)
@@ -1447,6 +1571,7 @@ class Utility:
 
     def __call__(self):
         """Call layer."""
+        self.nginx()
         self.texlive()
 
 

@@ -1,0 +1,14 @@
+version: "3.9"
+services:
+  project_name_nginx:
+    profiles: ["utility"]
+    image: project_name:nginx
+    container_name: project_name_nginx
+    hostname: project_name-nginx
+    build: 
+      context: ./
+      dockerfile: utility/nginx/Dockerfile
+    ports:
+      - 80:8080
+    networks:
+      - project_name_default
