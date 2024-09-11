@@ -5,7 +5,7 @@ services:
     image: project_name:nginx
     container_name: project_name_nginx
     hostname: project_name-nginx
-    build: 
+    build:
       context: ./
       dockerfile: utility/nginx/Dockerfile
     ports:

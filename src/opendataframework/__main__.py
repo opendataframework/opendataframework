@@ -5,10 +5,10 @@ import json
 import os
 import re
 import shutil
-import venv
 import subprocess
 import traceback
 import uuid
+import venv
 from datetime import datetime
 from pathlib import Path
 
@@ -108,7 +108,7 @@ class Component:
     POSTGRES: str = "postgres"
 
     # UTILITY
-    NGINX = 'nginx'
+    NGINX = "nginx"
     TEXLIVE = "texlive"
 
 
@@ -143,7 +143,7 @@ DESCRIPTIONS = {
     # STORAGE
     Component.POSTGRES: "Advanced Relational Database",
     # UTILITY
-    Component.NGINX: 'HTTP and reverse proxy server',
+    Component.NGINX: "HTTP and reverse proxy server",
     Component.TEXLIVE: "TeX Live is intended to be a straightforward way to get up and running with the TeX document production system",  # noqa
 }
 
@@ -156,7 +156,7 @@ PORTS = {
     # STORAGE
     Component.POSTGRES: "5432",
     # UTILITY
-    Component.NGINX: "80"
+    Component.NGINX: "80",
 }
 
 
@@ -218,10 +218,10 @@ PROFILES = {Profile.CUSTOM, Profile.RESEARCH}
 
 
 BADGES = {
-    Layer.ANALYTICS: 'badge badge-info gap-2',
-    Layer.API: 'badge badge-accent gap-2',
-    Layer.STORAGE: 'badge badge-warning gap-2',
-    Layer.UTILITY: 'badge badge-secondary gap-2'
+    Layer.ANALYTICS: "badge badge-info gap-2",
+    Layer.API: "badge badge-accent gap-2",
+    Layer.STORAGE: "badge badge-warning gap-2",
+    Layer.UTILITY: "badge badge-secondary gap-2",
 }
 
 
@@ -1441,10 +1441,10 @@ class Utility:
             )
 
             break
-        
+
         if not os.path.exists(to_path):
             return
-        
+
         Project.replace(
             os.path.join(to_path, "docker-compose.yaml"),
             PROJECT_NAME,
@@ -1459,26 +1459,21 @@ class Utility:
             f"{ports[Component.NGINX]}:",
         )
 
-        host = 'http://localhost'
-        target_path = os.path.join(to_path, 'static', 'index.html')
+        host = "http://localhost"
+        target_path = os.path.join(to_path, "static", "index.html")
 
-        Project.replace(
-            target_path, 
-            PROJECT_NAME, 
-            self.project.settings["project"]
-        )
+        Project.replace(target_path, PROJECT_NAME, self.project.settings["project"])
 
-        with open(target_path, 'r') as file:
+        with open(target_path, "r") as file:
             filedata = file.read()
-        
-        header = filedata.split('<tbody>')[0]
-        template, _ = filedata.split('<tbody>')[1].split('</tbody>')
-        footer = filedata.split('</tbody>')[1]
+
+        header = filedata.split("<tbody>")[0]
+        template, _ = filedata.split("<tbody>")[1].split("</tbody>")
+        footer = filedata.split("</tbody>")[1]
 
         lines = [header]
-        
+
         for component, port in ports.items():
-            
             layer = None
             for current_layer, components in COMPONENTS.items():
                 if component in components:
@@ -1486,15 +1481,15 @@ class Utility:
                     break
             if not layer:
                 continue
-            
+
             tr = template.replace(
-                'class="badge badge-info gap-2">layer_name', 
-                f'class="{BADGES[layer]}">{layer}'
+                'class="badge badge-info gap-2">layer_name',
+                f'class="{BADGES[layer]}">{layer}',
             )
             tr = tr.replace("component_name", f"{component}")
             tr = tr.replace("http://host:port/", f"{host}:{port}/")
             lines.append(tr)
-        
+
         entities = self.project.settings.get("entities", {})
 
         for plural_name, settings in entities.items():
@@ -1502,7 +1497,7 @@ class Utility:
 
             if Component.NGINX not in layers.get(Layer.UTILITY, {}):
                 continue
-            
+
             for layer, components in layers.items():
                 for component in components:
                     port = components[component].get("port")
@@ -1510,16 +1505,16 @@ class Utility:
                         continue
 
                     tr = template.replace(
-                        'class="badge badge-info gap-2">layer_name', 
-                        f'class="{BADGES[layer]}">{layer}'
+                        'class="badge badge-info gap-2">layer_name',
+                        f'class="{BADGES[layer]}">{layer}',
                     )
                     tr = tr.replace("component_name", f"{component} | {plural_name}")
                     tr = tr.replace("http://host:port/", f"{host}:{port}/")
                     lines.append(tr)
-        
+
         lines.append(footer)
-        filedata = '\n'.join(lines)
-        with open(target_path, 'w') as file:
+        filedata = "\n".join(lines)
+        with open(target_path, "w") as file:
             file.write(filedata)
 
         rprint(f"{to_path}[green] created[/green]")
@@ -1645,26 +1640,23 @@ def create(project: str, path: str = ""):
 
 @app.command()
 def install(path: str = ""):
+    """Install dependencies into .venv from requirements.txt under cwd/path."""
     try:
         if path and not os.path.exists(path):
             raise ValueError(f"{path} does not exists")
         elif not path:
             path = os.getcwd()
-        
+
         venv_path = os.path.join(path, ".venv")
         if os.path.exists(venv_path):
             raise ValueError(f"{venv_path} already exists")
-        
+
         requirements_path = os.path.join(path, "requirements.txt")
         if not os.path.exists(requirements_path):
             raise ValueError(f"{requirements_path} not exists")
-        
+
         venv.create(venv_path, with_pip=True)
-        subprocess.run(["bin/pip", 
-            "install", 
-            "-r", 
-            requirements_path], 
-            cwd=venv_path)
+        subprocess.run(["bin/pip", "install", "-r", requirements_path], cwd=venv_path)
     except Exception as e:
         rprint(f"[bold red] {e} [/bold red]")
 
