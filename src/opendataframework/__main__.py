@@ -5,6 +5,8 @@ import json
 import os
 import re
 import shutil
+import venv
+import subprocess
 import traceback
 import uuid
 from datetime import datetime
@@ -1639,6 +1641,32 @@ def create(project: str, path: str = ""):
         project.create()
     except Exception:
         rprint(f"[bold red] {traceback.format_exc()} [/bold red]")
+
+
+@app.command()
+def install(path: str = ""):
+    try:
+        if path and not os.path.exists(path):
+            raise ValueError(f"{path} does not exists")
+        elif not path:
+            path = os.getcwd()
+        
+        venv_path = os.path.join(path, ".venv")
+        if os.path.exists(venv_path):
+            raise ValueError(f"{venv_path} already exists")
+        
+        requirements_path = os.path.join(path, "requirements.txt")
+        if not os.path.exists(requirements_path):
+            raise ValueError(f"{requirements_path} not exists")
+        
+        venv.create(venv_path, with_pip=True)
+        subprocess.run(["bin/pip", 
+            "install", 
+            "-r", 
+            requirements_path], 
+            cwd=venv_path)
+    except Exception as e:
+        rprint(f"[bold red] {e} [/bold red]")
 
 
 def main():
