@@ -704,6 +704,40 @@ class Project:
 
         rprint(f"{self.name}: {self.layout} layout[green] created[/green]")
 
+    def add_docs(self):
+        """Add project docs."""
+        from_path = os.path.join(SRC_PATH, "docs")
+        if not os.path.exists(from_path):
+            raise ValueError(f"{from_path} does not exist")
+
+        to_path = os.path.join(self.path, "docs")
+        if os.path.exists(os.path.join(to_path, "docs")):
+            raise ValueError(f'{os.path.join(to_path, "docs")} already exists')
+
+        shutil.copytree(
+            from_path,
+            to_path,
+            ignore=shutil.ignore_patterns(
+                *IGNORE_PATTERNS, *("mkdocs.yml", "requirements.txt")
+            ),
+        )
+
+        if os.path.exists(os.path.join(self.path, "requirements.txt")):
+            with open(os.path.join(from_path, "requirements.txt"), "r") as file:
+                src_file_data = file.read()
+            with open(os.path.join(self.path, "requirements.txt"), "a") as file:
+                file.write(src_file_data)
+        else:
+            self.copy(from_path, self.path, "requirements.txt")
+
+        self.copy(from_path, self.path, "mkdocs.yml")
+        self.replace(
+            os.path.join(self.path, "docs", "index.md"), PROJECT_NAME, self.name
+        )
+        self.replace(os.path.join(self.path, "mkdocs.yml"), PROJECT_NAME, self.name)
+
+        rprint(f"{self.name}: docs[green] created[/green]")
+
     def init(self):
         """Handler for `init` CLI command."""
         rprint()
@@ -822,6 +856,7 @@ class Project:
         """Handler for `create` CLI command."""
         self.from_json()
         self.add_layout()
+        self.add_docs()
 
         layers = [
             Analytics(project=self),

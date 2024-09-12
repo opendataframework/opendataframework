@@ -76,10 +76,12 @@ def test_create(temp_dir, settings):
     assert result.exit_code == 0
     assert os.listdir(os.path.join(TEMP_DIR, TEST_PROJECT_NAME)) == [
         "ingest.py",
+        "mkdocs.yml",
         "settings.json",
         "requirements.txt",
         "main.sh",
         "platform",
+        "docs",
         "README.md",
         "expectations.py",
         "env.sh",
@@ -430,10 +432,12 @@ def test_project_create(temp_dir, settings):
     project.create()
     assert os.listdir(project.path) == [
         "ingest.py",
+        "mkdocs.yml",
         "settings.json",
         "requirements.txt",
         "main.sh",
         "platform",
+        "docs",
         "README.md",
         "expectations.py",
         "env.sh",
