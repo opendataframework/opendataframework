@@ -711,8 +711,8 @@ class Project:
             raise ValueError(f"{from_path} does not exist")
 
         to_path = os.path.join(self.path, "docs")
-        if os.path.exists(os.path.join(to_path, "docs")):
-            raise ValueError(f'{os.path.join(to_path, "docs")} already exists')
+        if os.path.exists(to_path):
+            raise ValueError(f"{to_path} already exists")
 
         shutil.copytree(
             from_path,
@@ -737,6 +737,29 @@ class Project:
         self.replace(os.path.join(self.path, "mkdocs.yml"), PROJECT_NAME, self.name)
 
         rprint(f"{self.name}: docs[green] created[/green]")
+
+    def add_hooks(self):
+        """Add project pre-commit hooks."""
+        from_path = os.path.join(SRC_PATH, "hooks")
+        if not os.path.exists(from_path):
+            raise ValueError(f"{from_path} does not exist")
+
+        if os.path.exists(os.path.join(self.path, ".pre-commit-config.yaml")):
+            raise ValueError(
+                f'{os.path.join(self.path, ".pre-commit-config.yaml")} already exists'
+            )
+
+        self.copy(from_path, self.path, ".pre-commit-config.yaml")
+
+        if os.path.exists(os.path.join(self.path, "requirements.txt")):
+            with open(os.path.join(from_path, "requirements.txt"), "r") as file:
+                src_file_data = file.read()
+            with open(os.path.join(self.path, "requirements.txt"), "a") as file:
+                file.write(src_file_data)
+        else:
+            self.copy(from_path, self.path, "requirements.txt")
+
+        rprint(f"{self.name}: .pre-commit-config.yaml[green] created[/green]")
 
     def init(self):
         """Handler for `init` CLI command."""
@@ -857,6 +880,7 @@ class Project:
         self.from_json()
         self.add_layout()
         self.add_docs()
+        self.add_hooks()
 
         layers = [
             Analytics(project=self),
