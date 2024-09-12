@@ -761,6 +761,26 @@ class Project:
 
         rprint(f"{self.name}: .pre-commit-config.yaml[green] created[/green]")
 
+    def add_workflows(self):
+        """Add github workflows (github pages ci for docs)."""
+        from_path = os.path.join(SRC_PATH, "github")
+        if not os.path.exists(from_path):
+            raise ValueError(f"{from_path} does not exist")
+
+        to_path = os.path.join(self.path, ".github")
+        if os.path.exists(to_path):
+            raise ValueError(f"{to_path} already exists")
+
+        shutil.copytree(
+            from_path,
+            to_path,
+            ignore=shutil.ignore_patterns(
+                *IGNORE_PATTERNS,
+            ),
+        )
+
+        rprint(f"{self.name}: github workflows[green] created[/green]")
+
     def init(self):
         """Handler for `init` CLI command."""
         rprint()
@@ -875,12 +895,16 @@ class Project:
         rprint(f"{json.dumps(self.settings, indent=JSON_INDENT)}")
         rprint()
 
-    def create(self):
+    def create(self, docs: bool = True, hooks: bool = True, workflows: bool = False):
         """Handler for `create` CLI command."""
         self.from_json()
         self.add_layout()
-        self.add_docs()
-        self.add_hooks()
+        if docs:
+            self.add_docs()
+        if hooks:
+            self.add_hooks()
+        if workflows:
+            self.add_workflows()
 
         layers = [
             Analytics(project=self),
@@ -1688,11 +1712,17 @@ def init(
 
 
 @app.command()
-def create(project: str, path: str = ""):
+def create(
+    project: str,
+    path: str = "",
+    docs: bool = True,
+    hooks: bool = True,
+    workflows: bool = False,
+):
     """Create PROJECT structure based on settings.json, optionally with a --path."""
     try:
         project = Project(name=project, path=path)
-        project.create()
+        project.create(docs=docs, hooks=hooks, workflows=workflows)
     except Exception:
         rprint(f"[bold red] {traceback.format_exc()} [/bold red]")
 
