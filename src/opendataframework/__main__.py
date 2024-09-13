@@ -782,6 +782,32 @@ class Project:
 
         rprint(f"{self.name}: github workflows[green] created[/green]")
 
+    def add_tests(self):
+        """Add project tests."""
+        from_path = os.path.join(SRC_PATH, "tests")
+        if not os.path.exists(from_path):
+            raise ValueError(f"{from_path} does not exist")
+
+        to_path = os.path.join(self.path, "tests")
+        if os.path.exists(to_path):
+            raise ValueError(f"{to_path} already exists")
+
+        shutil.copytree(
+            from_path,
+            to_path,
+            ignore=shutil.ignore_patterns(*IGNORE_PATTERNS, *("requirements.txt",)),
+        )
+
+        if os.path.exists(os.path.join(self.path, "requirements.txt")):
+            with open(os.path.join(from_path, "requirements.txt"), "r") as file:
+                src_file_data = file.read()
+            with open(os.path.join(self.path, "requirements.txt"), "a") as file:
+                file.write(src_file_data)
+        else:
+            self.copy(from_path, self.path, "requirements.txt")
+
+        rprint(f"{self.name}: tests[green] created[/green]")
+
     def init(self):
         """Handler for `init` CLI command."""
         rprint()
@@ -896,7 +922,13 @@ class Project:
         rprint(f"{json.dumps(self.settings, indent=JSON_INDENT)}")
         rprint()
 
-    def create(self, docs: bool = True, hooks: bool = True, workflows: bool = False):
+    def create(
+        self,
+        docs: bool = True,
+        hooks: bool = True,
+        workflows: bool = False,
+        tests: bool = True,
+    ):
         """Handler for `create` CLI command."""
         self.from_json()
         self.add_layout()
@@ -906,6 +938,8 @@ class Project:
             self.add_hooks()
         if workflows:
             self.add_workflows()
+        if tests:
+            self.add_tests()
 
         layers = [
             Analytics(project=self),
@@ -1719,11 +1753,12 @@ def create(
     docs: bool = True,
     hooks: bool = True,
     workflows: bool = False,
+    tests: bool = True,
 ):
     """Create PROJECT structure based on settings.json, optionally with a --path."""
     try:
         project = Project(name=project, path=path)
-        project.create(docs=docs, hooks=hooks, workflows=workflows)
+        project.create(docs=docs, hooks=hooks, workflows=workflows, tests=tests)
     except Exception:
         rprint(f"[bold red] {traceback.format_exc()} [/bold red]")
 
@@ -1901,6 +1936,35 @@ def docs(project: str = "", path: str = ""):
             raise ValueError(f"{docs_path} does not exist")
 
         subprocess.run([".venv/bin/mkdocs", "serve"], cwd=path)
+    except Exception as e:
+        rprint(f"[bold red] {e} [/bold red]")
+
+
+@app.command()
+def test(project: str = "", path: str = "", cov: str = ""):
+    """Run `pytest --cov={cov} tests`."""
+    try:
+        if path and not os.path.exists(path):
+            raise ValueError(f"{path} does not exist")
+        elif not path:
+            path = os.getcwd()
+        path = os.path.join(path, project)
+        venv_path = os.path.join(path, ".venv")
+        if not os.path.exists(venv_path):
+            raise ValueError(f"{venv_path} does not exist")
+
+        test_path = os.path.join(path, "tests")
+        if not os.path.exists(test_path):
+            raise ValueError(f"{test_path} does not exist")
+
+        if cov:
+            cov_path = os.path.join(path, cov)
+            if not os.path.exists(cov_path):
+                raise ValueError(f"{cov_path} does not exist")
+
+            subprocess.run([".venv/bin/pytest", f"--cov={cov}", "tests"], cwd=path)
+        else:
+            subprocess.run([".venv/bin/pytest", "tests"], cwd=path)
     except Exception as e:
         rprint(f"[bold red] {e} [/bold red]")
 
