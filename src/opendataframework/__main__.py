@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import traceback
 import uuid
@@ -1728,14 +1729,14 @@ def create(
 
 
 @app.command()
-def install(path: str = ""):
+def install(project: str = "", path: str = ""):
     """Install dependencies into .venv from requirements.txt under cwd/path."""
     try:
         if path and not os.path.exists(path):
             raise ValueError(f"{path} does not exists")
         elif not path:
             path = os.getcwd()
-
+        path = os.path.join(path, project)
         venv_path = os.path.join(path, ".venv")
         if os.path.exists(venv_path):
             raise ValueError(f"{venv_path} already exists")
@@ -1746,6 +1747,116 @@ def install(path: str = ""):
 
         venv.create(venv_path, with_pip=True)
         subprocess.run(["bin/pip", "install", "-r", requirements_path], cwd=venv_path)
+    except Exception as e:
+        rprint(f"[bold red] {e} [/bold red]")
+
+
+@app.command()
+def build(project: str = "", path: str = ""):
+    """Run `docker compose --profile {layer} build`."""
+    try:
+        if path and not os.path.exists(path):
+            raise ValueError(f"{path} does not exists")
+        elif not path:
+            path = os.getcwd()
+        path = os.path.join(path, project, "platform")
+
+        compose_path = os.path.join(path, "docker-compose.yaml")
+        if not os.path.exists(compose_path):
+            raise ValueError(f"{compose_path} not exists")
+
+        for layer in COMPONENTS:
+            subprocess.run(
+                ["docker", "compose", "--profile", f"{layer}", "build"], cwd=path
+            )
+
+    except Exception as e:
+        rprint(f"[bold red] {e} [/bold red]")
+
+
+@app.command()
+def start(project: str = "", path: str = ""):
+    """Run `docker compose --profile {layer} up -d`."""
+    try:
+        if path and not os.path.exists(path):
+            raise ValueError(f"{path} does not exists")
+        elif not path:
+            path = os.getcwd()
+        path = os.path.join(path, project, "platform")
+
+        compose_path = os.path.join(path, "docker-compose.yaml")
+        if not os.path.exists(compose_path):
+            raise ValueError(f"{compose_path} not exists")
+
+        for layer in COMPONENTS:
+            subprocess.run(
+                ["docker", "compose", "--profile", f"{layer}", "up", "-d"], cwd=path
+            )
+
+    except Exception as e:
+        rprint(f"[bold red] {e} [/bold red]")
+
+
+@app.command()
+def stop(project: str = "", path: str = ""):
+    """Run `docker compose --profile {layer} stop`."""
+    try:
+        if path and not os.path.exists(path):
+            raise ValueError(f"{path} does not exists")
+        elif not path:
+            path = os.getcwd()
+        path = os.path.join(path, project, "platform")
+
+        compose_path = os.path.join(path, "docker-compose.yaml")
+        if not os.path.exists(compose_path):
+            raise ValueError(f"{compose_path} not exists")
+
+        for layer in COMPONENTS:
+            subprocess.run(
+                ["docker", "compose", "--profile", f"{layer}", "stop"], cwd=path
+            )
+
+    except Exception as e:
+        rprint(f"[bold red] {e} [/bold red]")
+
+
+@app.command()
+def status(project: str = "", path: str = ""):
+    """Run `docker compose ps`."""
+    try:
+        if path and not os.path.exists(path):
+            raise ValueError(f"{path} does not exists")
+        elif not path:
+            path = os.getcwd()
+        path = os.path.join(path, project, "platform")
+
+        compose_path = os.path.join(path, "docker-compose.yaml")
+        if not os.path.exists(compose_path):
+            raise ValueError(f"{compose_path} not exists")
+
+        subprocess.run(["docker", "compose", "ps"], cwd=path)
+
+    except Exception as e:
+        rprint(f"[bold red] {e} [/bold red]")
+
+
+@app.command()
+def setup(project: str = "", path: str = ""):
+    """Run `platform/setup.sh`."""
+    try:
+        if path and not os.path.exists(path):
+            raise ValueError(f"{path} does not exists")
+        elif not path:
+            path = os.getcwd()
+        path = os.path.join(path, project, "platform")
+
+        setup_path = os.path.join(path, "setup.sh")
+        if not os.path.exists(setup_path):
+            raise ValueError(f"{setup_path} not exists")
+
+        os.chmod(setup_path, os.stat(setup_path).st_mode | stat.S_IEXEC)
+        subprocess.run(["./setup.sh"], cwd=path)
+
     except Exception as e:
         rprint(f"[bold red] {e} [/bold red]")
 
