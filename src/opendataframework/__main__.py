@@ -1861,6 +1861,50 @@ def setup(project: str = "", path: str = ""):
         rprint(f"[bold red] {e} [/bold red]")
 
 
+@app.command()
+def check(project: str = "", path: str = ""):
+    """Run `pre-commit run --all-files`."""
+    try:
+        if path and not os.path.exists(path):
+            raise ValueError(f"{path} does not exist")
+        elif not path:
+            path = os.getcwd()
+        path = os.path.join(path, project)
+        venv_path = os.path.join(path, ".venv")
+        if not os.path.exists(venv_path):
+            raise ValueError(f"{venv_path} does not exist")
+
+        pre_commit_path = os.path.join(path, ".pre-commit-config.yaml")
+        if not os.path.exists(pre_commit_path):
+            raise ValueError(f"{pre_commit_path} does not exist")
+
+        subprocess.run([".venv/bin/pre-commit", "run", "--all-files"], cwd=path)
+    except Exception as e:
+        rprint(f"[bold red] {e} [/bold red]")
+
+
+@app.command()
+def docs(project: str = "", path: str = ""):
+    """Run `mkdocs serve`."""
+    try:
+        if path and not os.path.exists(path):
+            raise ValueError(f"{path} does not exist")
+        elif not path:
+            path = os.getcwd()
+        path = os.path.join(path, project)
+        venv_path = os.path.join(path, ".venv")
+        if not os.path.exists(venv_path):
+            raise ValueError(f"{venv_path} does not exist")
+
+        docs_path = os.path.join(path, "mkdocs.yml")
+        if not os.path.exists(docs_path):
+            raise ValueError(f"{docs_path} does not exist")
+
+        subprocess.run([".venv/bin/mkdocs", "serve"], cwd=path)
+    except Exception as e:
+        rprint(f"[bold red] {e} [/bold red]")
+
+
 def main():
     """Main function which starts the app."""
     rprint(colorized_logo())
