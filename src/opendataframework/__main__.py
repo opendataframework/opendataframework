@@ -1037,8 +1037,6 @@ class Project:
                 self.copy(from_path, to_path, file_name)
 
         self.copy(from_path, to_path, "docker-compose.yaml")
-
-        self.copy(from_path, self.path, "env.sh")
         self.copy(from_path, self.path, "expectations.py")
         self.copy(from_path, self.path, "main.sh")
         self.copy(from_path, self.path, "README.md")

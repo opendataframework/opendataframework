@@ -34,9 +34,4 @@ echo "WORKDIR:"
 cd ..
 pwd
 
-echo ""
-echo "Setting up virtual environment in project_name ..."
-chmod +x ./env.sh
-source ./env.sh
-
 echo "Done."

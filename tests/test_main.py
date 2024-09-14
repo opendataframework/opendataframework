@@ -86,7 +86,6 @@ def test_create(temp_dir, settings):
         "docs",
         "README.md",
         "expectations.py",
-        "env.sh",
         "data",
     ]
 
@@ -444,7 +443,6 @@ def test_project_create(temp_dir, settings):
         "docs",
         "README.md",
         "expectations.py",
-        "env.sh",
         "data",
     ]
 
