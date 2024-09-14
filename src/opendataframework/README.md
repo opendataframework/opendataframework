@@ -5,11 +5,6 @@
 chmod +x ./main.sh && source ./main.sh
 ```
 
-## Stop platform
-```sh
-cd platform && ./stop.sh && cd ..
-```
-
 ## Expectations
 ```sh
 # [activate venv] source .venv/bin/activate

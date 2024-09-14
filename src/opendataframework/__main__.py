@@ -1022,7 +1022,7 @@ class Project:
         if not os.path.exists(to_path):
             raise ValueError(f"{to_path} does not exist")
 
-        scripts = ["setup.sh", "stop.sh", "requirements.txt"]
+        scripts = ["setup.sh", "requirements.txt"]
 
         for file_name in scripts:
             if file_name == "requirements.txt":

@@ -7,7 +7,7 @@ echo "WORKDIR:"
 cd platform
 pwd
 
-chmod +x ./setup.sh && chmod +x ./stop.sh
+chmod +x ./setup.sh
 
 echo ""
 echo "Wating ..."

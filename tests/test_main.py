@@ -451,7 +451,6 @@ def test_project_create(temp_dir, settings):
         "docker-compose.yaml",
         "storage",
         "api",
-        "stop.sh",
     ]
 
     assert os.listdir(os.path.join(project.path, "platform", "api")) == ["api-postgres"]
