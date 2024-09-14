@@ -139,24 +139,19 @@ $ tree
     │   ├── derived
     │   └── raw
     │       └── events.csv
-    ├── env.sh
     ├── expectations.py
     ├── libraries
     ├── logs
-    ├── main.sh
     ├── models
     ├── output
     │   ├── figures
     │   └── tables
     ├── paper
     ├── platform
-    │   ├── build.sh
     │   ├── devcontainers
     │   │   └── R
     │   ├── docker-compose.yaml
     │   ├── setup.sh
-    │   ├── start.sh
-    │   ├── stop.sh
     │   └── utility
     │       └── texlive
     │           ├── Dockerfile
