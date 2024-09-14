@@ -1076,11 +1076,18 @@ class Project:
                 if lines and layer == Layer.STORAGE and file_name == "setup.sh":
                     # put storage setup logic on top of setup.sh
                     with open(f"{to_path}/{file_name}", "r") as file:
-                        current_file_data = file.read()
-
+                        current_file_data = file.readlines()
+                        # keep shebang on top of the file
+                        header, current_file_data = (
+                            current_file_data[:4],
+                            current_file_data[4:],
+                        )
+                        header = [line for line in header if line != "\n"]
                     with open(f"{to_path}/{file_name}", "w") as file:
                         file.write(
-                            "\n".join([src_file_data, *lines, current_file_data])
+                            "\n".join(
+                                [*header, src_file_data, *lines, *current_file_data]
+                            )
                         )
 
                 else:
