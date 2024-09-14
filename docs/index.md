@@ -165,15 +165,41 @@ $ tree
     └── settings.json
 ```
 
-### Run
+### Build platform
+Command builds platform's images.
 
 <!-- termynal -->
 
 ```
-$ cd myproject
-$ chmod +x ./main.sh && source ./main.sh
+$ opendataframework build myproject
 ```
 
+### Start platform
+Command starts platform's containers.
+
+<!-- termynal -->
+
+```
+$ opendataframework start myproject
+```
+
+### Setup platform
+Command setup platform's containers.
+
+<!-- termynal -->
+
+```
+$ opendataframework setup myproject
+```
+
+### Install dependencies
+Command creates `myproject/.venv/` and installs dependencies from `requirements.txt`.
+
+<!-- termynal -->
+
+```
+$ opendataframework install myproject
+```
 
 ## Build from the source
 1. This package requires [poetry](https://python-poetry.org/docs/#installation) to be installed in your system first.
@@ -231,6 +257,7 @@ Layers of data platform with containerized components.
 ###### [postgresql](https://www.postgresql.org/)
 
 ##### utility
+###### [nginx](https://nginx.org/en/)
 ###### [TeX Live](https://hub.docker.com/r/texlive/texlive)
 
 ### Profile
