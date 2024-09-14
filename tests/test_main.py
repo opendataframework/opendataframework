@@ -452,7 +452,6 @@ def test_project_create(temp_dir, settings):
         "storage",
         "api",
         "stop.sh",
-        "start.sh",
     ]
 
     assert os.listdir(os.path.join(project.path, "platform", "api")) == ["api-postgres"]

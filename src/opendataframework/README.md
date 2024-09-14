@@ -5,11 +5,6 @@
 chmod +x ./main.sh && source ./main.sh
 ```
 
-## Start platform
-```sh
-cd platform && ./start.sh && cd ..
-```
-
 ## Stop platform
 ```sh
 cd platform && ./stop.sh && cd ..
