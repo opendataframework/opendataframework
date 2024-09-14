@@ -1,18 +1,43 @@
 # project_name
 
-## Build & setup platform
+### Build platform
+Command builds platform's images.
+
 ```sh
-chmod +x ./main.sh && source ./main.sh
+opendataframework build
 ```
 
-## Expectations
+### Start platform
+Command starts platform's containers.
+
 ```sh
-# [activate venv] source .venv/bin/activate
-python expectations.py -d data/raw/
+opendataframework start
 ```
 
-## Ingest
+### Setup platform
+Command setup platform's containers.
+
 ```sh
-# [activate venv] source .venv/bin/activate
-python ingest.py -d data/raw/
+opendataframework setup
+```
+
+### Install dependencies
+Command creates `myproject/.venv/` and installs dependencies from `requirements.txt`.
+
+```sh
+opendataframework install
+```
+
+### Docs
+Command starts mkdocs server.
+
+```sh
+opendataframework docs
+```
+
+### Test
+Command runs tests.
+
+```sh
+opendataframework test
 ```
