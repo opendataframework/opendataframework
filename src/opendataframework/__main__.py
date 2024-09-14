@@ -1876,7 +1876,7 @@ def status(project: str = "", path: str = ""):
         if not os.path.exists(compose_path):
             raise ValueError(f"{compose_path} not exists")
 
-        subprocess.run(["docker", "compose", "ps"], cwd=path)
+        subprocess.run(["docker", "compose", "ps", "--all"], cwd=path)
 
     except Exception as e:
         rprint(f"[bold red] {e} [/bold red]")
