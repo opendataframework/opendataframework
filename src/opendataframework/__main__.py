@@ -1038,11 +1038,9 @@ class Project:
 
         self.copy(from_path, to_path, "docker-compose.yaml")
         self.copy(from_path, self.path, "expectations.py")
-        self.copy(from_path, self.path, "main.sh")
         self.copy(from_path, self.path, "README.md")
 
         self.replace(os.path.join(self.path, "README.md"), f"{PROJECT_NAME}", self.name)
-        self.replace(os.path.join(self.path, "main.sh"), f"{PROJECT_NAME}", self.name)
 
         for layer in COMPONENTS:
             if layer is Layer.DEVCONTAINERS:
