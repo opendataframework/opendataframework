@@ -450,7 +450,6 @@ def test_project_create(temp_dir, settings):
         "setup.sh",
         "docker-compose.yaml",
         "storage",
-        "build.sh",
         "api",
         "stop.sh",
         "start.sh",
