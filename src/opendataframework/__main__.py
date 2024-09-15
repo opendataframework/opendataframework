@@ -1075,14 +1075,16 @@ class Project:
                         current_file_data = file.readlines()
                         # keep shebang on top of the file
                         header, current_file_data = (
-                            current_file_data[:4],
-                            current_file_data[4:],
+                            current_file_data[:3],
+                            current_file_data[3:],
                         )
                         header = [line for line in header if line != "\n"]
+                        header = "".join([*header])
+                        current_file_data = "".join([*current_file_data])
                     with open(f"{to_path}/{file_name}", "w") as file:
                         file.write(
                             "\n".join(
-                                [*header, src_file_data, *lines, *current_file_data]
+                                [header, src_file_data, *lines, current_file_data]
                             )
                         )
 
