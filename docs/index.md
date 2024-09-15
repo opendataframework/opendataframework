@@ -69,7 +69,7 @@ $ tree
 ```
 $ cat myproject/settings.json
 {
-  "opendataframework": "0.0.2",
+  "opendataframework": "0.0.3",
   "project": "myproject",
   "profile": "research",
   "layout": "research",
@@ -166,7 +166,7 @@ Command builds platform's images.
 <!-- termynal -->
 
 ```
-$ opendataframework build myproject
+$ opendataframework build --project myproject
 ```
 
 ### Start platform
@@ -175,7 +175,7 @@ Command starts platform's containers.
 <!-- termynal -->
 
 ```
-$ opendataframework start myproject
+$ opendataframework start --project myproject
 ```
 
 ### Setup platform
@@ -184,7 +184,7 @@ Command setup platform's containers.
 <!-- termynal -->
 
 ```
-$ opendataframework setup myproject
+$ opendataframework setup --project myproject
 ```
 
 ### Install dependencies
@@ -193,7 +193,7 @@ Command creates `myproject/.venv/` and installs dependencies from `requirements.
 <!-- termynal -->
 
 ```
-$ opendataframework install myproject
+$ opendataframework install --project myproject
 ```
 
 ## Build from the source
