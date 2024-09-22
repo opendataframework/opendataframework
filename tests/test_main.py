@@ -82,6 +82,7 @@ def test_create(temp_dir, settings):
         ".pre-commit-config.yaml",
         "platform",
         "tests",
+        "models",
         "docs",
         "README.md",
         "expectations.py",
@@ -192,7 +193,7 @@ def test_add_custom_layout(temp_dir):
     """Tests add custom layout to project."""
     project = Project(name=TEST_PROJECT_NAME, path=TEMP_DIR, data=DATA_DIR)
     assert project.layout == Layout.CUSTOM
-    assert os.listdir(project.path) == ["data"]
+    assert os.listdir(project.path) == ["models", "data"]
 
 
 def test_add_research_layout(temp_dir):
@@ -438,6 +439,7 @@ def test_project_create(temp_dir, settings):
         ".pre-commit-config.yaml",
         "platform",
         "tests",
+        "models",
         "docs",
         "README.md",
         "expectations.py",

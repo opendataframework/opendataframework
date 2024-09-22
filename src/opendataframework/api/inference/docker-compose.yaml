@@ -1,0 +1,16 @@
+version: "3.9"
+services:
+  project_name_entity:
+    profiles: ["api"]
+    image: project_name:entity
+    container_name: project_name_entity
+    hostname: project_name-entity
+    build:
+      context: ./api/inference/entity
+      args:
+        poetry_version: "1.3.2"
+    ports:
+      - 8000:8000
+    networks:
+      - project_name_default
+    restart: always

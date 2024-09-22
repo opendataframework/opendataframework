@@ -7,3 +7,5 @@ __pycache__
 todo.md
 /temp
 /data
+*.pkl
+/models

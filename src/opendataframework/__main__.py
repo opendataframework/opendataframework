@@ -100,6 +100,7 @@ class Component:
 
     # API
     API_POSTGRES: str = "api-postgres"
+    INFERENCE: str = "inference"
 
     # DEVCONTAINERS
     PYTHON: str = "python"
@@ -123,7 +124,7 @@ FILE_FORMATS = {
 COMPONENTS = {
     Layer.ANALYTICS: [Component.SUPERSET],
     Layer.DEVCONTAINERS: [Component.PYTHON, Component.R],
-    Layer.API: [Component.API_POSTGRES],
+    Layer.API: [Component.API_POSTGRES, Component.INFERENCE],
     Layer.STORAGE: [Component.POSTGRES],
     Layer.UTILITY: [Component.NGINX, Component.TEXLIVE],
 }
@@ -154,6 +155,7 @@ PORTS = {
     Component.SUPERSET: "8088",
     # API
     Component.API_POSTGRES: "8000",
+    Component.INFERENCE: "8000",
     # STORAGE
     Component.POSTGRES: "5432",
     # UTILITY
@@ -431,16 +433,20 @@ class Entity:
 class Project:
     """Project."""
 
-    def __init__(self, name: str, path: str = "", data: str = ""):
+    def __init__(self, name: str, path: str = "", data: str = "", models: str = ""):
         """Create project instance."""
         self._name = None
         self._path = None
         self._profile = Profile.CUSTOM
         self._layout = Layout.CUSTOM
+        self._models = None
+
         if data:
             self._data = os.path.join(os.getcwd(), data)
         else:
             self._data = os.path.join(os.getcwd(), "data")
+        if models:
+            self._models = os.path.join(os.getcwd(), models)
 
         self._settings = {
             "opendataframework": __version__,
@@ -504,6 +510,34 @@ class Project:
                     rprint(f"{file_name}[green] copied to [/green]{dest_path}")
 
         self._path = path
+
+        if not self._models:
+            models = os.path.join(os.getcwd(), "models")
+            if not os.path.exists(models):
+                return
+            self._models = models
+
+        models_path = os.path.join(path, "models")
+        if not os.path.exists(models_path):
+            os.mkdir(models_path)
+            rprint(f"{models_path}[green] created[/green]")
+
+            for folder in os.listdir(self._models):
+                source_path = os.path.join(self._models, folder)
+                if os.path.isdir(source_path):
+                    dest_path = os.path.join(models_path, folder)
+                    if not os.path.exists(dest_path):
+                        os.mkdir(dest_path)
+
+                    for file_name in os.listdir(source_path):
+                        supported = [
+                            file_name.endswith(".pkl"),
+                            file_name.strip().lower() == "requirements.txt",
+                        ]
+                        if not any(supported):
+                            continue
+                        self.copy(source_path, dest_path, file_name)
+                        rprint(f"{file_name}[green] copied to [/green]{dest_path}")
 
     @property
     def settings(self) -> dict:
@@ -1340,9 +1374,134 @@ class API:
 
             rprint(f"{to_path}[green] created[/green]")
 
+    def inference(self):
+        """Configure API `INFERENCE` component."""
+        from_path = os.path.join(SRC_PATH, Layer.API, Component.INFERENCE)
+        if not os.path.exists(from_path):
+            raise ValueError(f"{from_path} does not exist")
+
+        entities = self.project.settings.get("entities", {})
+
+        for plural_name, settings in entities.items():
+            components = settings["layers"].get(Layer.API, {})
+            if Component.INFERENCE not in components:
+                continue
+
+            to_path = os.path.join(
+                self.project.path,
+                PLATFORM_FOLDER,
+                Layer.API,
+                Component.INFERENCE,
+                plural_name,
+            )
+            if os.path.exists(to_path):
+                raise ValueError(f"{to_path} already exists")
+
+            shutil.copytree(
+                from_path,
+                to_path,
+                ignore=shutil.ignore_patterns(
+                    *IGNORE_PATTERNS,
+                ),
+            )
+
+            model_path = os.path.join(self.project.path, "models", plural_name)
+            if not os.path.exists(os.path.join(model_path, "model.pkl")):
+                raise ValueError(f"{model_path} does not exist")
+
+            Project.copy(model_path, os.path.join(to_path, "app"), "model.pkl")
+
+            if os.path.exists(os.path.join(model_path, "requirements.txt")):
+                with open(os.path.join(model_path, "requirements.txt"), "r") as file:
+                    filedata = file.read()
+                    new_filedata = []
+                    for line in filedata.split("\n"):
+                        if not line:
+                            continue
+                        packet, version = line.split("==")
+                        new_line = f'{packet} = "{version}"'
+                        new_filedata.append(new_line)
+                    filedata = "\n".join(new_filedata)
+
+                    Project.replace(
+                        os.path.join(to_path, "pyproject.toml"),
+                        "# dependencies",
+                        filedata,
+                    )
+
+            hostname = self.project.settings["project"].replace("_", "-")
+
+            Project.replace(
+                os.path.join(to_path, "docker-compose.yaml"),
+                f"hostname: {PROJECT_NAME}-{Component.INFERENCE}",
+                f"hostname: {hostname}-{Component.INFERENCE}",
+            )
+
+            Project.replace(
+                os.path.join(to_path, "docker-compose.yaml"),
+                f"{PROJECT_NAME}",
+                self.project.settings["project"],
+            )
+
+            Project.replace(
+                os.path.join(to_path, "docker-compose.yaml"), "entity", plural_name
+            )
+
+            port = components[Component.INFERENCE]["port"]
+            Project.replace(
+                os.path.join(to_path, "docker-compose.yaml"),
+                f"{PORTS[Component.INFERENCE]}:",
+                f"{port}:",
+            )
+
+            # model
+            model_path = os.path.join(to_path, "app", "models.py")
+            new_text = "# fields"
+
+            for field_name, field_type in settings["fields"].items():
+                if field_name in Field.RESERVED_FIELDS:
+                    raise ValueError(
+                        f"Field names `{self.RESERVED_FIELDS}` are reserved"
+                    )
+                if "datetime" in field_type:
+                    # TODO: format validator
+                    field_type = "datetime"
+
+                new_text += f"\n    {field_name}: {field_type}"
+
+            Project.replace(model_path, "# extra fields", new_text)
+            Project.replace(model_path, "entities", plural_name)
+            Project.replace(model_path, "Entity", settings["name"].capitalize())
+
+            # crud
+            crud_path = os.path.join(to_path, "app", "crud.py")
+            Project.replace(crud_path, "entity", settings["name"])
+            Project.replace(crud_path, "entities", plural_name)
+            Project.replace(crud_path, "Entity", settings["name"].capitalize())
+
+            # router
+            router_path = os.path.join(to_path, "app", "router.py")
+            Project.replace(router_path, "entity", settings["name"])
+            Project.replace(router_path, "entities", plural_name)
+            Project.replace(router_path, "Entity", settings["name"].capitalize())
+
+            # env
+            env_path = os.path.join(to_path, ".env")
+            Project.replace(
+                env_path, f"{PROJECT_NAME}", self.project.settings["project"]
+            )
+            Project.replace(env_path, "description", settings["description"])
+
+            # main
+            main_path = os.path.join(to_path, "app", "main.py")
+            Project.replace(main_path, "entity", settings["name"])
+
+            rprint(f"{to_path}[green] created[/green]")
+
     def __call__(self):
         """Call layer."""
         self.api_postgres()
+        self.inference()
 
 
 class Devcontainers:
