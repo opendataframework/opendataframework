@@ -327,7 +327,7 @@ $ tree
 
 #### Create models folder
 > Name (required): `models`
-> Model folder (must correspond to the `data file name`): `events`
+> Model folder (must correspond to the `data file name`): `wines`
 
 <!-- termynal -->
 
