@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "opendataframework"
-version = "0.0.3"
+version = "0.0.4"
 description = "Open Data Framework is an open source, full stack data framework."
 authors = [
     "mykytapavlov <mykytapavlov@users.noreply.github.com>",

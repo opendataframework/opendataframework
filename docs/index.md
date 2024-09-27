@@ -69,7 +69,7 @@ $ tree
 ```
 $ cat myproject/settings.json
 {
-  "opendataframework": "0.0.3",
+  "opendataframework": "0.0.4",
   "project": "myproject",
   "profile": "research",
   "layout": "research",
