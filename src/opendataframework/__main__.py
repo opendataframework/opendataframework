@@ -2133,6 +2133,146 @@ def test(project: str = "", path: str = "", cov: str = ""):
         rprint(f"[bold red] {e} [/bold red]")
 
 
+@app.command()
+def chat():
+    """Project configuration based on prompt.
+
+    Example:
+    Input:
+    "I have a csv file. Prepare environment for storage and analytics,
+    so I can upload my files, transform the data using SQL
+    and visualize results on a dashboard."
+
+    Output:
+    analytics
+    - superset
+    storage
+    - postgres
+    """
+    import difflib
+    from collections import Counter
+
+    KEYWORDS = {
+        # ANALYTICS
+        Component.SUPERSET: {
+            "exploration",
+            "visualization",
+            "business",
+            "intelligence",
+            "bi",
+            "chart",
+            "sql",
+            "analytics",
+            "query",
+            "file",
+            "upload",
+            "csv",
+            "dashboard",
+            "transform",
+            "bar",
+            "geospatial",
+        },
+        # API
+        Component.API_POSTGRES: {
+            "api",
+            "serve",
+            "endpoint",
+            "url",
+            "postgres",
+            "postgresql",
+            "postgre",
+        },
+        Component.INFERENCE: {"inference", "api", "model", "ml", "predict", "endpoint"},
+        # DEVCONTAINERS
+        Component.PYTHON: {
+            "devcontainer",
+            "python",
+            "env",
+            "isolated",
+            "containerized",
+            "py",
+            "lang",
+        },
+        Component.R: {
+            "devcontainer",
+            "r",
+            "env",
+            "isolated",
+            "containerized",
+            "rlang",
+            "lang",
+        },
+        # STORAGE
+        Component.POSTGRES: {
+            "structured",
+            "sql",
+            "relational",
+            "transaction",
+            "csv",
+            "storage",
+            "db",
+            "database",
+            "insert",
+            "postgresql",
+            "postgre",
+            "postgres",
+        },
+        # UTILITY
+        Component.NGINX: {
+            "web",
+            "server",
+            "reverse",
+            "proxy",
+            "cache",
+            "balancer",
+            "frontend",
+            "nginx",
+        },
+        Component.TEXLIVE: {
+            "typesetting",
+            "TeX",
+            "mathematical",
+            "formulae",
+            "texlive",
+        },
+    }
+
+    THRESHOLD = 3
+
+    try:
+        prompt = Prompt.ask("[#00FA92]Prompt[/#00FA92]").strip().lower().split()
+        rprint()
+
+        counters = {}
+        for layer, components in COMPONENTS.items():
+            counters[layer] = Counter()
+            for component in components:
+                keywords = KEYWORDS.get(component, {})
+                for keyword in keywords:
+                    matches = difflib.get_close_matches(keyword, prompt)
+                    if matches:
+                        counters[layer].update({component: 1})
+
+        is_match = False
+
+        for layer, counter in counters.items():
+            components = []
+            for component, score in counter.items():
+                if score >= THRESHOLD:
+                    components.append(component)
+            if components:
+                is_match = True
+                rprint(f"[#B36AE2]{layer}[/#B36AE2]")
+                for component in components:
+                    rprint(f"[#00FA92][blue]\[x] [/blue]{component}[/#00FA92]")
+
+        if not is_match:
+            rprint("[yellow]No match.[/yellow]")
+
+    except Exception:
+        rprint(f"[bold red] {traceback.format_exc()} [/bold red]")
+
+
 def main():
     """Main function which starts the app."""
     rprint(colorized_logo())
