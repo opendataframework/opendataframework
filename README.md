@@ -5,7 +5,7 @@ Aims to be a bridge between `data` and `data platform`.
 
 ![layers](docs/images/layers.png)
 
-To start, you need to create a `data folder` called `data` with at least one `data file`, for example, `.csv`. 
+To start, you need to create a `data folder` called `data` with at least one `data file`, for example, `.csv`.
 That file will be used to derive the schema and register an `entity` across `components` selected during `layers` configuration via `CLI` where applicable.
 
 Your project has to be `reproducible` and eventually, `scalable`. The framework heavily relies on `containerization`.

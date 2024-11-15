@@ -251,7 +251,7 @@ def test_field_to_dict():
     field = Field()
     field.field_name = "value"
     field.field_type = "1.0"
-    assert field.to_dict() == {"value": "float"}
+    assert field.to_dict() == {"value": {"alias": None, "type": "float"}}
 
 
 def test_field_timestamp():
@@ -314,10 +314,13 @@ def test_entity_to_dict():
         TEST_ENTITY_PLURAL_NAME: {
             "description": "",
             "fields": {
-                "id": "int",
-                "logged_at": "datetime|%Y-%m-%d %H:%M:%S",
-                "name": "str",
-                "value": "float",
+                "id": {"alias": "id", "type": "int"},
+                "logged_at": {
+                    "alias": "logged_at",
+                    "type": "datetime|%Y-%m-%d %H:%M:%S",
+                },
+                "name": {"alias": "name", "type": "str"},
+                "value": {"alias": "value", "type": "float"},
             },
             "layers": {},
             "name": TEST_ENTITY_NAME,
@@ -396,10 +399,13 @@ def test_project_from_json(temp_dir, settings):
             TEST_ENTITY_PLURAL_NAME: {
                 "description": "",
                 "fields": {
-                    "id": "int",
-                    "logged_at": "datetime|%Y-%m-%d %H:%M:%S",
-                    "name": "str",
-                    "value": "float",
+                    "id": {"alias": "id", "type": "int"},
+                    "logged_at": {
+                        "alias": "logged_at",
+                        "type": "datetime|%Y-%m-%d %H:%M:%S",
+                    },
+                    "name": {"alias": "name", "type": "str"},
+                    "value": {"alias": "value", "type": "float"},
                 },
                 "layers": {
                     "api": {

@@ -1,5 +1,7 @@
 """Models module."""
 
+from datetime import datetime  # noqa: F401
+
 from pydantic import BaseModel
 from sqlmodel import SQLModel
 
@@ -12,9 +14,25 @@ class HealthCheck(BaseModel):
     description: str
 
 
-class Entity(SQLModel):
-    """Entity model."""
+class Parameters(SQLModel):
+    """Parameters model."""
 
-    __tablename__ = "entities"
+    # parameters fields
 
-    # extra fields
+
+class Fit(SQLModel):
+    """Fit model."""
+
+    # fit fields
+
+
+class Predict(SQLModel):
+    """Predict model."""
+
+    # predict fields
+
+
+class Prediction(SQLModel):
+    """Prediction model."""
+
+    # prediction fields

@@ -242,6 +242,7 @@ class Field:
         """Create field instance."""
         self._field_name = None
         self._field_type = None
+        self._field_alias = None
 
     @property
     def field_name(self) -> str:
@@ -258,6 +259,16 @@ class Field:
         if value in self.RESERVED_FIELDS:
             raise ValueError(f"Field names `{self.RESERVED_FIELDS}` are reserved")
         self._field_name = value
+
+    @property
+    def field_alias(self) -> str:
+        """Get field alias."""
+        return self._field_alias
+
+    @field_alias.setter
+    def field_alias(self, value: str) -> None:
+        """Set field alias."""
+        self._field_alias = value
 
     @property
     def field_type(self) -> str:
@@ -290,7 +301,7 @@ class Field:
 
     def to_dict(self) -> dict:
         """Create dict representation."""
-        return {self.field_name: self.field_type}
+        return {self.field_name: {"type": self.field_type, "alias": self.field_alias}}
 
 
 class Entity:
@@ -384,6 +395,7 @@ class Entity:
                 field = Field()
                 field.field_name = key
                 field.field_type = value
+                field.field_alias = key
                 self.add_field(field)
 
     def add_field(self, field: Field, key: str = None) -> None:
@@ -399,7 +411,10 @@ class Entity:
             self.plural_name: {
                 "name": self.name,
                 "description": self.description,
-                "fields": {k: v.field_type for k, v in self.fields.items()},
+                "fields": {
+                    k: {"type": v.field_type, "alias": v.field_alias}
+                    for k, v in self.fields.items()
+                },
                 "layers": self.layers,
             }
         }
@@ -531,7 +546,8 @@ class Project:
 
                     for file_name in os.listdir(source_path):
                         supported = [
-                            file_name.endswith(".pkl"),
+                            file_name.strip().lower() == "model.pkl",
+                            file_name.strip().lower() == "model.json",
                             file_name.strip().lower() == "requirements.txt",
                         ]
                         if not any(supported):
@@ -1028,11 +1044,14 @@ class Project:
         return data, paths
 
     @staticmethod
-    def copy(from_path: str, to_path: str, file_name: str):
+    def copy(from_path: str, to_path: str, file_name: str, make_dirs: bool = False):
         """Copy file."""
         src_path = os.path.join(from_path, file_name)
         if not os.path.exists(src_path):
             raise ValueError(f"{src_path} not found")
+
+        if make_dirs:
+            os.makedirs(to_path, exist_ok=True)
 
         target_path = os.path.join(to_path, file_name)
         if os.path.exists(target_path):
@@ -1134,15 +1153,16 @@ class Project:
             file_name = "docker-compose.yaml"
             files_data, paths = self.walk(target_path, [file_name])
             if paths:
-                lines = files_data[file_name]
+                contents = files_data[file_name]
                 file_path = f"{to_path}/{file_name}"
 
                 # exclude docker compose header
-                lines = lines[0].split("\n")[2:]
-                lines = ["\n".join(lines)]
+                for content in contents:
+                    lines = content.split("\n")[2:]
+                    lines = ["\n".join(lines)]
 
-                with open(file_path, "a") as file:
-                    file.write("\n".join(lines))
+                    with open(file_path, "a") as file:
+                        file.write("\n".join(lines))
 
                 self.remove(paths)
 
@@ -1309,7 +1329,7 @@ class API:
                 os.path.join(to_path, "docker-compose.yaml"),
                 f"hostname: {PROJECT_NAME}-{Component.API_POSTGRES}",
                 f"hostname: {hostname}-{Component.API_POSTGRES}",
-            )
+            )  # TODO: enity name instead?
 
             Project.replace(
                 os.path.join(to_path, "docker-compose.yaml"),
@@ -1332,7 +1352,8 @@ class API:
             model_path = os.path.join(to_path, "app", "models.py")
             new_text = "# fields"
 
-            for field_name, field_type in settings["fields"].items():
+            for field_name, value in settings["fields"].items():
+                field_type, _ = value["type"], value["alias"]
                 if field_name in Field.RESERVED_FIELDS:
                     raise ValueError(
                         f"Field names `{self.RESERVED_FIELDS}` are reserved"
@@ -1406,10 +1427,24 @@ class API:
             )
 
             model_path = os.path.join(self.project.path, "models", plural_name)
-            if not os.path.exists(os.path.join(model_path, "model.pkl")):
-                raise ValueError(f"{model_path} does not exist")
+            if not os.path.exists(os.path.join(model_path, "model.json")):
+                raise ValueError(f"{model_path}/model.json does not exist")
 
-            Project.copy(model_path, os.path.join(to_path, "app"), "model.pkl")
+            app_models_path = os.path.join(to_path, "app", ".models", str(uuid.uuid4()))
+
+            Project.copy(model_path, app_models_path, "model.json", make_dirs=True)
+
+            for field_name, value in settings["fields"].items():
+                _, field_alias = value["type"], value["alias"]
+
+                Project.replace(
+                    os.path.join(app_models_path, "model.json"),
+                    field_alias,
+                    field_name,
+                )
+
+            if os.path.exists(os.path.join(model_path, "model.pkl")):
+                Project.copy(model_path, app_models_path, "model.pkl")
 
             if os.path.exists(os.path.join(model_path, "requirements.txt")):
                 with open(os.path.join(model_path, "requirements.txt"), "r") as file:
@@ -1435,7 +1470,7 @@ class API:
                 os.path.join(to_path, "docker-compose.yaml"),
                 f"hostname: {PROJECT_NAME}-{Component.INFERENCE}",
                 f"hostname: {hostname}-{Component.INFERENCE}",
-            )
+            )  # TODO: enity name instead?
 
             Project.replace(
                 os.path.join(to_path, "docker-compose.yaml"),
@@ -1456,28 +1491,85 @@ class API:
 
             # model
             model_path = os.path.join(to_path, "app", "models.py")
-            new_text = "# fields"
 
-            for field_name, field_type in settings["fields"].items():
-                if field_name in Field.RESERVED_FIELDS:
-                    raise ValueError(
-                        f"Field names `{self.RESERVED_FIELDS}` are reserved"
-                    )
-                if "datetime" in field_type:
-                    # TODO: format validator
-                    field_type = "datetime"
+            with open(os.path.join(app_models_path, "model.json"), "r") as file:
+                inference_config = json.load(file)
+                parameters = inference_config.get("parameters")
+                fit = inference_config.get("fit")
+                predict = inference_config.get("predict")
+                prediction = inference_config.get("prediction")
+                assert parameters and isinstance(parameters, dict)
+                assert fit and isinstance(fit, dict)
+                assert predict and isinstance(predict, dict)
+                assert prediction
 
-                new_text += f"\n    {field_name}: {field_type}"
+                new_text = "# fields"
 
-            Project.replace(model_path, "# extra fields", new_text)
-            Project.replace(model_path, "entities", plural_name)
-            Project.replace(model_path, "Entity", settings["name"].capitalize())
+                for key, value in parameters.items():
+                    if isinstance(value, dict):
+                        new_text += f"\n    {key}: dict"
+                    elif isinstance(value, list):
+                        new_text += f"\n    {key}: list"
+                    elif isinstance(value, int):
+                        new_text += f"\n    {key}: int"
+                    elif isinstance(value, float):
+                        new_text += f"\n    {key}: float"
+                    elif isinstance(value, str):
+                        new_text += f"\n    {key}: str"
+
+                Project.replace(model_path, "# parameters fields", new_text)
+
+                new_text = "# fields"
+
+                for key, records in fit.items():
+                    assert isinstance(records, list)
+                    assert all(isinstance(record, dict) for record in records)
+                    new_text += f"\n    {key}: list[dict]"
+
+                Project.replace(model_path, "# fit fields", new_text)
+
+                new_text = "# fields"
+
+                for key, records in predict.items():
+                    assert isinstance(records, list)
+                    assert all(isinstance(record, dict) for record in records)
+                    new_text += f"\n    {key}: list[dict]"
+
+                Project.replace(model_path, "# predict fields", new_text)
+
+                new_text = "# fields"
+
+                if isinstance(prediction, dict):
+                    new_text += "\n    value: dict"
+                elif isinstance(prediction, list):
+                    new_text += "\n    value: list"
+                elif isinstance(prediction, int):
+                    new_text += "\n    value: int"
+                elif isinstance(prediction, float):
+                    new_text += "\n    value: float"
+                elif isinstance(prediction, str):
+                    new_text += "\n    value: str"
+
+                Project.replace(model_path, "# prediction fields", new_text)
 
             # crud
-            crud_path = os.path.join(to_path, "app", "crud.py")
-            Project.replace(crud_path, "entity", settings["name"])
-            Project.replace(crud_path, "entities", plural_name)
-            Project.replace(crud_path, "Entity", settings["name"].capitalize())
+            # crud_path = os.path.join(to_path, "app", "crud.py")
+            # Project.replace(crud_path, "entity", settings["name"])
+            # Project.replace(crud_path, "entities", plural_name)
+            # Project.replace(crud_path, "Entity", settings["name"].capitalize())
+
+            # inference
+            inference_path = os.path.join(to_path, "app", "inference.py")
+            Project.replace(
+                inference_path,
+                "PACKAGE_NAME = None",
+                f'PACKAGE_NAME = "{inference_config["package"]}"',
+            )
+            Project.replace(
+                inference_path,
+                "MODEL_NAME = None",
+                f'MODEL_NAME = "{inference_config["model"]}"',
+            )
 
             # router
             router_path = os.path.join(to_path, "app", "router.py")

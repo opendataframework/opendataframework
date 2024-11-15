@@ -45,7 +45,9 @@ def load_file(
             # rename fields to match api model (TODO?)
             for field_name, value in current_row.items():
                 try:
-                    date_format = entity["fields"][field_name].split("datetime|")[1]
+                    date_format = entity["fields"][field_name]["type"].split(
+                        "datetime|"
+                    )[1]
                 except IndexError:
                     date_format = None
 
@@ -162,6 +164,9 @@ def main():
 
         components = entites[entity].get("layers", {}).get("api", {})
         for component, config in components.items():
+            if component == "inference":
+                logging.info("skip inference API")
+                continue
             port = config.get("port")
             if not port:
                 continue
