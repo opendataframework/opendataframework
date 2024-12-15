@@ -1227,7 +1227,7 @@ class Analytics:
                     file.write("&& " + content)
 
                 from_create = os.path.join(
-                    from_path, "database", f"{storage}", "create.sh"
+                    from_path, "database", f"{storage}", "dataset.sh"
                 )
 
                 with open(f"{from_create}", "r") as file:
