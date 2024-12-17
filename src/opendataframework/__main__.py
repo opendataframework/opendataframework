@@ -99,6 +99,7 @@ class Component:
     SUPERSET: str = "superset"
 
     # API
+    API_DRUID: str = "api-druid"
     API_POSTGRES: str = "api-postgres"
     INFERENCE: str = "inference"
 
@@ -107,6 +108,7 @@ class Component:
     R: str = "R"
 
     # STORAGE
+    DRUID: str = "druid"
     POSTGRES: str = "postgres"
 
     # UTILITY
@@ -124,7 +126,7 @@ FILE_FORMATS = {
 COMPONENTS = {
     Layer.ANALYTICS: [Component.SUPERSET],
     Layer.DEVCONTAINERS: [Component.PYTHON, Component.R],
-    Layer.API: [Component.API_POSTGRES, Component.INFERENCE],
+    Layer.API: [Component.API_DRUID, Component.API_POSTGRES, Component.INFERENCE],
     Layer.STORAGE: [Component.POSTGRES],
     Layer.UTILITY: [Component.NGINX, Component.TEXLIVE],
 }
@@ -138,6 +140,7 @@ DESCRIPTIONS = {
     # ANALYTICS
     Component.SUPERSET: "Apache Superset is a modern, enterprise-ready business intelligence web application",  # noqa
     # API
+    Component.API_DRUID: "REST Data Access for Druid",
     Component.API_POSTGRES: "REST Data Access for Postgres",
     # DEVCONTAINERS
     Component.PYTHON: "VS Code devcontainer for Python",
@@ -154,6 +157,7 @@ PORTS = {
     # ANALYTICS
     Component.SUPERSET: "8088",
     # API
+    Component.API_DRUID: "8000",
     Component.API_POSTGRES: "8000",
     Component.INFERENCE: "8000",
     # STORAGE
@@ -1292,6 +1296,110 @@ class API:
         """Create API layer instance."""
         self.project = project
 
+    def api_druid(self):
+        """Configure API `API_DRUID` component."""
+        from_path = os.path.join(SRC_PATH, Layer.API, Component.API_DRUID)
+        if not os.path.exists(from_path):
+            raise ValueError(f"{from_path} does not exist")
+
+        entities = self.project.settings.get("entities", {})
+
+        for plural_name, settings in entities.items():
+            components = settings["layers"].get(Layer.API, {})
+            if Component.API_DRUID not in components:
+                continue
+
+            to_path = os.path.join(
+                self.project.path,
+                PLATFORM_FOLDER,
+                Layer.API,
+                Component.API_DRUID,
+                plural_name,
+            )
+            if os.path.exists(to_path):
+                raise ValueError(f"{to_path} already exists")
+
+            shutil.copytree(
+                from_path,
+                to_path,
+                ignore=shutil.ignore_patterns(
+                    *IGNORE_PATTERNS,
+                ),
+            )
+
+            hostname = self.project.settings["project"].replace("_", "-")
+
+            Project.replace(
+                os.path.join(to_path, "docker-compose.yaml"),
+                f"hostname: {PROJECT_NAME}-{Component.API_DRUID}",
+                f"hostname: {hostname}-{Component.API_DRUID}",
+            )  # TODO: enity name instead?
+
+            Project.replace(
+                os.path.join(to_path, "docker-compose.yaml"),
+                f"{PROJECT_NAME}",
+                self.project.settings["project"],
+            )
+
+            Project.replace(
+                os.path.join(to_path, "docker-compose.yaml"), "entity", plural_name
+            )
+
+            port = components[Component.API_DRUID]["port"]
+            Project.replace(
+                os.path.join(to_path, "docker-compose.yaml"),
+                f"{PORTS[Component.API_DRUID]}:",
+                f"{port}:",
+            )
+
+            # model
+            model_path = os.path.join(to_path, "app", "models.py")
+            new_text = "# fields"
+
+            for field_name, value in settings["fields"].items():
+                field_type, _ = value["type"], value["alias"]
+                if field_name in Field.RESERVED_FIELDS:
+                    raise ValueError(
+                        f"Field names `{self.RESERVED_FIELDS}` are reserved"
+                    )
+                if "datetime" in field_type:
+                    # TODO: format validator
+                    field_type = "datetime"
+
+                new_text += f"\n    {field_name}: {field_type}"
+
+            Project.replace(model_path, "# extra fields", new_text)
+            Project.replace(model_path, "entities", plural_name)
+            Project.replace(model_path, "Entity", settings["name"].capitalize())
+
+            # crud
+            crud_path = os.path.join(to_path, "app", "crud.py")
+            Project.replace(crud_path, "entity", settings["name"])
+            Project.replace(crud_path, "entities", plural_name)
+            Project.replace(crud_path, "Entity", settings["name"].capitalize())
+
+            # router
+            router_path = os.path.join(to_path, "app", "router.py")
+            Project.replace(router_path, "entity", settings["name"])
+            Project.replace(router_path, "entities", plural_name)
+            Project.replace(router_path, "Entity", settings["name"].capitalize())
+
+            # env
+            port = self.project.settings["ports"].get(Component.DRUID)
+            env_path = os.path.join(to_path, ".env")
+            Project.replace(
+                env_path, f"{PROJECT_NAME}", self.project.settings["project"]
+            )
+            Project.replace(env_path, "description", settings["description"])
+            if port:
+                Project.replace(env_path, PORTS[Component.POSTGRES], port)
+
+            # main
+            main_path = os.path.join(to_path, "app", "main.py")
+            Project.replace(main_path, "entity", settings["name"])
+
+            rprint(f"{to_path}[green] created[/green]")
+
     def api_postgres(self):
         """Configure API `API_POSTGRES` component."""
         from_path = os.path.join(SRC_PATH, Layer.API, Component.API_POSTGRES)
@@ -1592,6 +1700,7 @@ class API:
 
     def __call__(self):
         """Call layer."""
+        self.api_druid()
         self.api_postgres()
         self.inference()
 
