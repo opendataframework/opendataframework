@@ -1,10 +1,10 @@
 version: "3.9"
 services:
-  project_name_entity:
+  project_name_api_postgres_entity:
     profiles: ["api"]
-    image: project_name:entity
-    container_name: project_name_entity
-    hostname: project_name-entity
+    image: project_name_api_postgres:entity
+    container_name: project_name_api_postgres_entity
+    hostname: project_name-api-postgres-entity
     build:
       context: ./api/api-postgres/entity
       args:

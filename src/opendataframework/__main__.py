@@ -1346,7 +1346,7 @@ class API:
                 os.path.join(to_path, "docker-compose.yaml"),
                 f"hostname: {PROJECT_NAME}-{Component.API_DRUID}",
                 f"hostname: {hostname}-{Component.API_DRUID}",
-            )  # TODO: enity name instead?
+            )
 
             Project.replace(
                 os.path.join(to_path, "docker-compose.yaml"),
@@ -1450,7 +1450,7 @@ class API:
                 os.path.join(to_path, "docker-compose.yaml"),
                 f"hostname: {PROJECT_NAME}-{Component.API_JSON_KAFKA}",
                 f"hostname: {hostname}-{Component.API_JSON_KAFKA}",
-            )  # TODO: enity name instead?
+            )
 
             Project.replace(
                 os.path.join(to_path, "docker-compose.yaml"),
@@ -1555,7 +1555,7 @@ class API:
                 os.path.join(to_path, "docker-compose.yaml"),
                 f"hostname: {PROJECT_NAME}-{Component.API_POSTGRES}",
                 f"hostname: {hostname}-{Component.API_POSTGRES}",
-            )  # TODO: enity name instead?
+            )
 
             Project.replace(
                 os.path.join(to_path, "docker-compose.yaml"),
@@ -1696,7 +1696,7 @@ class API:
                 os.path.join(to_path, "docker-compose.yaml"),
                 f"hostname: {PROJECT_NAME}-{Component.INFERENCE}",
                 f"hostname: {hostname}-{Component.INFERENCE}",
-            )  # TODO: enity name instead?
+            )
 
             Project.replace(
                 os.path.join(to_path, "docker-compose.yaml"),

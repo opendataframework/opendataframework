@@ -1,10 +1,10 @@
 version: "3.9"
 services:
-  project_name_entity:
+  project_name_api_druid_entity:
     profiles: ["api"]
-    image: project_name:entity
-    container_name: project_name_entity
-    hostname: project_name-entity
+    image: project_name_api_druid:entity
+    container_name: project_name_api_druid_entity
+    hostname: project_name-api-druid-entity
     build:
       context: ./api/api-druid/entity
       args:
