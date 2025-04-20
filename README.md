@@ -17,6 +17,7 @@ Supported `containerization technologies`:
 As an option, pre-configured [devcontainers](https://code.visualstudio.com/docs/devcontainers/containers) are included for:
 - R
 - Python
+- Go
 
 Besides configuration of `containerized data platform`, framework enforces usage of:
 - project `layouts` (`research`, `custom`, etc.)
