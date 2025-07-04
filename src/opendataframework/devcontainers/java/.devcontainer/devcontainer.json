@@ -1,0 +1,23 @@
+{
+    "name": "project_name",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": ".",
+        "args": {
+            "OPENJDK_VERSION": "25-slim-bullseye"
+        }
+    },
+    "customizations": {
+        "vscode": {
+            "settings": {},
+            "extensions": [
+                "oracle.oracle-java"
+            ]
+        }
+    },
+    "workspaceMount": "source=${localWorkspaceFolder},target=/project_name,type=bind",
+    "workspaceFolder": "/project_name",
+    "mounts": [
+        "source=${localWorkspaceFolder}/../../../data,target=/project_name/data,type=bind,consistency=cached"
+    ]
+}

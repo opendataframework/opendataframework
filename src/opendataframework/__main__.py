@@ -108,6 +108,7 @@ class Component:
     GO: str = "go"
     PYTHON: str = "python"
     R: str = "R"
+    JAVA: str = "java"
 
     # STORAGE
     DRUID: str = "druid"
@@ -129,7 +130,7 @@ FILE_FORMATS = {
 
 COMPONENTS = {
     Layer.ANALYTICS: [Component.SUPERSET],
-    Layer.DEVCONTAINERS: [Component.GO, Component.PYTHON, Component.R],
+    Layer.DEVCONTAINERS: [Component.GO, Component.PYTHON, Component.R, Component.JAVA],
     Layer.API: [
         Component.API_DRUID,
         Component.API_JSON_KAFKA,
@@ -158,6 +159,7 @@ DESCRIPTIONS = {
     Component.GO: "VS Code devcontainer for GO",
     Component.PYTHON: "VS Code devcontainer for Python",
     Component.R: "VS Code devcontainer for R",
+    Component.JAVA: "VS Code devcontainer for Java",
     # STORAGE
     Component.KAFKA: "Apache Kafka is an open-source distributed event streaming platform",  # noqa
     Component.POSTGRES: "Advanced Relational Database",
@@ -234,6 +236,22 @@ MOUNTS = {
         ],
     },
     Component.R: {
+        "workspaceMount": ",".join(
+            ("source=${{localWorkspaceFolder}}", "target=/{project_name}", "type=bind")
+        ),
+        "workspaceFolder": "/{project_name}",
+        "mounts": [
+            ",".join(
+                (
+                    "source=${{localWorkspaceFolder}}/../../../data",
+                    "target=/{project_name}/data",
+                    "type=bind",
+                    "consistency=cached",
+                )
+            )
+        ],
+    },
+    Component.JAVA: {
         "workspaceMount": ",".join(
             ("source=${{localWorkspaceFolder}}", "target=/{project_name}", "type=bind")
         ),
@@ -1999,12 +2017,62 @@ class Devcontainers:
                 json.dump(config, file, indent=JSON_INDENT)
 
             rprint(f"{to_path}[green] created[/green]")
+    
+    def java(self):
+        """Configure Devcontainers `JAVA` component."""
+        from_path = os.path.join(SRC_PATH, Layer.DEVCONTAINERS, Component.JAVA)
+        if not os.path.exists(from_path):
+            raise ValueError(f"{from_path} does not exist")
+
+        to_path = os.path.join(
+            self.project.path, PLATFORM_FOLDER, Layer.DEVCONTAINERS, Component.JAVA
+        )
+        if os.path.exists(to_path):
+            raise ValueError(f"{to_path} already exists")
+
+        entities = self.project.settings.get("entities", {})
+
+        for plural_name, settings in entities.items():
+            components = settings["layers"].get(Layer.DEVCONTAINERS, {})
+            if Component.JAVA not in components:
+                continue
+
+            if os.path.exists(to_path):
+                break
+
+            shutil.copytree(
+                from_path,
+                to_path,
+                ignore=shutil.ignore_patterns(*IGNORE_PATTERNS),
+            )
+
+            mounts = self.project.settings["mounts"].get(Component.JAVA)
+
+            if not mounts:
+                break
+
+            config_path = os.path.join(to_path, ".devcontainer", "devcontainer.json")
+            if not os.path.exists(os.path.join(config_path)):
+                raise ValueError(f"{config_path} does not exist")
+
+            with open(config_path, "r") as file:
+                config = json.load(file)
+                config["name"] = self.project.settings["project"]
+                config["workspaceMount"] = mounts.get("workspaceMount", "")
+                config["workspaceFolder"] = mounts.get("workspaceFolder", "")
+                config["mounts"] = mounts.get("mounts", [])
+
+            with open(config_path, "w") as file:
+                json.dump(config, file, indent=JSON_INDENT)
+
+            rprint(f"{to_path}[green] created[/green]")
 
     def __call__(self):
         """Call layer."""
         self.go()
         self.python()
         self.r()
+        self.java()
 
 
 class Storage:
@@ -2714,6 +2782,15 @@ def chat():
             "isolated",
             "containerized",
             "rlang",
+            "lang",
+        },
+        Component.JAVA: {
+            "devcontainer",
+            "javalang",
+            "env",
+            "isolated",
+            "containerized",
+            "java",
             "lang",
         },
         # STORAGE

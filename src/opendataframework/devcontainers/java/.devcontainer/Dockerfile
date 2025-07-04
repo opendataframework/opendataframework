@@ -1,0 +1,3 @@
+ARG OPENJDK_VERSION=25-slim-bullseye
+
+FROM openjdk:${OPENJDK_VERSION}
