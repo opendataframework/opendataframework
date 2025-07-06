@@ -2284,11 +2284,31 @@ class Utility:
         with open(target_path, "r") as file:
             filedata = file.read()
 
-        header = filedata.split("<tbody>")[0]
-        template, _ = filedata.split("<tbody>")[1].split("</tbody>")
-        footer = filedata.split("</tbody>")[1]
+        data = {}
+        nav = ["<nav>"]
+        content = ['<div class="main-content" id="mainContent">']
+        section = '  <section id="{layer}" class="{section}">\n    <div class="grid" id="grid-{layer}"></div>\n  </section>'
 
-        lines = [header]
+        def html(data, layer, nav, content, plural_name=None):
+            if not data.get(layer):
+                data[layer] = {}
+                if len(nav) == 1:
+                    a = f'    <a href="#" class="active" data-section="{layer}">{layer.capitalize()}</a>'
+                else:
+                    a = f'    <a href="#" data-section="{layer}">{layer.capitalize()}</a>'
+                nav.append(a)
+
+                if len(content) == 1:
+                    header = f'  <div class="header" id="sectionHeader" style="color: #00FA92;">{layer.capitalize()}</div>'
+                    content.append(header)
+                    content.append(section.format(layer=layer, section="section active"))
+                else:
+                    content.append(section.format(layer=layer, section="section"))
+            
+            if plural_name:
+                data[layer].update({f"{component}.{plural_name}": {"url": f"{host}:{port}/"}})
+            else:
+                data[layer].update({component: {"url": f"{host}:{port}/"}})
 
         for component, port in ports.items():
             layer = None
@@ -2298,14 +2318,7 @@ class Utility:
                     break
             if not layer:
                 continue
-
-            tr = template.replace(
-                'class="badge badge-info gap-2">layer_name',
-                f'class="{BADGES[layer]}">{layer}',
-            )
-            tr = tr.replace("component_name", f"{component}")
-            tr = tr.replace("http://host:port/", f"{host}:{port}/")
-            lines.append(tr)
+            html(data, layer, nav, content)
 
         entities = self.project.settings.get("entities", {})
 
@@ -2320,17 +2333,15 @@ class Utility:
                     port = components[component].get("port")
                     if not port:
                         continue
+                    html(data, layer, nav, content, plural_name)
+                    
+        nav.append("  </nav>")
+        content.append("</div>")
+        
+        filedata = filedata.replace("<nav></nav>", "\n".join(nav))
+        filedata = filedata.replace('<div class="main-content" id="mainContent"></div>', "\n".join(content))
+        filedata = filedata.replace("const components = {}", f"const components = {data}")
 
-                    tr = template.replace(
-                        'class="badge badge-info gap-2">layer_name',
-                        f'class="{BADGES[layer]}">{layer}',
-                    )
-                    tr = tr.replace("component_name", f"{component} | {plural_name}")
-                    tr = tr.replace("http://host:port/", f"{host}:{port}/")
-                    lines.append(tr)
-
-        lines.append(footer)
-        filedata = "\n".join(lines)
         with open(target_path, "w") as file:
             file.write(filedata)
 
