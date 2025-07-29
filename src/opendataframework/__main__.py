@@ -914,6 +914,105 @@ class Project:
 
         rprint(f"{self.name}: tests[green] created[/green]")
 
+    def add_server(self):
+        """Add project server."""
+        from_path = os.path.join(SRC_PATH, "server")
+        if not os.path.exists(from_path):
+            raise ValueError(f"{from_path} does not exist")
+
+        to_path = os.path.join(self.path, "server")
+        if os.path.exists(to_path):
+            raise ValueError(f"{to_path} already exists")
+
+        shutil.copytree(
+            from_path,
+            to_path,
+            ignore=shutil.ignore_patterns(
+                *IGNORE_PATTERNS, *("requirements.txt",)
+            ),
+        )
+
+        if os.path.exists(os.path.join(self.path, "requirements.txt")):
+            with open(os.path.join(from_path, "requirements.txt"), "r") as file:
+                src_file_data = file.read()
+            with open(os.path.join(self.path, "requirements.txt"), "a") as file:
+                file.write(src_file_data)
+        else:
+            self.copy(from_path, self.path, "requirements.txt")
+
+
+        entities = self.settings.get("entities", {})
+
+        ports = self.settings.get("ports", {})
+
+        host = "http://localhost"
+        target_path = os.path.join(to_path, "static", "index.html")
+
+        Project.replace(target_path, PROJECT_NAME, self.settings["project"])
+
+        with open(target_path, "r") as file:
+            filedata = file.read()
+
+        data = {}
+        nav = ["<nav>"]
+        content = ['<div class="main-content" id="mainContent">']
+        section = '  <section id="{layer}" class="{section}">\n    <div class="grid" id="grid-{layer}"></div>\n  </section>'
+
+        def html(data, layer, nav, content, plural_name=None):
+            if not data.get(layer):
+                data[layer] = {}
+                if len(nav) == 1:
+                    a = f'    <a href="#" class="active" data-section="{layer}">{layer.capitalize()}</a>'
+                else:
+                    a = f'    <a href="#" data-section="{layer}">{layer.capitalize()}</a>'
+                nav.append(a)
+
+                if len(content) == 1:
+                    header = f'  <div class="header" id="sectionHeader" style="color: #00FA92;">{layer.capitalize()}</div>'
+                    content.append(header)
+                    content.append(section.format(layer=layer, section="section active"))
+                else:
+                    content.append(section.format(layer=layer, section="section"))
+            
+            if plural_name:
+                data[layer].update({f"{component}.{plural_name}": {"url": f"{host}:{port}/"}})
+            else:
+                data[layer].update({component: {"url": f"{host}:{port}/"}})
+
+        for component, port in ports.items():
+            layer = None
+            for current_layer, components in COMPONENTS.items():
+                if component in components:
+                    layer = current_layer
+                    break
+            if not layer:
+                continue
+            html(data, layer, nav, content)
+
+        entities = self.settings.get("entities", {})
+
+        for plural_name, settings in entities.items():
+            layers = settings.get("layers", {})
+
+            for layer, components in layers.items():
+                for component in components:
+                    port = components[component].get("port")
+                    if not port:
+                        continue
+                    html(data, layer, nav, content, plural_name)
+                    
+        nav.append("  </nav>")
+        content.append("</div>")
+        
+        filedata = filedata.replace("<nav></nav>", "\n".join(nav))
+        filedata = filedata.replace('<div class="main-content" id="mainContent"></div>', "\n".join(content))
+        filedata = filedata.replace("const components = {}", f"const components = {data}")
+
+        with open(target_path, "w") as file:
+            file.write(filedata)
+
+        rprint(f"{self.name}: server[green] created[/green]")
+    
     def init(self):
         """Handler for `init` CLI command."""
         rprint()
@@ -1034,6 +1133,7 @@ class Project:
         hooks: bool = True,
         workflows: bool = False,
         tests: bool = True,
+        server: bool = True,
     ):
         """Handler for `create` CLI command."""
         self.from_json()
@@ -1046,6 +1146,8 @@ class Project:
             self.add_workflows()
         if tests:
             self.add_tests()
+        if server:
+            self.add_server()
 
         layers = [
             Analytics(project=self),
@@ -2502,11 +2604,12 @@ def create(
     hooks: bool = True,
     workflows: bool = False,
     tests: bool = True,
+    server: bool = True,
 ):
     """Create PROJECT structure based on settings.json, optionally with a --path."""
     try:
         project = Project(name=project, path=path)
-        project.create(docs=docs, hooks=hooks, workflows=workflows, tests=tests)
+        project.create(docs=docs, hooks=hooks, workflows=workflows, tests=tests, server=server)
     except Exception:
         rprint(f"[bold red] {traceback.format_exc()} [/bold red]")
 
@@ -2716,6 +2819,37 @@ def test(project: str = "", path: str = "", cov: str = ""):
     except Exception as e:
         rprint(f"[bold red] {e} [/bold red]")
 
+
+@app.command()
+def server(project: str = "", path: str = "", host: str = "127.0.0.1", port: str = "8080", reload: bool = False):
+    """Run `uvicorn server.main:app` inside project."""
+    try:
+        if path and not os.path.exists(path):
+            raise ValueError(f"{path} does not exist")
+        elif not path:
+            path = os.getcwd()
+        path = os.path.join(path, project)
+        venv_path = os.path.join(path, ".venv")
+        if not os.path.exists(venv_path):
+            raise ValueError(f"{venv_path} does not exist")
+
+        main_path = os.path.join(path, "server", "main.py")
+        if not os.path.exists(main_path):
+            raise ValueError(f"{main_path} does not exist")
+        
+        params = [
+            ".venv/bin/uvicorn",
+            "server.main:app",
+            "--host", f"{host}",
+            "--port", f"{port}"
+        ]
+        if reload:
+            params.append("--reload")
+        
+        subprocess.run(params, cwd=path)
+
+    except Exception as e:
+        rprint(f"[bold red] {e} [/bold red]")
 
 @app.command()
 def chat():
