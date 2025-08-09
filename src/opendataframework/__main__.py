@@ -10,6 +10,7 @@ import subprocess
 import traceback
 import uuid
 import venv
+import yaml
 from datetime import datetime
 from pathlib import Path
 
@@ -126,6 +127,11 @@ JSON_INDENT = 2
 FILE_FORMATS = {
     ".csv",
 }
+
+
+class Settings:
+    JSON = 'json'
+    YAML = 'yaml'
 
 
 COMPONENTS = {
@@ -653,9 +659,42 @@ class Project:
         """Load settings from json."""
         path = os.path.join(self.path, "settings.json")
         if not os.path.exists(path):
-            raise ValueError(f"{path} does not exists")
+            raise ValueError(f"{path} does not exists")  # TODO: "does not exist"
         with open(path, "r") as file:
             self.settings = json.load(file)
+    
+    def to_yaml(self) -> None:
+        """Dump settings to yaml."""
+        path = os.path.join(self.path, "settings.yaml")
+        if os.path.exists(path):
+            raise ValueError(f"{path} already exists")
+        with open(path, "w") as file:
+            yaml.dump(self.settings, file, sort_keys=False)
+            rprint(f"{path} [green]created[/green]")
+
+    def from_yaml(self) -> None:
+        """Load settings from yaml."""
+        path = os.path.join(self.path, "settings.yaml")
+        if not os.path.exists(path):
+            raise ValueError(f"{path} does not exist")
+        with open(path, "r") as file:
+            self.settings = yaml.safe_load(file)
+    
+    def load(self) -> None:
+        try:
+            self.from_json()
+            return
+        except ValueError:
+            pass
+            
+        try:
+            self.from_yaml()
+            return
+        except ValueError :
+            pass
+
+        raise ValueError(f"{os.path.join(self.path)}: settings file does not exist")
+
 
     def mounts(self, entity: Entity) -> None:
         """Configure mounts."""
@@ -1013,7 +1052,7 @@ class Project:
 
         rprint(f"{self.name}: server[green] created[/green]")
     
-    def init(self):
+    def init(self, extention=Settings.JSON):
         """Handler for `init` CLI command."""
         rprint()
         while True:
@@ -1121,7 +1160,10 @@ class Project:
                 )
                 rprint()
 
-        self.to_json()
+        if extention == Settings.JSON:
+            self.to_json()
+        else:
+            self.to_yaml()
         rprint(f"[#00FA92]Project `[#B36AE2]{self.name}[/#B36AE2]` created[/#00FA92]")
 
         rprint(f"{json.dumps(self.settings, indent=JSON_INDENT)}")
@@ -1136,7 +1178,7 @@ class Project:
         server: bool = True,
     ):
         """Handler for `create` CLI command."""
-        self.from_json()
+        self.load()
         self.add_layout()
         if docs:
             self.add_docs()
@@ -2512,13 +2554,14 @@ def init(
     path: str = "",
     data: str = "",
     profile: str = Profile.CUSTOM,
+    extention: str = Settings.JSON
 ):
     """Initialize PROJECT settings.json, optionally with a --path."""
     try:
         project = Project(name=project, path=path, data=data)
         profile = profile.strip().lower()
         if profile == Profile.CUSTOM:
-            project.init()
+            project.init(extention=extention)
         elif profile == Profile.RESEARCH:
             Research(project)()
         else:
