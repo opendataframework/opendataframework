@@ -2568,8 +2568,8 @@ class Research:
                 entity.plural_name = entity.name + "s"
                 entity.description = f"{entity.plural_name} {Profile.RESEARCH}"
                 entity.read()
-                entity.register(Layer.DEVCONTAINERS, Component.R)
-                entity.register(Layer.UTILITY, Component.TEXLIVE)
+                self.project.register(layer=Layer.DEVCONTAINERS, component=Component.R)
+                self.project.register(layer=Layer.UTILITY, component=Component.TEXLIVE)
 
                 self.project.register(entity)
         self.project.to_json()
