@@ -530,7 +530,8 @@ class Project:
             "project": "",
             "profile": self._profile,
             "layout": self._layout,
-            "entities": {},
+            "data": {},
+            "platform": {},
             "mounts": {},
             "volumes": {},
             "ports": {},
@@ -669,7 +670,8 @@ class Project:
         if os.path.exists(path):
             raise ValueError(f"{path} already exists")
         with open(path, "w") as file:
-            yaml.dump(self.settings, file, sort_keys=False)
+            settings = json.loads(json.dumps(self.settings))
+            yaml.dump(settings, file, sort_keys=False)
             rprint(f"{path} [green]created[/green]")
 
     def from_yaml(self) -> None:
@@ -760,7 +762,7 @@ class Project:
                         port += 1
                     port = str(port)
                     self._api_ports.append(port)
-                    self._settings["entities"][entity.plural_name]["layers"][layer][
+                    self._settings["data"][entity.plural_name]["layers"][layer][
                         component
                     ]["port"] = port
                     continue
@@ -776,9 +778,9 @@ class Project:
 
     def register(self, entity: Entity):
         """Register entity."""
-        if entity.plural_name in self.settings["entities"]:
+        if entity.plural_name in self.settings["data"]:
             raise ValueError(f"`{entity.plural_name}` already exists")
-        self.settings["entities"].update(entity.to_dict())
+        self.settings["data"].update(entity.to_dict())
         self.mounts(entity)
         self.volumes(entity)
         self.ports(entity)
@@ -980,7 +982,7 @@ class Project:
             self.copy(from_path, self.path, "requirements.txt")
 
 
-        entities = self.settings.get("entities", {})
+        entities = self.settings.get("data", {})
 
         ports = self.settings.get("ports", {})
 
@@ -1028,7 +1030,7 @@ class Project:
                 continue
             html(data, layer, nav, content)
 
-        entities = self.settings.get("entities", {})
+        entities = self.settings.get("data", {})
 
         for plural_name, settings in entities.items():
             layers = settings.get("layers", {})
@@ -1391,7 +1393,7 @@ class Analytics:
         if os.path.exists(to_path):
             raise ValueError(f"{to_path} already exists")
 
-        entities = self.project.settings.get("entities", {})
+        entities = self.project.settings.get("data", {})
         ports = self.project.settings.get("ports", {})
 
         to_setup = os.path.join(to_path, "setup.sh")
@@ -1498,7 +1500,7 @@ class API:
         if not os.path.exists(from_path):
             raise ValueError(f"{from_path} does not exist")
 
-        entities = self.project.settings.get("entities", {})
+        entities = self.project.settings.get("data", {})
 
         for plural_name, settings in entities.items():
             components = settings["layers"].get(Layer.API, {})
@@ -1602,7 +1604,7 @@ class API:
         if not os.path.exists(from_path):
             raise ValueError(f"{from_path} does not exist")
 
-        entities = self.project.settings.get("entities", {})
+        entities = self.project.settings.get("data", {})
 
         for plural_name, settings in entities.items():
             components = settings["layers"].get(Layer.API, {})
@@ -1707,7 +1709,7 @@ class API:
         if not os.path.exists(from_path):
             raise ValueError(f"{from_path} does not exist")
 
-        entities = self.project.settings.get("entities", {})
+        entities = self.project.settings.get("data", {})
 
         for plural_name, settings in entities.items():
             components = settings["layers"].get(Layer.API, {})
@@ -1810,7 +1812,7 @@ class API:
         if not os.path.exists(from_path):
             raise ValueError(f"{from_path} does not exist")
 
-        entities = self.project.settings.get("entities", {})
+        entities = self.project.settings.get("data", {})
 
         for plural_name, settings in entities.items():
             components = settings["layers"].get(Layer.API, {})
@@ -2026,7 +2028,7 @@ class Devcontainers:
         if os.path.exists(to_path):
             raise ValueError(f"{to_path} already exists")
 
-        entities = self.project.settings.get("entities", {})
+        entities = self.project.settings.get("data", {})
 
         for plural_name, settings in entities.items():
             components = settings["layers"].get(Layer.DEVCONTAINERS, {})
@@ -2076,7 +2078,7 @@ class Devcontainers:
         if os.path.exists(to_path):
             raise ValueError(f"{to_path} already exists")
 
-        entities = self.project.settings.get("entities", {})
+        entities = self.project.settings.get("data", {})
 
         for plural_name, settings in entities.items():
             components = settings["layers"].get(Layer.DEVCONTAINERS, {})
@@ -2125,7 +2127,7 @@ class Devcontainers:
         if os.path.exists(to_path):
             raise ValueError(f"{to_path} already exists")
 
-        entities = self.project.settings.get("entities", {})
+        entities = self.project.settings.get("data", {})
 
         for plural_name, settings in entities.items():
             components = settings["layers"].get(Layer.DEVCONTAINERS, {})
@@ -2174,7 +2176,7 @@ class Devcontainers:
         if os.path.exists(to_path):
             raise ValueError(f"{to_path} already exists")
 
-        entities = self.project.settings.get("entities", {})
+        entities = self.project.settings.get("data", {})
 
         for plural_name, settings in entities.items():
             components = settings["layers"].get(Layer.DEVCONTAINERS, {})
@@ -2238,7 +2240,7 @@ class Storage:
         if os.path.exists(to_path):
             raise ValueError(f"{to_path} already exists")
 
-        entities = self.project.settings.get("entities", {})
+        entities = self.project.settings.get("data", {})
         ports = self.project.settings.get("ports", {})
 
         for plural_name, settings in entities.items():
@@ -2312,7 +2314,7 @@ class Storage:
         if os.path.exists(to_path):
             raise ValueError(f"{to_path} already exists")
 
-        entities = self.project.settings.get("entities", {})
+        entities = self.project.settings.get("data", {})
         ports = self.project.settings.get("ports", {})
 
         for plural_name, settings in entities.items():
@@ -2385,7 +2387,7 @@ class Utility:
         if os.path.exists(to_path):
             raise ValueError(f"{to_path} already exists")
 
-        entities = self.project.settings.get("entities", {})
+        entities = self.project.settings.get("data", {})
 
         for plural_name, settings in entities.items():
             components = settings["layers"].get(Layer.UTILITY, {})
@@ -2434,7 +2436,7 @@ class Utility:
         if os.path.exists(to_path):
             raise ValueError(f"{to_path} already exists")
 
-        entities = self.project.settings.get("entities", {})
+        entities = self.project.settings.get("data", {})
 
         for plural_name, settings in entities.items():
             components = settings["layers"].get(Layer.UTILITY, {})
@@ -2471,7 +2473,7 @@ class Utility:
         if os.path.exists(to_path):
             raise ValueError(f"{to_path} already exists")
 
-        entities = self.project.settings.get("entities", {})
+        entities = self.project.settings.get("data", {})
 
         for plural_name, settings in entities.items():
             components = settings["layers"].get(Layer.UTILITY, {})
