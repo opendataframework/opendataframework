@@ -775,15 +775,42 @@ class Project:
                     continue
 
                 self._settings["ports"][component] = port
+        
+    
+    def register(self, layer: str = None, component: str = None, entity: Entity = None) -> None:
+        """Register component or entity at project level."""
+        assert (layer and component) or entity, "Eather `layer` AND `component` OR entity should be set"
 
-    def register(self, entity: Entity):
-        """Register entity."""
-        if entity.plural_name in self.settings["data"]:
-            raise ValueError(f"`{entity.plural_name}` already exists")
-        self.settings["data"].update(entity.to_dict())
-        self.mounts(entity)
-        self.volumes(entity)
-        self.ports(entity)
+        if not (layer and component) and entity:
+            if entity.plural_name in self.settings["data"]:
+                raise ValueError(f"`{entity.plural_name}` already exists")
+            self.settings["data"].update(entity.to_dict())
+
+        if layer and layer not in COMPONENTS:
+            raise ValueError(f"Layer `{layer}` not found")
+
+        if layer and component:
+            if component not in COMPONENTS[layer]:
+                raise ValueError(f"Component `{component}` not found")
+            if component in self.settings["platform"]:
+                raise ValueError(f"Component `{component}` already exists")
+            
+            if entity:
+                self.settings["platform"][entity.plural_name] = {"layer": layer}
+            else:
+                self.settings["platform"][component] = {"layer": layer}
+
+            dependencies = DEPENDENCIES.get(component, {})
+            for deps_layer, deps_components in dependencies.items():
+                for deps_component in deps_components:
+                    if deps_component not in self.settings["platform"]:
+                        if layer == Layer.API and deps_layer == Layer.STORAGE and entity:
+                            self.settings["platform"][entity.plural_name][Layer.STORAGE] = deps_component
+                        self.settings["platform"][deps_component] = {"layer": deps_layer}
+        
+        # self.mounts(entity)
+        # self.volumes(entity)
+        # self.ports(entity)
 
     @property
     def layout(self):
@@ -1139,7 +1166,7 @@ class Project:
                     rprint()
                     rprint(f"[#B36AE2]{entity.name} | {layer}[/#B36AE2]")
                     for component in components:
-                        if component in entity.layers.get(layer, {}):
+                        if self.settings["platform"].get(component):
                             rprint(f"[bright_black]{component}: y[/bright_black]")
                             continue
                         user_input = (
@@ -1148,13 +1175,16 @@ class Project:
                             .lower()
                         )
                         if user_input in {"y", "yes"}:
-                            entity.register(layer, component)
+                            if layer == Layer.API:
+                                self.register(layer=layer, component=component, entity=entity)
+                            else:
+                                self.register(layer=layer, component=component)
                     rprint()
 
                 rprint()
                 rprint(f"{json.dumps(entity.to_dict(), indent=JSON_INDENT)}")
                 rprint()
-                self.register(entity)
+                self.register(entity=entity)
                 rprint(
                     "[#00FA92]Entity[/#00FA92]",
                     f"`[#B36AE2]{entity.name}[/#B36AE2]`",
