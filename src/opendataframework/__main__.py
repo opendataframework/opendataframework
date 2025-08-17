@@ -698,38 +698,39 @@ class Project:
         raise ValueError(f"{os.path.join(self.path)}: settings file does not exist")
 
 
-    def mounts(self, entity: Entity) -> None:
+    def mounts(self) -> None:
         """Configure mounts."""
-        for layer, components in entity.layers.items():
-            for component in components:
-                if component not in MOUNTS:
-                    continue
+        for component, settings in self.settings["platform"].items():
+            if component not in MOUNTS:
+                continue
 
-                if component in self._settings["mounts"]:
-                    continue
+            if component in self._settings["mounts"]:
+                continue
 
-                self._settings["mounts"][component] = {}
+            self._settings["mounts"][component] = {}
 
-                if layer is Layer.DEVCONTAINERS:
-                    workspace_mount = MOUNTS[component]["workspaceMount"].format(
-                        project_name=self.name
-                    )
-                    self._settings["mounts"][component]["workspaceMount"] = (
-                        workspace_mount
-                    )
+            layer = settings["layer"]
 
-                    workspace_folder = MOUNTS[component]["workspaceFolder"].format(
-                        project_name=self.name
-                    )
-                    self._settings["mounts"][component]["workspaceFolder"] = (
-                        workspace_folder
-                    )
+            if layer is Layer.DEVCONTAINERS:
+                workspace_mount = MOUNTS[component]["workspaceMount"].format(
+                    project_name=self.name
+                )
+                self._settings["mounts"][component]["workspaceMount"] = (
+                    workspace_mount
+                )
 
-                    mounts = [
-                        mnt.format(project_name=self.name)
-                        for mnt in MOUNTS[component]["mounts"]
-                    ]
-                    self._settings["mounts"][component]["mounts"] = mounts
+                workspace_folder = MOUNTS[component]["workspaceFolder"].format(
+                    project_name=self.name
+                )
+                self._settings["mounts"][component]["workspaceFolder"] = (
+                    workspace_folder
+                )
+
+                mounts = [
+                    mnt.format(project_name=self.name)
+                    for mnt in MOUNTS[component]["mounts"]
+                ]
+                self._settings["mounts"][component]["mounts"] = mounts
 
     def volumes(self, entity: Entity) -> None:
         """Configure volumes."""
@@ -808,7 +809,7 @@ class Project:
                             self.settings["platform"][entity.plural_name][Layer.STORAGE] = deps_component
                         self.settings["platform"][deps_component] = {"layer": deps_layer}
         
-        # self.mounts(entity)
+        self.mounts()
         # self.volumes(entity)
         # self.ports(entity)
 
