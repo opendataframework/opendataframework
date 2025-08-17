@@ -732,20 +732,19 @@ class Project:
                 ]
                 self._settings["mounts"][component]["mounts"] = mounts
 
-    def volumes(self, entity: Entity) -> None:
+    def volumes(self) -> None:
         """Configure volumes."""
-        for layer, components in entity.layers.items():
-            for component in components:
-                if component not in VOLUMES:
-                    continue
+        for component in self.settings["platform"]:
+            if component not in VOLUMES:
+                continue
 
-                if component in self._settings["volumes"]:
-                    continue
+            if component in self._settings["volumes"]:
+                continue
 
-                self._settings["volumes"][component] = {}
-                self._settings["volumes"][component].update(
-                    VOLUMES[component].get(self.layout, {})
-                )
+            self._settings["volumes"][component] = {}
+            self._settings["volumes"][component].update(
+                VOLUMES[component].get(self.layout, {})
+            )
 
     def ports(self, entity: Entity) -> None:
         """Configure ports."""
@@ -810,7 +809,7 @@ class Project:
                         self.settings["platform"][deps_component] = {"layer": deps_layer}
         
         self.mounts()
-        # self.volumes(entity)
+        self.volumes()
         # self.ports(entity)
 
     @property
