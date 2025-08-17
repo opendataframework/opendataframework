@@ -746,35 +746,31 @@ class Project:
                 VOLUMES[component].get(self.layout, {})
             )
 
-    def ports(self, entity: Entity) -> None:
+    def ports(self) -> None:
         """Configure ports."""
-        for layer, components in entity.layers.items():
-            for component in components:
-                if component not in PORTS:
-                    continue
+        for component, settings in self.settings["platform"].items():
+            layer = settings["layer"]
 
-                if layer is Layer.API:
-                    if not self._api_ports:
-                        port = int(PORTS.get(component))
+            if component in self._settings["ports"]:
+                continue
 
-                    else:
-                        port = int(self._api_ports[-1])
-                        port += 1
-                    port = str(port)
-                    self._api_ports.append(port)
-                    self._settings["data"][entity.plural_name]["layers"][layer][
-                        component
-                    ]["port"] = port
-                    continue
+            port = PORTS.get(component)
+            
+            layer = settings["layer"]
+            if layer is Layer.API:
+                if not self._api_ports:
+                    name = f'{layer}-{settings["storage"]}'
+                    port = int(PORTS.get(name))
+                else:
+                    port = int(self._api_ports[-1])
+                    port += 1
+                port = str(port)
+                self._api_ports.append(port)
 
-                if component in self._settings["ports"]:
-                    continue
+            if not port:
+                continue
 
-                port = PORTS.get(component)
-                if not port:
-                    continue
-
-                self._settings["ports"][component] = port
+            self._settings["ports"][component] = port
         
     
     def register(self, layer: str = None, component: str = None, entity: Entity = None) -> None:
@@ -810,7 +806,7 @@ class Project:
         
         self.mounts()
         self.volumes()
-        # self.ports(entity)
+        self.ports()
 
     @property
     def layout(self):
