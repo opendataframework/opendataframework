@@ -153,6 +153,21 @@ DEPENDENCIES = {
     Component.API_POSTGRES: {Layer.STORAGE: [Component.POSTGRES]},
 }
 
+ENTIIES = {
+    Component.API_POSTGRES: {
+        "name": "models",
+        "type": "list"
+    },
+    Component.SUPERSET: {
+        "name": "datasets",
+        "type": "list"
+    },
+    Component.POSTGRES: {
+        "name": "tables",
+        "type": "list"
+    }
+}
+
 
 DESCRIPTIONS = {
     # ANALYTICS
@@ -638,8 +653,10 @@ class Project:
             raise ValueError("`mounts` field does not exist")
         if "opendataframework" not in value:
             raise ValueError("`opendataframework` field does not exist")
-        if "entities" not in value:
-            raise ValueError("`entities` field does not exist")
+        if "data" not in value:
+            raise ValueError("`data` field does not exist")
+        if "platform" not in value:
+            raise ValueError("`platform` field does not exist")
         if "volumes" not in value:
             raise ValueError("`volumes` field does not exist")
         if "ports" not in value:
@@ -791,18 +808,31 @@ class Project:
             if component in self.settings["platform"]:
                 raise ValueError(f"Component `{component}` already exists")
             
-            if entity:
+            if entity and layer == Layer.API:
                 self.settings["platform"][entity.plural_name] = {"layer": layer}
+                storage = DEPENDENCIES.get(component, {}).get(Layer.STORAGE, [None])[0]
+                if storage:
+                    self.settings["platform"][entity.plural_name]["storage"] = storage
             else:
                 self.settings["platform"][component] = {"layer": layer}
-
-            dependencies = DEPENDENCIES.get(component, {})
-            for deps_layer, deps_components in dependencies.items():
-                for deps_component in deps_components:
-                    if deps_component not in self.settings["platform"]:
-                        if layer == Layer.API and deps_layer == Layer.STORAGE and entity:
-                            self.settings["platform"][entity.plural_name][Layer.STORAGE] = deps_component
-                        self.settings["platform"][deps_component] = {"layer": deps_layer}
+            
+            if component in ENTIIES:
+                name = ENTIIES[component]["name"]
+                if ENTIIES[component]["type"] == "list":
+                    if layer == Layer.API:
+                        self.settings["platform"][entity.plural_name][name] = [entity.plural_name]
+                    else:
+                        self.settings["platform"][component][name] = [entity.plural_name]
+            
+            for layer, components in DEPENDENCIES.get(component, {}).items():
+                for component in components:
+                    if component in self.settings["platform"]:
+                        if component in ENTIIES and ENTIIES[component]["type"] == "list":
+                            self.settings["platform"][component][ENTIIES[component]["name"]].append(entity.plural_name)
+                    else:
+                        self.settings["platform"][component] = {"layer": layer}
+                        if component in ENTIIES and ENTIIES[component]["type"] == "list":
+                            self.settings["platform"][component][ENTIIES[component]["name"]] = [entity.plural_name]
         
         self.mounts()
         self.volumes()
@@ -1004,11 +1034,6 @@ class Project:
         else:
             self.copy(from_path, self.path, "requirements.txt")
 
-
-        entities = self.settings.get("data", {})
-
-        ports = self.settings.get("ports", {})
-
         host = "http://localhost"
         target_path = os.path.join(to_path, "static", "index.html")
 
@@ -1043,27 +1068,17 @@ class Project:
             else:
                 data[layer].update({component: {"url": f"{host}:{port}/"}})
 
+        ports = self.settings.get("ports", {})
+
         for component, port in ports.items():
-            layer = None
-            for current_layer, components in COMPONENTS.items():
-                if component in components:
-                    layer = current_layer
-                    break
+            layer = self.settings["platform"].get(component, {}).get("layer")
             if not layer:
                 continue
-            html(data, layer, nav, content)
-
-        entities = self.settings.get("data", {})
-
-        for plural_name, settings in entities.items():
-            layers = settings.get("layers", {})
-
-            for layer, components in layers.items():
-                for component in components:
-                    port = components[component].get("port")
-                    if not port:
-                        continue
-                    html(data, layer, nav, content, plural_name)
+            
+            if layer == Layer.API:
+                html(data, layer, nav, content, component)
+            else:
+                html(data, layer, nav, content)
                     
         nav.append("  </nav>")
         content.append("</div>")
@@ -1079,6 +1094,7 @@ class Project:
     
     def init(self, extention=Settings.JSON):
         """Handler for `init` CLI command."""
+        entities = []
         rprint()
         while True:
             user_input = (
@@ -1156,27 +1172,6 @@ class Project:
 
                 entity.read()
 
-                for layer, components in COMPONENTS.items():
-                    if not components:
-                        continue
-                    rprint()
-                    rprint(f"[#B36AE2]{entity.name} | {layer}[/#B36AE2]")
-                    for component in components:
-                        if self.settings["platform"].get(component):
-                            rprint(f"[bright_black]{component}: y[/bright_black]")
-                            continue
-                        user_input = (
-                            Prompt.ask(f"[#00FA92]{component}[/#00FA92]")
-                            .strip()
-                            .lower()
-                        )
-                        if user_input in {"y", "yes"}:
-                            if layer == Layer.API:
-                                self.register(layer=layer, component=component, entity=entity)
-                            else:
-                                self.register(layer=layer, component=component)
-                    rprint()
-
                 rprint()
                 rprint(f"{json.dumps(entity.to_dict(), indent=JSON_INDENT)}")
                 rprint()
@@ -1187,7 +1182,36 @@ class Project:
                     "[#00FA92]created[/#00FA92]",
                 )
                 rprint()
+                entities.append(entity)
 
+        for layer, components in COMPONENTS.items():
+            if not components:
+                continue
+            rprint()
+            rprint(f"[#B36AE2]{layer}[/#B36AE2]")
+            for component in components:
+                if self.settings["platform"].get(component):
+                    rprint(f"[bright_black]{component}: y[/bright_black]")
+                    continue
+                user_input = (
+                    Prompt.ask(f"[#00FA92]{component}[/#00FA92]")
+                    .strip()
+                    .lower()
+                )
+                if user_input in {"y", "yes"}:
+                    if component in ENTIIES:
+                        for entity in entities:
+                            user_input = (
+                                Prompt.ask(f"[#00FA92]Add {entity.plural_name} to {component}?[/#00FA92]")
+                                .strip()
+                                .lower()
+                            )
+                            if user_input in {"y", "yes"}:
+                                self.register(layer=layer, component=component, entity=entity)
+                    else:
+                        self.register(layer=layer, component=component)
+            rprint()
+        
         if extention == Settings.JSON:
             self.to_json()
         else:
