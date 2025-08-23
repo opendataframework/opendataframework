@@ -614,18 +614,12 @@ class Project:
 
         self.layout = value["layout"]
 
-        if "mounts" not in value:
-            raise ValueError("`mounts` field does not exist")
         if "opendataframework" not in value:
             raise ValueError("`opendataframework` field does not exist")
         if "data" not in value:
             raise ValueError("`data` field does not exist")
         if "platform" not in value:
             raise ValueError("`platform` field does not exist")
-        if "volumes" not in value:
-            raise ValueError("`volumes` field does not exist")
-        if "ports" not in value:
-            raise ValueError("`ports` field does not exist")
         # TODO: validate layer & component names
         self._settings = value
 
