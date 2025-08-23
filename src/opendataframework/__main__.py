@@ -396,17 +396,11 @@ class Entity:
         self.plural_name = name
 
         self._fields = {}
-        self._layers = {}
 
     @property
     def fields(self):
         """Get fields."""
         return self._fields
-
-    @property
-    def layers(self):
-        """Get layers."""
-        return self._layers
 
     @property
     def name(self) -> str:
@@ -491,35 +485,9 @@ class Entity:
                 "fields": {
                     k: {"type": v.field_type, "alias": v.field_alias}
                     for k, v in self.fields.items()
-                },
-                "layers": self.layers,
+                }
             }
         }
-
-    def register(self, layer: str, component: str) -> None:
-        """Register component at entity level."""
-        if layer not in COMPONENTS:
-            raise ValueError(f"Layer `{layer}` not found")
-
-        if component not in COMPONENTS[layer]:
-            raise ValueError(f"Component `{component}` not found")
-
-        if layer not in self.layers:
-            self.layers[layer] = {}
-
-        if component in self.layers[layer]:
-            raise ValueError(f"Component `{component}` already exists")
-
-        # TODO: setter/validate names | component config
-        self.layers[layer][component] = {}
-
-        dependencies = DEPENDENCIES.get(component, {})
-        for deps_layer, deps_components in dependencies.items():
-            if deps_layer not in self.layers:
-                self.layers[deps_layer] = {}
-            for deps_component in deps_components:
-                if deps_component not in self.layers[deps_layer]:
-                    self.layers[deps_layer][deps_component] = {}
 
 
 class Project:
