@@ -733,7 +733,7 @@ class Project:
             if not port:
                 continue
 
-            self._settings["platform"][component]["port"] = int(port)
+            self._settings["platform"][component]["port"] = port
         
     
     def register(self, layer: str = None, component: str = None, entity: Entity = None) -> None:
@@ -1187,16 +1187,16 @@ class Project:
         if server:
             self.add_server()
 
-        # layers = [
-        #     Analytics(project=self),
-        #     API(project=self),
-        #     Devcontainers(project=self),
-        #     Storage(project=self),
-        #     Utility(project=self),
-        # ]
+        layers = [
+            Analytics(project=self),
+            # API(project=self),
+            # Devcontainers(project=self),
+            # Storage(project=self),
+            # Utility(project=self),
+        ]
 
-        # for layer in layers:
-        #     layer()
+        for layer in layers:
+            layer()
 
         # self.collect()
 
@@ -1377,6 +1377,10 @@ class Analytics:
 
     def superset(self):
         """Configure Analytics `SUPERSET` component."""
+        settings = self.project.settings.get("platform", {}).get(Component.SUPERSET)
+        if not settings:
+            return
+
         from_path = os.path.join(SRC_PATH, Layer.ANALYTICS, Component.SUPERSET)
         if not os.path.exists(from_path):
             raise ValueError(f"{from_path} does not exist")
@@ -1388,13 +1392,13 @@ class Analytics:
             raise ValueError(f"{to_path} already exists")
 
         entities = self.project.settings.get("data", {})
-        ports = self.project.settings.get("ports", {})
+        storages = {storage: config for storage, config in self.project.settings["platform"].items() if config["layer"] == Layer.STORAGE}
+        port = settings["port"]
 
         to_setup = os.path.join(to_path, "setup.sh")
 
-        for plural_name, settings in entities.items():
-            components = settings["layers"].get(Layer.ANALYTICS, {})
-            if Component.SUPERSET not in components:
+        for plural_name in entities:
+            if plural_name not in settings["datasets"]:
                 continue
 
             if not os.path.exists(to_path):
@@ -1404,37 +1408,42 @@ class Analytics:
                     ignore=shutil.ignore_patterns(*IGNORE_PATTERNS, *("database",)),
                 )
 
-            storages = settings["layers"].get(Layer.STORAGE, {})
-            if not storages:
+            storage = None
+
+            for name, config in storages.items():
+                for table in config["tables"]:
+                    if table == plural_name:
+                        storage = name
+            
+            if not storage:
                 continue
 
-            for storage in storages:
-                from_setup = os.path.join(
-                    from_path, "database", f"{storage}", "setup.sh"
-                )
+            from_setup = os.path.join(
+                from_path, "database", f"{storage}", "setup.sh"
+            )
 
-                if not os.path.exists(from_setup):
-                    continue
+            if not os.path.exists(from_setup):
+                continue
 
-                with open(f"{from_setup}", "r") as file:
-                    content = file.read()
+            with open(f"{from_setup}", "r") as file:
+                content = file.read()
 
-                with open(f"{to_setup}", "a") as file:
-                    file.write("&& " + content)
+            with open(f"{to_setup}", "a") as file:
+                file.write("&& " + content)
 
-                from_create = os.path.join(
-                    from_path, "database", f"{storage}", "dataset.sh"
-                )
+            from_create = os.path.join(
+                from_path, "database", f"{storage}", "dataset.sh"
+            )
 
-                with open(f"{from_create}", "r") as file:
-                    content = file.read()
-                    content = content.replace("table-name", f"{plural_name}")
+            with open(f"{from_create}", "r") as file:
+                content = file.read()
+                content = content.replace("table-name", f"{plural_name}")
 
-                with open(f"{to_setup}", "a") as file:
-                    file.write("&& " + content)
+            with open(f"{to_setup}", "a") as file:
+                file.write("&& " + content)
 
-                if PORTS.get(storage) and ports.get(storage):
-                    Project.replace(to_setup, PORTS.get(storage), ports.get(storage))
+            if PORTS.get(storage) and storages[storage].get("port"):
+                Project.replace(to_setup, PORTS.get(storage), storages[storage].get("port"))
 
             with open(f"{to_setup}", "a") as file:
                 file.write("\n")
@@ -1452,7 +1461,7 @@ class Analytics:
             os.path.join(to_path, "setup.sh"), f"{PROJECT_NAME}", self.project.name
         )
 
-        Project.replace(to_setup, PORTS[Component.SUPERSET], ports[Component.SUPERSET])
+        Project.replace(to_setup, PORTS[Component.SUPERSET], port)
 
         hostname = self.project.settings["project"].replace("_", "-")
 
@@ -1471,7 +1480,7 @@ class Analytics:
         Project.replace(
             os.path.join(to_path, "docker-compose.yaml"),
             f"{PORTS[Component.SUPERSET]}:",
-            f"{ports[Component.SUPERSET]}:",
+            f"{port}:",
         )
 
         rprint(f"{to_path}[green] created[/green]")
