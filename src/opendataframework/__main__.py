@@ -546,10 +546,7 @@ class Project:
             "profile": self._profile,
             "layout": self._layout,
             "data": {},
-            "platform": {},
-            "mounts": {},
-            "volumes": {},
-            "ports": {},
+            "platform": {}
         }
         self.name = name
         self.path = path
@@ -721,10 +718,7 @@ class Project:
             if component not in MOUNTS:
                 continue
 
-            if component in self._settings["mounts"]:
-                continue
-
-            self._settings["mounts"][component] = {}
+            self._settings["platform"][component]["mounts"] = {}
 
             layer = settings["layer"]
 
@@ -732,14 +726,14 @@ class Project:
                 workspace_mount = MOUNTS[component]["workspaceMount"].format(
                     project_name=self.name
                 )
-                self._settings["mounts"][component]["workspaceMount"] = (
+                self._settings["platform"][component]["mounts"]["workspaceMount"] = (
                     workspace_mount
                 )
 
                 workspace_folder = MOUNTS[component]["workspaceFolder"].format(
                     project_name=self.name
                 )
-                self._settings["mounts"][component]["workspaceFolder"] = (
+                self._settings["platform"][component]["mounts"]["workspaceFolder"] = (
                     workspace_folder
                 )
 
@@ -747,47 +741,36 @@ class Project:
                     mnt.format(project_name=self.name)
                     for mnt in MOUNTS[component]["mounts"]
                 ]
-                self._settings["mounts"][component]["mounts"] = mounts
+                self._settings["platform"][component]["mounts"]["mounts"] = mounts
 
     def volumes(self) -> None:
         """Configure volumes."""
         for component in self.settings["platform"]:
             if component not in VOLUMES:
                 continue
-
-            if component in self._settings["volumes"]:
-                continue
-
-            self._settings["volumes"][component] = {}
-            self._settings["volumes"][component].update(
-                VOLUMES[component].get(self.layout, {})
-            )
+            self._settings["platform"][component]["volumes"] = VOLUMES[component].get(self.layout, {})
 
     def ports(self) -> None:
         """Configure ports."""
         for component, settings in self.settings["platform"].items():
-            layer = settings["layer"]
-
-            if component in self._settings["ports"]:
+            port = PORTS.get(component)
+            if not port:
                 continue
 
-            port = PORTS.get(component)
-            
             layer = settings["layer"]
             if layer is Layer.API:
                 if not self._api_ports:
-                    name = f'{layer}-{settings["storage"]}'
-                    port = int(PORTS.get(name))
+                    name = component
+                    if settings.get("storage"):
+                        name = f'{layer}-{settings["storage"]}'
+                    port = int(PORTS.get(name))    
                 else:
                     port = int(self._api_ports[-1])
                     port += 1
                 port = str(port)
                 self._api_ports.append(port)
-
-            if not port:
-                continue
-
-            self._settings["ports"][component] = port
+            
+            self._settings["platform"][component]["port"] = int(port)
         
     
     def register(self, layer: str = None, component: str = None, entity: Entity = None) -> None:
@@ -1047,7 +1030,7 @@ class Project:
         content = ['<div class="main-content" id="mainContent">']
         section = '  <section id="{layer}" class="{section}">\n    <div class="grid" id="grid-{layer}"></div>\n  </section>'
 
-        def html(data, layer, nav, content, plural_name=None):
+        def html(data, layer, nav, content, host, port, plural_name=None):
             if not data.get(layer):
                 data[layer] = {}
                 if len(nav) == 1:
@@ -1076,9 +1059,9 @@ class Project:
                 continue
             
             if layer == Layer.API:
-                html(data, layer, nav, content, component)
+                html(data, layer, nav, content, host, port, component)
             else:
-                html(data, layer, nav, content)
+                html(data, layer, nav, content, host, port)
                     
         nav.append("  </nav>")
         content.append("</div>")
