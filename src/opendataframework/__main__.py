@@ -716,8 +716,6 @@ class Project:
         """Configure ports."""
         for component, settings in self.settings["platform"].items():
             port = PORTS.get(component)
-            if not port:
-                continue
 
             layer = settings["layer"]
             if layer is Layer.API:
@@ -725,13 +723,16 @@ class Project:
                     name = component
                     if settings.get("storage"):
                         name = f'{layer}-{settings["storage"]}'
-                    port = int(PORTS.get(name))    
+                    port = PORTS.get(name)
                 else:
                     port = int(self._api_ports[-1])
                     port += 1
                 port = str(port)
                 self._api_ports.append(port)
             
+            if not port:
+                continue
+
             self._settings["platform"][component]["port"] = int(port)
         
     
@@ -778,10 +779,6 @@ class Project:
                         self.settings["platform"][component] = {"layer": layer}
                         if component in ENTIIES and ENTIIES[component]["type"] == "list":
                             self.settings["platform"][component][ENTIIES[component]["name"]] = [entity.plural_name]
-        
-        self.mounts()
-        self.volumes()
-        self.ports()
 
     @property
     def layout(self):
@@ -1009,22 +1006,20 @@ class Project:
                     content.append(section.format(layer=layer, section="section"))
             
             if plural_name:
-                data[layer].update({f"{component}.{plural_name}": {"url": f"{host}:{port}/"}})
+                data[layer].update({f"{plural_name}": {"url": f"{host}:{port}/"}})
             else:
                 data[layer].update({component: {"url": f"{host}:{port}/"}})
 
-        ports = self.settings.get("ports", {})
-
-        for component, port in ports.items():
-            layer = self.settings["platform"].get(component, {}).get("layer")
-            if not layer:
+        for component, settings in self._settings["platform"].items():
+            layer = settings["layer"]
+            port = settings.get("port")
+            if not port:
                 continue
-            
             if layer == Layer.API:
                 html(data, layer, nav, content, host, port, component)
             else:
                 html(data, layer, nav, content, host, port)
-                    
+        
         nav.append("  </nav>")
         content.append("</div>")
         
@@ -1157,6 +1152,10 @@ class Project:
                         self.register(layer=layer, component=component)
             rprint()
         
+        self.mounts()
+        self.volumes()
+        self.ports()
+        
         if extention == Settings.JSON:
             self.to_json()
         else:
@@ -1188,18 +1187,18 @@ class Project:
         if server:
             self.add_server()
 
-        layers = [
-            Analytics(project=self),
-            API(project=self),
-            Devcontainers(project=self),
-            Storage(project=self),
-            Utility(project=self),
-        ]
+        # layers = [
+        #     Analytics(project=self),
+        #     API(project=self),
+        #     Devcontainers(project=self),
+        #     Storage(project=self),
+        #     Utility(project=self),
+        # ]
 
-        for layer in layers:
-            layer()
+        # for layer in layers:
+        #     layer()
 
-        self.collect()
+        # self.collect()
 
     @staticmethod
     def replace(path: str, text: str, new_text: str):
