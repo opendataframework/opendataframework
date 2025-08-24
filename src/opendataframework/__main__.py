@@ -434,7 +434,7 @@ class Entity:
 class Project:
     """Project."""
 
-    def __init__(self, name: str, path: str = "", data: str = "", models: str = ""):
+    def __init__(self, name: str, path: str = "", data: str = ""):
         """Create project instance."""
         self._name = None
         self._path = None
