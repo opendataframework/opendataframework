@@ -106,7 +106,6 @@ class Component:
     INFERENCE: str = "inference"
 
     # DEVCONTAINERS
-    GO: str = "go"
     PYTHON: str = "python"
     R: str = "R"
 
@@ -133,7 +132,7 @@ class Settings:
 
 COMPONENTS = {
     Layer.ANALYTICS: [Component.SUPERSET],
-    Layer.DEVCONTAINERS: [Component.GO, Component.PYTHON, Component.R],
+    Layer.DEVCONTAINERS: [Component.PYTHON, Component.R],
     Layer.API: [
         Component.API_DRUID,
         Component.API_JSON_KAFKA,
@@ -174,7 +173,6 @@ DESCRIPTIONS = {
     Component.API_JSON_KAFKA: "REST Data Access for Kafka",
     Component.API_POSTGRES: "REST Data Access for Postgres",
     # DEVCONTAINERS
-    Component.GO: "VS Code devcontainer for GO",
     Component.PYTHON: "VS Code devcontainer for Python",
     Component.R: "VS Code devcontainer for R",
     # STORAGE
@@ -215,22 +213,6 @@ VOLUMES = {
 
 
 MOUNTS = {
-    Component.GO: {
-        "workspaceMount": ",".join(
-            ("source=${{localWorkspaceFolder}}", "target=/{project_name}", "type=bind")
-        ),
-        "workspaceFolder": "/{project_name}",
-        "mounts": [
-            ",".join(
-                (
-                    "source=${{localWorkspaceFolder}}/../../../data",
-                    "target=/{project_name}/data",
-                    "type=bind",
-                    "consistency=cached",
-                )
-            )
-        ],
-    },
     Component.PYTHON: {
         "workspaceMount": ",".join(
             ("source=${{localWorkspaceFolder}}", "target=/{project_name}", "type=bind")
@@ -1994,56 +1976,6 @@ class Devcontainers:
         """Create Devcontainers layer instance."""
         self.project = project
 
-    def go(self):
-        """Configure Devcontainers `GO` component."""
-        from_path = os.path.join(SRC_PATH, Layer.DEVCONTAINERS, Component.GO)
-        if not os.path.exists(from_path):
-            raise ValueError(f"{from_path} does not exist")
-
-        to_path = os.path.join(
-            self.project.path, PLATFORM_FOLDER, Layer.DEVCONTAINERS, Component.GO
-        )
-        if os.path.exists(to_path):
-            raise ValueError(f"{to_path} already exists")
-
-        entities = self.project.settings.get("data", {})
-
-        for plural_name, settings in entities.items():
-            components = settings["layers"].get(Layer.DEVCONTAINERS, {})
-            if Component.GO not in components:
-                continue
-
-            if os.path.exists(to_path):
-                break
-
-            shutil.copytree(
-                from_path,
-                to_path,
-                ignore=shutil.ignore_patterns(*IGNORE_PATTERNS),
-            )
-
-            mounts = self.project.settings["mounts"].get(Component.GO)
-
-            if not mounts:
-                break
-
-            config_path = os.path.join(to_path, ".devcontainer", "devcontainer.json")
-            if not os.path.exists(os.path.join(config_path)):
-                raise ValueError(f"{config_path} does not exist")
-
-            with open(config_path, "r") as file:
-                config = json.load(file)
-                config["name"] = self.project.settings["project"]
-                config["workspaceMount"] = mounts.get("workspaceMount", "")
-                config["workspaceFolder"] = mounts.get("workspaceFolder", "")
-                config["mounts"] = mounts.get("mounts", [])
-
-            with open(config_path, "w") as file:
-                json.dump(config, file, indent=JSON_INDENT)
-
-            rprint(f"{to_path}[green] created[/green]")
-    
-
     def python(self):
         """Configure Devcontainers `PYTHON` component."""
         from_path = os.path.join(SRC_PATH, Layer.DEVCONTAINERS, Component.PYTHON)
@@ -2144,7 +2076,6 @@ class Devcontainers:
 
     def __call__(self):
         """Call layer."""
-        self.go()
         self.python()
         self.r()
 
@@ -2718,15 +2649,6 @@ def chat():
         },
         Component.INFERENCE: {"inference", "api", "model", "ml", "predict", "endpoint"},
         # DEVCONTAINERS
-        Component.GO: {
-            "devcontainer",
-            "golang",
-            "env",
-            "isolated",
-            "containerized",
-            "go",
-            "lang",
-        },
         Component.PYTHON: {
             "devcontainer",
             "python",
