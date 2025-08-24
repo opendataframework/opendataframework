@@ -117,7 +117,6 @@ class Component:
     POSTGRES: str = "postgres"
 
     # UTILITY
-    NGINX = "nginx"
     TEXLIVE = "texlive"
 
 
@@ -143,7 +142,7 @@ COMPONENTS = {
         Component.INFERENCE,
     ],
     Layer.STORAGE: [Component.KAFKA, Component.POSTGRES],
-    Layer.UTILITY: [Component.NGINX, Component.TEXLIVE],
+    Layer.UTILITY: [Component.TEXLIVE],
 }
 
 DEPENDENCIES = {
@@ -184,7 +183,6 @@ DESCRIPTIONS = {
     Component.KAFKA: "Apache Kafka is an open-source distributed event streaming platform",  # noqa
     Component.POSTGRES: "Advanced Relational Database",
     # UTILITY
-    Component.NGINX: "HTTP and reverse proxy server",
     Component.TEXLIVE: "TeX Live is intended to be a straightforward way to get up and running with the TeX document production system",  # noqa
 }
 
@@ -200,8 +198,6 @@ PORTS = {
     # STORAGE
     Component.KAFKA: "9092",
     Component.POSTGRES: "5432",
-    # UTILITY
-    Component.NGINX: "80",
 }
 
 
@@ -2374,55 +2370,6 @@ class Utility:
     def __init__(self, project: Project):
         """Create Utility layer instance."""
         self.project = project
-
-    def nginx(self):
-        """Configure Analytics `NGINX` component."""
-        from_path = os.path.join(SRC_PATH, Layer.UTILITY, Component.NGINX)
-        if not os.path.exists(from_path):
-            raise ValueError(f"{from_path} does not exist")
-
-        to_path = os.path.join(
-            self.project.path, PLATFORM_FOLDER, Layer.UTILITY, Component.NGINX
-        )
-        if os.path.exists(to_path):
-            raise ValueError(f"{to_path} already exists")
-
-        entities = self.project.settings.get("data", {})
-
-        for plural_name, settings in entities.items():
-            components = settings["layers"].get(Layer.UTILITY, {})
-            if Component.NGINX not in components:
-                continue
-
-            if os.path.exists(to_path):
-                raise ValueError(f"{to_path} already exists")
-
-            shutil.copytree(
-                from_path,
-                to_path,
-                ignore=shutil.ignore_patterns(*IGNORE_PATTERNS),
-            )
-
-            break
-
-        if not os.path.exists(to_path):
-            return
-
-        Project.replace(
-            os.path.join(to_path, "docker-compose.yaml"),
-            PROJECT_NAME,
-            self.project.settings["project"],
-        )
-
-        ports = self.project.settings.get("ports", {})
-
-        Project.replace(
-            os.path.join(to_path, "docker-compose.yaml"),
-            f"{PORTS[Component.NGINX]}:",
-            f"{ports[Component.NGINX]}:",
-        )
-
-        rprint(f"{to_path}[green] created[/green]")
     
     def texlive(self):
         """Configure Analytics `TEXLIVE` component."""
@@ -2473,7 +2420,6 @@ class Utility:
 
     def __call__(self):
         """Call layer."""
-        self.nginx()
         self.texlive()
 
 
@@ -2892,16 +2838,6 @@ def chat():
             "postgres",
         },
         # UTILITY
-        Component.NGINX: {
-            "web",
-            "server",
-            "reverse",
-            "proxy",
-            "cache",
-            "balancer",
-            "frontend",
-            "nginx",
-        },
         Component.TEXLIVE: {
             "typesetting",
             "TeX",
