@@ -100,7 +100,6 @@ class Component:
     SUPERSET: str = "superset"
 
     # API
-    API_JSON_KAFKA: str = "api-json-kafka"
     API_POSTGRES: str = "api-postgres"
 
     # DEVCONTAINERS
@@ -108,7 +107,6 @@ class Component:
     R: str = "R"
 
     # STORAGE
-    KAFKA: str = "kafka"
     POSTGRES: str = "postgres"
 
     # UTILITY
@@ -131,16 +129,14 @@ COMPONENTS = {
     Layer.ANALYTICS: [Component.SUPERSET],
     Layer.DEVCONTAINERS: [Component.PYTHON, Component.R],
     Layer.API: [
-        Component.API_JSON_KAFKA,
         Component.API_POSTGRES,
     ],
-    Layer.STORAGE: [Component.KAFKA, Component.POSTGRES],
+    Layer.STORAGE: [Component.POSTGRES],
     Layer.UTILITY: [Component.TEXLIVE],
 }
 
 DEPENDENCIES = {
     # API
-    Component.API_JSON_KAFKA: {Layer.STORAGE: [Component.KAFKA]},
     Component.API_POSTGRES: {Layer.STORAGE: [Component.POSTGRES]},
 }
 
@@ -164,13 +160,11 @@ DESCRIPTIONS = {
     # ANALYTICS
     Component.SUPERSET: "Apache Superset is a modern, enterprise-ready business intelligence web application",  # noqa
     # API
-    Component.API_JSON_KAFKA: "REST Data Access for Kafka",
     Component.API_POSTGRES: "REST Data Access for Postgres",
     # DEVCONTAINERS
     Component.PYTHON: "VS Code devcontainer for Python",
     Component.R: "VS Code devcontainer for R",
     # STORAGE
-    Component.KAFKA: "Apache Kafka is an open-source distributed event streaming platform",  # noqa
     Component.POSTGRES: "Advanced Relational Database",
     # UTILITY
     Component.TEXLIVE: "TeX Live is intended to be a straightforward way to get up and running with the TeX document production system",  # noqa
@@ -181,10 +175,8 @@ PORTS = {
     # ANALYTICS
     Component.SUPERSET: "8088",
     # API
-    Component.API_JSON_KAFKA: "8000",
     Component.API_POSTGRES: "8000",
     # STORAGE
-    Component.KAFKA: "9092",
     Component.POSTGRES: "5432",
 }
 
@@ -1414,111 +1406,6 @@ class API:
         """Create API layer instance."""
         self.project = project
 
-    def api_json_kafka(self):
-        """Configure API `API_JSON_KAFKA` component."""
-        from_path = os.path.join(SRC_PATH, Layer.API, Component.API_JSON_KAFKA)
-        if not os.path.exists(from_path):
-            raise ValueError(f"{from_path} does not exist")
-
-        entities = self.project.settings.get("data", {})
-
-        for plural_name, settings in entities.items():
-            components = settings["layers"].get(Layer.API, {})
-            if Component.API_JSON_KAFKA not in components:
-                continue
-
-            to_path = os.path.join(
-                self.project.path,
-                PLATFORM_FOLDER,
-                Layer.API,
-                Component.API_JSON_KAFKA,
-                plural_name,
-            )
-            if os.path.exists(to_path):
-                raise ValueError(f"{to_path} already exists")
-
-            shutil.copytree(
-                from_path,
-                to_path,
-                ignore=shutil.ignore_patterns(
-                    *IGNORE_PATTERNS,
-                ),
-            )
-
-            hostname = self.project.settings["project"].replace("_", "-")
-
-            Project.replace(
-                os.path.join(to_path, "docker-compose.yaml"),
-                f"hostname: {PROJECT_NAME}-{Component.API_JSON_KAFKA}",
-                f"hostname: {hostname}-{Component.API_JSON_KAFKA}",
-            )
-
-            Project.replace(
-                os.path.join(to_path, "docker-compose.yaml"),
-                f"{PROJECT_NAME}",
-                self.project.settings["project"],
-            )
-
-            Project.replace(
-                os.path.join(to_path, "docker-compose.yaml"), "entity", plural_name
-            )
-
-            port = components[Component.API_JSON_KAFKA]["port"]
-            Project.replace(
-                os.path.join(to_path, "docker-compose.yaml"),
-                f"{PORTS[Component.API_JSON_KAFKA]}:",
-                f"{port}:",
-            )
-
-            # model
-            model_path = os.path.join(to_path, "app", "models.py")
-            new_text = "# fields"
-
-            for field_name, value in settings["fields"].items():
-                field_type, _ = value["type"], value["alias"]
-                if field_name in Field.RESERVED_FIELDS:
-                    raise ValueError(
-                        f"Field names `{self.RESERVED_FIELDS}` are reserved"
-                    )
-                if "datetime" in field_type:
-                    # TODO: format validator
-                    field_type = "datetime"
-
-                new_text += f"\n    {field_name}: {field_type}"
-
-            Project.replace(model_path, "# extra fields", new_text)
-            Project.replace(model_path, "entities", plural_name)
-            Project.replace(model_path, "Entity", settings["name"].capitalize())
-
-            # crud
-            crud_path = os.path.join(to_path, "app", "crud.py")
-            Project.replace(crud_path, "entity", settings["name"])
-            Project.replace(crud_path, "entities", plural_name)
-            Project.replace(crud_path, "Entity", settings["name"].capitalize())
-
-            # router
-            router_path = os.path.join(to_path, "app", "router.py")
-            Project.replace(router_path, "entity", settings["name"])
-            Project.replace(router_path, "entities", plural_name)
-            Project.replace(router_path, "Entity", settings["name"].capitalize())
-
-            # env
-            port = self.project.settings["ports"][Component.KAFKA]
-            env_path = os.path.join(to_path, ".env")
-            Project.replace(
-                env_path, f"{PROJECT_NAME}", self.project.settings["project"]
-            )
-            Project.replace(env_path, "description", settings["description"])
-            Project.replace(env_path, PORTS[Component.KAFKA], port)
-            Project.replace(env_path, "Entities", plural_name.capitalize())
-            Project.replace(env_path, "entities", plural_name)
-
-            # main
-            main_path = os.path.join(to_path, "app", "main.py")
-            Project.replace(main_path, "entity", settings["name"])
-
-            rprint(f"{to_path}[green] created[/green]")
-
     def api_postgres(self):
         """Configure API `API_POSTGRES` component."""
         from_path = os.path.join(SRC_PATH, Layer.API, Component.API_POSTGRES)
@@ -1624,7 +1511,6 @@ class API:
 
     def __call__(self):
         """Call layer."""
-        self.api_json_kafka()
         self.api_postgres()
 
 
@@ -1746,80 +1632,6 @@ class Storage:
         """Create Storage layer instance."""
         self.project = project
 
-    def kafka(self):
-        """Configure Storage `KAFKA` component."""
-        from_path = os.path.join(SRC_PATH, Layer.STORAGE, Component.KAFKA)
-        if not os.path.exists(from_path):
-            raise ValueError(f"{from_path} does not exist")
-
-        to_path = os.path.join(
-            self.project.path, PLATFORM_FOLDER, Layer.STORAGE, Component.KAFKA
-        )
-        if os.path.exists(to_path):
-            raise ValueError(f"{to_path} already exists")
-
-        entities = self.project.settings.get("data", {})
-        ports = self.project.settings.get("ports", {})
-
-        for plural_name, settings in entities.items():
-            components = settings["layers"].get(Layer.STORAGE, {})
-            if Component.KAFKA not in components:
-                continue
-
-            if os.path.exists(to_path):
-                break
-
-            shutil.copytree(
-                from_path,
-                to_path,
-                ignore=shutil.ignore_patterns(*IGNORE_PATTERNS),
-            )
-
-        if not os.path.exists(to_path):
-            return
-
-        hostname = self.project.settings["project"].replace("_", "-")
-
-        Project.replace(
-            os.path.join(to_path, "docker-compose.yaml"),
-            f"{PROJECT_NAME}-{Component.KAFKA}",
-            f"{hostname}-{Component.KAFKA}",
-        )
-
-        Project.replace(
-            os.path.join(to_path, "docker-compose.yaml"),
-            f"{PROJECT_NAME}",
-            self.project.settings["project"],
-        )
-
-        with open(os.path.join(to_path, "setup.sh"), "r") as file:
-            setup_script = file.read()
-
-        with open(os.path.join(to_path, "setup.sh"), "w") as file:
-            lines = []
-            for plural_name, settings in entities.items():
-                components = settings["layers"].get(Layer.STORAGE, {})
-                if Component.KAFKA not in components:
-                    continue
-                line = setup_script.split("\n")[1].replace("entities", plural_name)
-                lines.append(line)
-            file.write("\n".join(lines))
-            file.write("\n")
-
-        Project.replace(
-            os.path.join(to_path, "setup.sh"),
-            f"{PROJECT_NAME}",
-            self.project.settings["project"],
-        )
-
-        Project.replace(
-            os.path.join(to_path, "docker-compose.yaml"),
-            f"{PORTS[Component.KAFKA]}:",
-            f"{ports[Component.KAFKA]}:",
-        )
-
-        rprint(f"{to_path}[green] created[/green]")
-
     def postgres(self):
         """Configure Storage `POSTGRES` component."""
         from_path = os.path.join(SRC_PATH, Layer.STORAGE, Component.POSTGRES)
@@ -1882,7 +1694,6 @@ class Storage:
 
     def __call__(self):
         """Call layer."""
-        self.kafka()
         self.postgres()
 
 

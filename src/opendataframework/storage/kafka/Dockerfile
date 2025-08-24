@@ -1,1 +1,0 @@
-FROM apache/kafka
