@@ -103,7 +103,6 @@ class Component:
     API_DRUID: str = "api-druid"
     API_JSON_KAFKA: str = "api-json-kafka"
     API_POSTGRES: str = "api-postgres"
-    INFERENCE: str = "inference"
 
     # DEVCONTAINERS
     PYTHON: str = "python"
@@ -137,7 +136,6 @@ COMPONENTS = {
         Component.API_DRUID,
         Component.API_JSON_KAFKA,
         Component.API_POSTGRES,
-        Component.INFERENCE,
     ],
     Layer.STORAGE: [Component.KAFKA, Component.POSTGRES],
     Layer.UTILITY: [Component.TEXLIVE],
@@ -190,7 +188,6 @@ PORTS = {
     Component.API_DRUID: "8000",
     Component.API_JSON_KAFKA: "8000",
     Component.API_POSTGRES: "8000",
-    Component.INFERENCE: "8000",
     # STORAGE
     Component.KAFKA: "9092",
     Component.POSTGRES: "5432",
@@ -456,14 +453,11 @@ class Project:
         self._path = None
         self._profile = Profile.CUSTOM
         self._layout = Layout.CUSTOM
-        self._models = None
 
         if data:
             self._data = os.path.join(os.getcwd(), data)
         else:
             self._data = os.path.join(os.getcwd(), "data")
-        if models:
-            self._models = os.path.join(os.getcwd(), models)
 
         self._settings = {
             "opendataframework": __version__,
@@ -525,35 +519,6 @@ class Project:
                     rprint(f"{file_name}[green] copied to [/green]{dest_path}")
 
         self._path = path
-
-        if not self._models:
-            models = os.path.join(os.getcwd(), "models")
-            if not os.path.exists(models):
-                return
-            self._models = models
-
-        models_path = os.path.join(path, "models")
-        if not os.path.exists(models_path):
-            os.mkdir(models_path)
-            rprint(f"{models_path}[green] created[/green]")
-
-            for folder in os.listdir(self._models):
-                source_path = os.path.join(self._models, folder)
-                if os.path.isdir(source_path):
-                    dest_path = os.path.join(models_path, folder)
-                    if not os.path.exists(dest_path):
-                        os.mkdir(dest_path)
-
-                    for file_name in os.listdir(source_path):
-                        supported = [
-                            file_name.strip().lower() == "model.pkl",
-                            file_name.strip().lower() == "model.json",
-                            file_name.strip().lower() == "requirements.txt",
-                        ]
-                        if not any(supported):
-                            continue
-                        self.copy(source_path, dest_path, file_name)
-                        rprint(f"{file_name}[green] copied to [/green]{dest_path}")
 
     @property
     def settings(self) -> dict:
@@ -1766,207 +1731,11 @@ class API:
 
             rprint(f"{to_path}[green] created[/green]")
 
-    def inference(self):
-        """Configure API `INFERENCE` component."""
-        from_path = os.path.join(SRC_PATH, Layer.API, Component.INFERENCE)
-        if not os.path.exists(from_path):
-            raise ValueError(f"{from_path} does not exist")
-
-        entities = self.project.settings.get("data", {})
-
-        for plural_name, settings in entities.items():
-            components = settings["layers"].get(Layer.API, {})
-            if Component.INFERENCE not in components:
-                continue
-
-            to_path = os.path.join(
-                self.project.path,
-                PLATFORM_FOLDER,
-                Layer.API,
-                Component.INFERENCE,
-                plural_name,
-            )
-            if os.path.exists(to_path):
-                raise ValueError(f"{to_path} already exists")
-
-            shutil.copytree(
-                from_path,
-                to_path,
-                ignore=shutil.ignore_patterns(
-                    *IGNORE_PATTERNS,
-                ),
-            )
-
-            model_path = os.path.join(self.project.path, "models", plural_name)
-            if not os.path.exists(os.path.join(model_path, "model.json")):
-                raise ValueError(f"{model_path}/model.json does not exist")
-
-            app_models_path = os.path.join(to_path, "app", ".models", str(uuid.uuid4()))
-
-            Project.copy(model_path, app_models_path, "model.json", make_dirs=True)
-
-            for field_name, value in settings["fields"].items():
-                _, field_alias = value["type"], value["alias"]
-
-                Project.replace(
-                    os.path.join(app_models_path, "model.json"),
-                    field_alias,
-                    field_name,
-                )
-
-            if os.path.exists(os.path.join(model_path, "model.pkl")):
-                Project.copy(model_path, app_models_path, "model.pkl")
-
-            if os.path.exists(os.path.join(model_path, "requirements.txt")):
-                with open(os.path.join(model_path, "requirements.txt"), "r") as file:
-                    filedata = file.read()
-                    new_filedata = []
-                    for line in filedata.split("\n"):
-                        if not line:
-                            continue
-                        packet, version = line.split("==")
-                        new_line = f'{packet} = "{version}"'
-                        new_filedata.append(new_line)
-                    filedata = "\n".join(new_filedata)
-
-                    Project.replace(
-                        os.path.join(to_path, "pyproject.toml"),
-                        "# dependencies",
-                        filedata,
-                    )
-
-            hostname = self.project.settings["project"].replace("_", "-")
-
-            Project.replace(
-                os.path.join(to_path, "docker-compose.yaml"),
-                f"hostname: {PROJECT_NAME}-{Component.INFERENCE}",
-                f"hostname: {hostname}-{Component.INFERENCE}",
-            )
-
-            Project.replace(
-                os.path.join(to_path, "docker-compose.yaml"),
-                f"{PROJECT_NAME}",
-                self.project.settings["project"],
-            )
-
-            Project.replace(
-                os.path.join(to_path, "docker-compose.yaml"), "entity", plural_name
-            )
-
-            port = components[Component.INFERENCE]["port"]
-            Project.replace(
-                os.path.join(to_path, "docker-compose.yaml"),
-                f"{PORTS[Component.INFERENCE]}:",
-                f"{port}:",
-            )
-
-            # model
-            model_path = os.path.join(to_path, "app", "models.py")
-
-            with open(os.path.join(app_models_path, "model.json"), "r") as file:
-                inference_config = json.load(file)
-                parameters = inference_config.get("parameters")
-                fit = inference_config.get("fit")
-                predict = inference_config.get("predict")
-                prediction = inference_config.get("prediction")
-                assert parameters and isinstance(parameters, dict)
-                assert fit and isinstance(fit, dict)
-                assert predict and isinstance(predict, dict)
-                assert prediction
-
-                new_text = "# fields"
-
-                for key, value in parameters.items():
-                    if isinstance(value, dict):
-                        new_text += f"\n    {key}: dict"
-                    elif isinstance(value, list):
-                        new_text += f"\n    {key}: list"
-                    elif isinstance(value, int):
-                        new_text += f"\n    {key}: int"
-                    elif isinstance(value, float):
-                        new_text += f"\n    {key}: float"
-                    elif isinstance(value, str):
-                        new_text += f"\n    {key}: str"
-
-                Project.replace(model_path, "# parameters fields", new_text)
-
-                new_text = "# fields"
-
-                for key, records in fit.items():
-                    assert isinstance(records, list)
-                    assert all(isinstance(record, dict) for record in records)
-                    new_text += f"\n    {key}: list[dict]"
-
-                Project.replace(model_path, "# fit fields", new_text)
-
-                new_text = "# fields"
-
-                for key, records in predict.items():
-                    assert isinstance(records, list)
-                    assert all(isinstance(record, dict) for record in records)
-                    new_text += f"\n    {key}: list[dict]"
-
-                Project.replace(model_path, "# predict fields", new_text)
-
-                new_text = "# fields"
-
-                if isinstance(prediction, dict):
-                    new_text += "\n    value: dict"
-                elif isinstance(prediction, list):
-                    new_text += "\n    value: list"
-                elif isinstance(prediction, int):
-                    new_text += "\n    value: int"
-                elif isinstance(prediction, float):
-                    new_text += "\n    value: float"
-                elif isinstance(prediction, str):
-                    new_text += "\n    value: str"
-
-                Project.replace(model_path, "# prediction fields", new_text)
-
-            # crud
-            # crud_path = os.path.join(to_path, "app", "crud.py")
-            # Project.replace(crud_path, "entity", settings["name"])
-            # Project.replace(crud_path, "entities", plural_name)
-            # Project.replace(crud_path, "Entity", settings["name"].capitalize())
-
-            # inference
-            inference_path = os.path.join(to_path, "app", "inference.py")
-            Project.replace(
-                inference_path,
-                "PACKAGE_NAME = None",
-                f'PACKAGE_NAME = "{inference_config["package"]}"',
-            )
-            Project.replace(
-                inference_path,
-                "MODEL_NAME = None",
-                f'MODEL_NAME = "{inference_config["model"]}"',
-            )
-
-            # router
-            router_path = os.path.join(to_path, "app", "router.py")
-            Project.replace(router_path, "entity", settings["name"])
-            Project.replace(router_path, "entities", plural_name)
-            Project.replace(router_path, "Entity", settings["name"].capitalize())
-
-            # env
-            env_path = os.path.join(to_path, ".env")
-            Project.replace(
-                env_path, f"{PROJECT_NAME}", self.project.settings["project"]
-            )
-            Project.replace(env_path, "description", settings["description"])
-
-            # main
-            main_path = os.path.join(to_path, "app", "main.py")
-            Project.replace(main_path, "entity", settings["name"])
-
-            rprint(f"{to_path}[green] created[/green]")
-
     def __call__(self):
         """Call layer."""
         self.api_druid()
         self.api_json_kafka()
         self.api_postgres()
-        self.inference()
 
 
 class Devcontainers:
@@ -2647,7 +2416,6 @@ def chat():
             "postgresql",
             "postgre",
         },
-        Component.INFERENCE: {"inference", "api", "model", "ml", "predict", "endpoint"},
         # DEVCONTAINERS
         Component.PYTHON: {
             "devcontainer",
