@@ -118,7 +118,6 @@ class Component:
 
     # UTILITY
     NGINX = "nginx"
-    OPENWEBUI = "openwebui"
     TEXLIVE = "texlive"
 
 
@@ -144,7 +143,7 @@ COMPONENTS = {
         Component.INFERENCE,
     ],
     Layer.STORAGE: [Component.KAFKA, Component.POSTGRES],
-    Layer.UTILITY: [Component.NGINX, Component.OPENWEBUI, Component.TEXLIVE],
+    Layer.UTILITY: [Component.NGINX, Component.TEXLIVE],
 }
 
 DEPENDENCIES = {
@@ -186,7 +185,6 @@ DESCRIPTIONS = {
     Component.POSTGRES: "Advanced Relational Database",
     # UTILITY
     Component.NGINX: "HTTP and reverse proxy server",
-    Component.OPENWEBUI: "Open WebUI is an extensible, feature-rich, and user-friendly self-hosted WebUI designed to operate entirely offline",  # noqa
     Component.TEXLIVE: "TeX Live is intended to be a straightforward way to get up and running with the TeX document production system",  # noqa
 }
 
@@ -204,7 +202,6 @@ PORTS = {
     Component.POSTGRES: "5432",
     # UTILITY
     Component.NGINX: "80",
-    Component.OPENWEBUI: "8080",
 }
 
 
@@ -2427,43 +2424,6 @@ class Utility:
 
         rprint(f"{to_path}[green] created[/green]")
     
-    def openwebui(self):
-        """Configure Analytics `OPENWEBUI` component."""
-        from_path = os.path.join(SRC_PATH, Layer.UTILITY, Component.OPENWEBUI)
-        if not os.path.exists(from_path):
-            raise ValueError(f"{from_path} does not exist")
-
-        to_path = os.path.join(
-            self.project.path, PLATFORM_FOLDER, Layer.UTILITY, Component.OPENWEBUI
-        )
-        if os.path.exists(to_path):
-            raise ValueError(f"{to_path} already exists")
-
-        entities = self.project.settings.get("data", {})
-
-        for plural_name, settings in entities.items():
-            components = settings["layers"].get(Layer.UTILITY, {})
-            if Component.OPENWEBUI not in components:
-                continue
-
-            if not os.path.exists(to_path):
-                shutil.copytree(
-                    from_path,
-                    to_path,
-                    ignore=shutil.ignore_patterns(*IGNORE_PATTERNS),
-                )
-
-        if not os.path.exists(to_path):
-            return
-
-        Project.replace(
-            os.path.join(to_path, "docker-compose.yaml"),
-            f"{PROJECT_NAME}",
-            self.project.settings["project"],
-        )
-
-        rprint(f"{to_path}[green] created[/green]")
-
     def texlive(self):
         """Configure Analytics `TEXLIVE` component."""
         from_path = os.path.join(SRC_PATH, Layer.UTILITY, Component.TEXLIVE)
@@ -2514,7 +2474,6 @@ class Utility:
     def __call__(self):
         """Call layer."""
         self.nginx()
-        self.openwebui()
         self.texlive()
 
 
