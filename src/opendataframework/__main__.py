@@ -238,14 +238,6 @@ LAYOUTS = {Layout.CUSTOM, Layout.RESEARCH}
 PROFILES = {Profile.CUSTOM, Profile.RESEARCH}
 
 
-BADGES = {
-    Layer.ANALYTICS: "badge badge-info gap-2",
-    Layer.API: "badge badge-accent gap-2",
-    Layer.STORAGE: "badge badge-warning gap-2",
-    Layer.UTILITY: "badge badge-secondary gap-2",
-}
-
-
 class Field:
     """Field."""
 
