@@ -1,0 +1,13 @@
+{{ service_name }}:
+  container_name: "{{ service_name }}"
+  image: "{{ image }}"
+  ports:
+    - "${{ service_name.upper() }}_HOST_PORT:{{ container_port }}"
+  environment:
+{% for k, v in env.items() %}
+    - {{ k }}=${{ service_name.upper() }}_{{ k }}
+{% endfor %}
+  volumes:
+    - {{ service_name }}_data:/var/lib/postgresql/data
+  networks:
+    - {{ network.name }}

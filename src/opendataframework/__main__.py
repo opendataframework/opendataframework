@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 
 import typer
+from jinja2 import Environment, FileSystemLoader
 from rich import print as rprint
 from rich.prompt import Prompt
 
@@ -142,15 +143,15 @@ DEPENDENCIES = {
 
 ENTIIES = {
     Component.API_POSTGRES: {
-        "name": "models",
+        "name": "data",
         "type": "list"
     },
     Component.SUPERSET: {
-        "name": "datasets",
+        "name": "data",
         "type": "list"
     },
     Component.POSTGRES: {
-        "name": "tables",
+        "name": "data",
         "type": "list"
     }
 }
@@ -635,7 +636,20 @@ class Project:
                 continue
 
             self._settings["platform"][component]["port"] = port
-        
+    
+    def configure(self) -> None:
+        for component, settings in self.settings["platform"].items():
+            path = os.path.join(SRC_PATH, "templates", settings["layer"], component)
+            if not os.path.exists(path):
+                print(f"{path} does not exist")  # TODO
+                continue
+            env = Environment(loader=FileSystemLoader(path))
+            port = self._settings["platform"][component].get("port")
+            if port:
+                self._settings["platform"][component].update(yaml.safe_load(env.get_template("config.yaml.j2").render(container_port=port, host_port=port)))
+            else:
+                self._settings["platform"][component].update(yaml.safe_load(env.get_template("config.yaml.j2").render()))
+            self._settings["platform"][component]["env"] = yaml.safe_load(env.get_template(".env.j2").render())
     
     def register(self, layer: str = None, component: str = None, entity: Entity = None) -> None:
         """Register component or entity at project level."""
@@ -1056,6 +1070,7 @@ class Project:
         self.mounts()
         self.volumes()
         self.ports()
+        self.configure()
         
         if extention == Settings.JSON:
             self.to_json()
@@ -1299,7 +1314,7 @@ class Analytics:
         to_setup = os.path.join(to_path, "setup.sh")
 
         for plural_name in entities:
-            if plural_name not in settings["datasets"]:
+            if plural_name not in settings["data"]:
                 continue
 
             if not os.path.exists(to_path):
@@ -1312,7 +1327,7 @@ class Analytics:
             storage = None
 
             for name, config in storages.items():
-                for table in config["tables"]:
+                for table in config["data"]:
                     if table == plural_name:
                         storage = name
             
