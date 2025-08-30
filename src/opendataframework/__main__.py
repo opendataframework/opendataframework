@@ -454,6 +454,8 @@ class Project:
 
         self._api_ports = []
 
+        self.services = {}
+
     @property
     def name(self) -> str:
         """Get project name."""
@@ -1082,6 +1084,21 @@ class Project:
 
         rprint(f"{json.dumps(self.settings, indent=JSON_INDENT)}")
         rprint()
+    
+    def compose(self) -> None:
+        """Create docker-compose.yaml."""
+        path = os.path.join(self.path, PLATFORM_FOLDER)
+        os.makedirs(path, exist_ok=True)
+        
+        path = os.path.join(path, "docker-compose.yaml")
+        
+        services = {"services": self.services}
+        services.update({"networks": self.settings["network"]})
+        
+        with open(path, "w") as file:
+            yaml.dump(json.loads(json.dumps(services)), file, sort_keys=False)
+        
+        rprint(f"{path} [green]created[/green]")
 
     def create(
         self,
@@ -1116,6 +1133,7 @@ class Project:
         for layer in layers:
             layer()
 
+        self.compose()
         # self.collect()
 
     @staticmethod
@@ -1649,15 +1667,18 @@ class Storage:
         path = os.path.join(TEMPLATES_PATH, Layer.STORAGE, Component.POSTGRES)
         env = Environment(loader=FileSystemLoader(path))
 
-        lines = env.get_template("service.yml.j2").render(
-            service_name=Component.POSTGRES,
-            image=config["image"], 
-            host_port=config["host_port"],
-            container_port=config["container_port"], 
-            env=config["env"],
-            network=self.project.settings["network"]
+        self.project.services.update(
+            yaml.safe_load(
+                env.get_template("service.yml.j2").render(
+                    service_name=Component.POSTGRES,
+                    image=config["image"], 
+                    host_port=config["host_port"],
+                    container_port=config["container_port"], 
+                    env=config["env"],
+                    network=self.project.settings["network"]
+                )
+            )
         )
-        print(lines)
 
     def __call__(self):
         """Call layer."""
