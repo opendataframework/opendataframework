@@ -30,6 +30,7 @@ IGNORE_PATTERNS = (
     "venv",
 )
 SRC_PATH = Path(__file__).parent
+TEMPLATES_PATH = os.path.join(SRC_PATH, "templates")
 
 
 def colorized_logo() -> str:
@@ -445,7 +446,8 @@ class Project:
             "profile": self._profile,
             "layout": self._layout,
             "data": {},
-            "platform": {}
+            "platform": {},
+            "network": {"name": f"{name}_network", "driver": "bridge"}
         }
         self.name = name
         self.path = path
@@ -1091,23 +1093,23 @@ class Project:
     ):
         """Handler for `create` CLI command."""
         self.load()
-        self.add_layout()
-        if docs:
-            self.add_docs()
-        if hooks:
-            self.add_hooks()
-        if workflows:
-            self.add_workflows()
-        if tests:
-            self.add_tests()
-        if server:
-            self.add_server()
+        # self.add_layout()
+        # if docs:
+        #     self.add_docs()
+        # if hooks:
+        #     self.add_hooks()
+        # if workflows:
+        #     self.add_workflows()
+        # if tests:
+        #     self.add_tests()
+        # if server:
+        #     self.add_server()
 
         layers = [
-            Analytics(project=self),
+            # Analytics(project=self),
             # API(project=self),
             # Devcontainers(project=self),
-            # Storage(project=self),
+            Storage(project=self),
             # Utility(project=self),
         ]
 
@@ -1641,63 +1643,21 @@ class Storage:
 
     def postgres(self):
         """Configure Storage `POSTGRES` component."""
-        from_path = os.path.join(SRC_PATH, Layer.STORAGE, Component.POSTGRES)
-        if not os.path.exists(from_path):
-            raise ValueError(f"{from_path} does not exist")
+        config = self.project.settings["platform"].get(Component.POSTGRES)
+        if not config: return
 
-        to_path = os.path.join(
-            self.project.path, PLATFORM_FOLDER, Layer.STORAGE, Component.POSTGRES
+        path = os.path.join(TEMPLATES_PATH, Layer.STORAGE, Component.POSTGRES)
+        env = Environment(loader=FileSystemLoader(path))
+
+        lines = env.get_template("service.yml.j2").render(
+            service_name=Component.POSTGRES,
+            image=config["image"], 
+            host_port=config["host_port"],
+            container_port=config["container_port"], 
+            env=config["env"],
+            network=self.project.settings["network"]
         )
-        if os.path.exists(to_path):
-            raise ValueError(f"{to_path} already exists")
-
-        entities = self.project.settings.get("data", {})
-        ports = self.project.settings.get("ports", {})
-
-        for plural_name, settings in entities.items():
-            components = settings["layers"].get(Layer.STORAGE, {})
-            if Component.POSTGRES not in components:
-                continue
-
-            if os.path.exists(to_path):
-                break
-
-            shutil.copytree(
-                from_path,
-                to_path,
-                ignore=shutil.ignore_patterns(*IGNORE_PATTERNS),
-            )
-
-        if not os.path.exists(to_path):
-            return
-
-        hostname = self.project.settings["project"].replace("_", "-")
-
-        Project.replace(
-            os.path.join(to_path, "docker-compose.yaml"),
-            f"hostname: {PROJECT_NAME}-{Component.POSTGRES}",
-            f"hostname: {hostname}-{Component.POSTGRES}",
-        )
-
-        Project.replace(
-            os.path.join(to_path, "docker-compose.yaml"),
-            f"{PROJECT_NAME}",
-            self.project.settings["project"],
-        )
-
-        Project.replace(
-            os.path.join(to_path, "setup.sh"),
-            f"{PROJECT_NAME}",
-            self.project.settings["project"],
-        )
-
-        Project.replace(
-            os.path.join(to_path, "docker-compose.yaml"),
-            f"{PORTS[Component.POSTGRES]}:",
-            f"{ports[Component.POSTGRES]}:",
-        )
-
-        rprint(f"{to_path}[green] created[/green]")
+        print(lines)
 
     def __call__(self):
         """Call layer."""
