@@ -1,0 +1,17 @@
+{%- for table_name, columns in tables.items() %}
+CREATE TABLE {{ table_name }} (
+{%- for col_name, col_type in columns.items() %}
+    {{ col_name }} {{ col_type }}{% if not loop.last %},{% endif %}
+{%- endfor %}
+);
+
+-- Load CSV data into {{ table_name }}
+COPY {{ table_name }} (
+{%- for col_name in columns.keys() %}
+    {{ col_name }}{% if not loop.last %},{% endif %}
+{%- endfor %}
+)
+FROM '/docker-entrypoint-initdb.d/{{ table_name }}.csv'
+DELIMITER ','
+CSV HEADER;
+{%- endfor %}

@@ -670,34 +670,36 @@ class Project:
         if layer and component:
             if component not in COMPONENTS[layer]:
                 raise ValueError(f"Component `{component}` not found")
-            if component in self.settings["platform"]:
-                raise ValueError(f"Component `{component}` already exists")
-            
-            if entity and layer == Layer.API:
-                self.settings["platform"][entity.plural_name] = {"layer": layer}
-                storage = DEPENDENCIES.get(component, {}).get(Layer.STORAGE, [None])[0]
-                if storage:
-                    self.settings["platform"][entity.plural_name]["storage"] = storage
+            if component not in self.settings["platform"]:
+                if entity and layer == Layer.API:
+                    self.settings["platform"][entity.plural_name] = {"layer": layer}
+                    storage = DEPENDENCIES.get(component, {}).get(Layer.STORAGE, [None])[0]
+                    if storage:
+                        self.settings["platform"][entity.plural_name]["storage"] = storage
+                else:
+                    self.settings["platform"][component] = {"layer": layer}
+                
+                if component in ENTIIES:
+                    name = ENTIIES[component]["name"]
+                    if ENTIIES[component]["type"] == "list":
+                        if layer == Layer.API:
+                            self.settings["platform"][entity.plural_name][name] = [entity.plural_name]
+                        else:
+                            self.settings["platform"][component][name] = [entity.plural_name]
+                
+                for layer, components in DEPENDENCIES.get(component, {}).items():
+                    for component in components:
+                        if component in self.settings["platform"]:
+                            if component in ENTIIES and ENTIIES[component]["type"] == "list":
+                                self.settings["platform"][component][ENTIIES[component]["name"]].append(entity.plural_name)
+                        else:
+                            self.settings["platform"][component] = {"layer": layer}
+                            if component in ENTIIES and ENTIIES[component]["type"] == "list":
+                                self.settings["platform"][component][ENTIIES[component]["name"]] = [entity.plural_name]
             else:
-                self.settings["platform"][component] = {"layer": layer}
-            
-            if component in ENTIIES:
-                name = ENTIIES[component]["name"]
-                if ENTIIES[component]["type"] == "list":
-                    if layer == Layer.API:
-                        self.settings["platform"][entity.plural_name][name] = [entity.plural_name]
-                    else:
-                        self.settings["platform"][component][name] = [entity.plural_name]
-            
-            for layer, components in DEPENDENCIES.get(component, {}).items():
-                for component in components:
-                    if component in self.settings["platform"]:
-                        if component in ENTIIES and ENTIIES[component]["type"] == "list":
-                            self.settings["platform"][component][ENTIIES[component]["name"]].append(entity.plural_name)
-                    else:
-                        self.settings["platform"][component] = {"layer": layer}
-                        if component in ENTIIES and ENTIIES[component]["type"] == "list":
-                            self.settings["platform"][component][ENTIIES[component]["name"]] = [entity.plural_name]
+                if component in ENTIIES and ENTIIES[component]["type"] == "list":
+                    self.settings["platform"][component][ENTIIES[component]["name"]].append(entity.plural_name)
+
 
     @property
     def layout(self):
@@ -1667,6 +1669,43 @@ class Storage:
         path = os.path.join(TEMPLATES_PATH, Layer.STORAGE, Component.POSTGRES)
         env = Environment(loader=FileSystemLoader(path))
 
+        # if not config["data"]:
+        #     return
+
+        type_map = {
+            "str": "TEXT",
+            "int": "INTEGER",
+            "float": "REAL",
+            "datetime": "TIMESTAMP"
+        }
+
+        tables = {}
+        volumes = {}
+
+        for table_name in config["data"]:
+            columns = {}
+            fields = self.project.settings["data"][table_name]["fields"]
+            for field in fields:
+                if "datetime" in fields[field]["type"]:
+                    columns[field] = type_map["datetime"]
+                else:
+                    columns[field] = type_map[fields[field]["type"]]
+            tables[table_name] = columns
+            volumes[f"../data/{table_name}.csv"] = f"/docker-entrypoint-initdb.d/{table_name}.csv"
+
+        path = os.path.join(self.project.path, PLATFORM_FOLDER, Layer.STORAGE, Component.POSTGRES)
+        os.makedirs(path, exist_ok=True)
+    
+        path = os.path.join(path, "init.sql")
+        with open(path, "w") as f:
+            f.write(
+                env.get_template("init.sql.j2").render(
+                    tables=tables
+                )
+            )
+        
+        volumes[os.path.join(Layer.STORAGE, Component.POSTGRES, "init.sql")] = "/docker-entrypoint-initdb.d/init.sql"
+        
         self.project.services.update(
             yaml.safe_load(
                 env.get_template("service.yml.j2").render(
@@ -1675,10 +1714,12 @@ class Storage:
                     host_port=config["host_port"],
                     container_port=config["container_port"], 
                     env=config["env"],
+                    volumes=volumes,
                     network=self.project.settings["network"]
                 )
             )
         )
+        rprint(f"{path} [green]created[/green]")
 
     def __call__(self):
         """Call layer."""
