@@ -961,7 +961,6 @@ class Project:
         #     self.add_server()
 
         layers = [
-            # API(project=self),
             Storage(project=self),
         ]
 
