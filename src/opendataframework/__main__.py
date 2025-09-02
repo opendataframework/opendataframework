@@ -574,40 +574,6 @@ class Project:
         self._profile = value
         self._settings["profile"] = self._profile
 
-    def add_docs(self):
-        """Add project docs."""
-        from_path = os.path.join(SRC_PATH, "docs")
-        if not os.path.exists(from_path):
-            raise ValueError(f"{from_path} does not exist")
-
-        to_path = os.path.join(self.path, "docs")
-        if os.path.exists(to_path):
-            raise ValueError(f"{to_path} already exists")
-
-        shutil.copytree(
-            from_path,
-            to_path,
-            ignore=shutil.ignore_patterns(
-                *IGNORE_PATTERNS, *("mkdocs.yml", "requirements.txt")
-            ),
-        )
-
-        if os.path.exists(os.path.join(self.path, "requirements.txt")):
-            with open(os.path.join(from_path, "requirements.txt"), "r") as file:
-                src_file_data = file.read()
-            with open(os.path.join(self.path, "requirements.txt"), "a") as file:
-                file.write(src_file_data)
-        else:
-            self.copy(from_path, self.path, "requirements.txt")
-
-        self.copy(from_path, self.path, "mkdocs.yml")
-        self.replace(
-            os.path.join(self.path, "docs", "index.md"), PROJECT_NAME, self.name
-        )
-        self.replace(os.path.join(self.path, "mkdocs.yml"), PROJECT_NAME, self.name)
-
-        rprint(f"{self.name}: docs[green] created[/green]")
-
     def add_tests(self):
         """Add project tests."""
         from_path = os.path.join(SRC_PATH, "tests")
@@ -862,14 +828,11 @@ class Project:
 
     def create(
         self,
-        docs: bool = True,
         tests: bool = True,
         server: bool = True,
     ):
         """Handler for `create` CLI command."""
         self.load()
-        # if docs:
-        #     self.add_docs()
         # if tests:
         #     self.add_tests()
         # if server:
@@ -1047,14 +1010,13 @@ def init(
 def create(
     project: str,
     path: str = "",
-    docs: bool = True,
     tests: bool = True,
     server: bool = True,
 ):
     """Create PROJECT structure based on settings.json, optionally with a --path."""
     try:
         project = Project(name=project, path=path)
-        project.create(docs=docs, tests=tests, server=server)
+        project.create(tests=tests, server=server)
     except Exception:
         rprint(f"[bold red] {traceback.format_exc()} [/bold red]")
 
@@ -1210,28 +1172,6 @@ def check(project: str = "", path: str = ""):
             raise ValueError(f"{pre_commit_path} does not exist")
 
         subprocess.run([".venv/bin/pre-commit", "run", "--all-files"], cwd=path)
-    except Exception as e:
-        rprint(f"[bold red] {e} [/bold red]")
-
-
-@app.command()
-def docs(project: str = "", path: str = ""):
-    """Run `mkdocs serve`."""
-    try:
-        if path and not os.path.exists(path):
-            raise ValueError(f"{path} does not exist")
-        elif not path:
-            path = os.getcwd()
-        path = os.path.join(path, project)
-        venv_path = os.path.join(path, ".venv")
-        if not os.path.exists(venv_path):
-            raise ValueError(f"{venv_path} does not exist")
-
-        docs_path = os.path.join(path, "mkdocs.yml")
-        if not os.path.exists(docs_path):
-            raise ValueError(f"{docs_path} does not exist")
-
-        subprocess.run([".venv/bin/mkdocs", "serve"], cwd=path)
     except Exception as e:
         rprint(f"[bold red] {e} [/bold red]")
 
