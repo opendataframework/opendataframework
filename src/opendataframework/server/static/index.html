@@ -289,7 +289,7 @@
 </style>
 
 <style>
-  .chat-button {
+  .logo-icon {
     position: fixed;
     bottom: 1.5rem;
     right: 1.5rem;
@@ -303,66 +303,6 @@
     cursor: pointer;
     z-index: 1000;
     box-shadow: 0 4px 10px rgba(0,0,0,0.6);
-  }
-
-  .chat-window {
-    position: fixed;
-    bottom: 5rem;
-    right: 1.5rem;
-    width: 300px;
-    max-height: 400px;
-    background: #1a1a1a;
-    color: white;
-    border-radius: 10px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.8);
-    display: none;
-    flex-direction: column;
-    overflow: hidden;
-    z-index: 1000;
-  }
-
-  .chat-window.active {
-    display: flex;
-  }
-
-  .chat-header {
-    padding: 0.75rem 1rem;
-    background: #111;
-    font-weight: bold;
-    border-bottom: 1px solid #333;
-  }
-
-  .chat-messages {
-    flex: 1;
-    padding: 1rem;
-    overflow-y: auto;
-    font-size: 0.9rem;
-  }
-
-  .chat-input {
-    display: flex;
-    border-top: 1px solid #333;
-  }
-
-  .chat-input input {
-    flex: 1;
-    padding: 0.5rem;
-    border: none;
-    outline: none;
-    background: #222;
-    color: white;
-  }
-
-  .chat-input button {
-    background: #333;
-    border: none;
-    color: white;
-    padding: 0.5rem 1rem;
-    cursor: pointer;
-  }
-
-  .chat-input button:hover {
-    background: #444;
   }
 </style>
 
@@ -573,101 +513,13 @@
 
 </script>
 
-<!-- Chat button and window -->
-<!-- <button class="chat-button" id="chatToggleBtn">💬</button> -->
-<button class="chat-button" id="chatToggleBtn">
+<div class="logo-icon">
   <svg width="45" height="45" style="border:1px solid #00FA92;border-radius: 5px;">
     <rect x="0" y="0" width="45" height="45" style="fill:#00FA92;stroke:grey;stroke-width:0.3;" />
     <rect x="3" y="5" width="15" height="15" style="fill:#B36AE2;stroke:grey;stroke-width:0.3;" />
     <rect x="21" y="5" width="15" height="15" style="fill:#B36AE2;stroke:grey;stroke-width:0.3;" />
   </svg>
-</button>
-<div class="chat-window" id="chatWindow">
-  <div class="chat-header">Chat</div>
-  <div class="chat-messages" id="chatMessages">
-    <div><span style="color: #B36AE2;"><strong>Agent:</strong></span> Hello! How can I help you?</div>
-  </div>
-  <div class="chat-input">
-    <input type="text" id="chatInput" placeholder="Type a message..." />
-    <button id="chatSendBtn">Send</button>
-  </div>
 </div>
-
-<script>
-  const chatToggleBtn = document.getElementById('chatToggleBtn');
-  const chatWindow = document.getElementById('chatWindow');
-  const chatMessages = document.getElementById('chatMessages');
-  const chatInput = document.getElementById('chatInput');
-  const chatSendBtn = document.getElementById('chatSendBtn');
-  const host = 'ws://localhost:8000/ws'
-
-  const ws = new WebSocket(host);
-  ws.onopen = () => {
-    console.log('WebSocket connection established');
-  };
-  ws.onmessage = (event) => {
-    const msg = event.data;
-    addMessage('Agent', msg);
-  };
-  ws.onerror = (error) => {
-    console.error('WebSocket error:', error);
-  };
-  ws.onclose = () => {
-    console.log('WebSocket connection closed');
-  };
-
-  const chatColors = {
-    "Agent": "#B36AE2",
-    "You": "#00FA92"
-  }
-  
-  const botResponses = [
-    "I'm here to assist you!",
-    "Could you please clarify that?",
-    "Thanks for your message!",
-    "Let me look into that for you.",
-    "Interesting question!"
-  ];
-
-  function addMessage(sender, text) {
-    const message = document.createElement('div');
-    message.innerHTML = `<span style="color: ${chatColors[sender]};"><strong>${sender}:</strong></span> ${text}`;
-    chatMessages.appendChild(message);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-  }
-
-  function simulateBotReply() {
-    const reply = botResponses[Math.floor(Math.random() * botResponses.length)];
-    setTimeout(() => addMessage('Agent', reply), 800);
-  }
-
-  chatToggleBtn.addEventListener('click', () => {
-    chatWindow.classList.toggle('active');
-  });
-
-  chatSendBtn.addEventListener('click', () => {
-    const message = chatInput.value.trim();
-    if (message) {
-      addMessage('You', message);
-
-      if (ws.readyState === WebSocket.OPEN) {
-         ws.send(message);
-      } else {
-        console.log('WebSocket state: ', ws.readyState);
-        console.log('Simulating reply...');
-        simulateBotReply();
-      }
-
-      chatInput.value = '';
-    }
-  });
-
-  chatInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-      chatSendBtn.click();
-    }
-  });
-</script>
 
 </body>
 </html>
