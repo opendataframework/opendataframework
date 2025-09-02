@@ -88,16 +88,12 @@ class Profile:
 class Layer:
     """Layer names."""
 
-    ANALYTICS: str = "analytics"
     API: str = "api"
     STORAGE: str = "storage"
 
 
 class Component:
     """Component names."""
-
-    # ANALYTICS
-    SUPERSET: str = "superset"
 
     # API
     API_POSTGRES: str = "api-postgres"
@@ -119,7 +115,6 @@ class Settings:
 
 
 COMPONENTS = {
-    Layer.ANALYTICS: [Component.SUPERSET],
     Layer.API: [
         Component.API_POSTGRES,
     ],
@@ -136,10 +131,6 @@ ENTIIES = {
         "name": "data",
         "type": "list"
     },
-    Component.SUPERSET: {
-        "name": "data",
-        "type": "list"
-    },
     Component.POSTGRES: {
         "name": "data",
         "type": "list"
@@ -148,8 +139,6 @@ ENTIIES = {
 
 
 DESCRIPTIONS = {
-    # ANALYTICS
-    Component.SUPERSET: "Apache Superset is a modern, enterprise-ready business intelligence web application",  # noqa
     # API
     Component.API_POSTGRES: "REST Data Access for Postgres",
     # STORAGE
@@ -158,8 +147,6 @@ DESCRIPTIONS = {
 
 
 PORTS = {
-    # ANALYTICS
-    Component.SUPERSET: "8088",
     # API
     Component.API_POSTGRES: "8000",
     # STORAGE
@@ -1016,7 +1003,6 @@ class Project:
         #     self.add_server()
 
         layers = [
-            # Analytics(project=self),
             # API(project=self),
             Storage(project=self),
         ]
@@ -1191,128 +1177,6 @@ class Project:
             file.write("networks:\n")
             file.write(f"  {self.name}_default:\n")
             file.write(f"    name: {self.name}_default\n")
-
-
-class Analytics:
-    """Analytics layer."""
-
-    def __init__(self, project: Project):
-        """Create Analytics layer instance."""
-        self.project = project
-
-    def superset(self):
-        """Configure Analytics `SUPERSET` component."""
-        settings = self.project.settings.get("platform", {}).get(Component.SUPERSET)
-        if not settings:
-            return
-
-        from_path = os.path.join(SRC_PATH, Layer.ANALYTICS, Component.SUPERSET)
-        if not os.path.exists(from_path):
-            raise ValueError(f"{from_path} does not exist")
-
-        to_path = os.path.join(
-            self.project.path, PLATFORM_FOLDER, Layer.ANALYTICS, Component.SUPERSET
-        )
-        if os.path.exists(to_path):
-            raise ValueError(f"{to_path} already exists")
-
-        entities = self.project.settings.get("data", {})
-        storages = {storage: config for storage, config in self.project.settings["platform"].items() if config["layer"] == Layer.STORAGE}
-        port = settings["port"]
-
-        to_setup = os.path.join(to_path, "setup.sh")
-
-        for plural_name in entities:
-            if plural_name not in settings["data"]:
-                continue
-
-            if not os.path.exists(to_path):
-                shutil.copytree(
-                    from_path,
-                    to_path,
-                    ignore=shutil.ignore_patterns(*IGNORE_PATTERNS, *("database",)),
-                )
-
-            storage = None
-
-            for name, config in storages.items():
-                for table in config["data"]:
-                    if table == plural_name:
-                        storage = name
-            
-            if not storage:
-                continue
-
-            from_setup = os.path.join(
-                from_path, "database", f"{storage}", "setup.sh"
-            )
-
-            if not os.path.exists(from_setup):
-                continue
-
-            with open(f"{from_setup}", "r") as file:
-                content = file.read()
-
-            with open(f"{to_setup}", "a") as file:
-                file.write("&& " + content)
-
-            from_create = os.path.join(
-                from_path, "database", f"{storage}", "dataset.sh"
-            )
-
-            with open(f"{from_create}", "r") as file:
-                content = file.read()
-                content = content.replace("table-name", f"{plural_name}")
-
-            with open(f"{to_setup}", "a") as file:
-                file.write("&& " + content)
-
-            if PORTS.get(storage) and storages[storage].get("port"):
-                Project.replace(to_setup, PORTS.get(storage), storages[storage].get("port"))
-
-            with open(f"{to_setup}", "a") as file:
-                file.write("\n")
-
-        if not os.path.exists(to_path):
-            return
-
-        Project.replace(
-            os.path.join(to_path, ".env"),
-            'SUPERSET_SECRET_KEY=""',
-            f'SUPERSET_SECRET_KEY="{uuid.uuid4()}"',
-        )
-
-        Project.replace(
-            os.path.join(to_path, "setup.sh"), f"{PROJECT_NAME}", self.project.name
-        )
-
-        Project.replace(to_setup, PORTS[Component.SUPERSET], port)
-
-        hostname = self.project.settings["project"].replace("_", "-")
-
-        Project.replace(
-            os.path.join(to_path, "docker-compose.yaml"),
-            f"hostname: {PROJECT_NAME}-{Component.SUPERSET}",
-            f"hostname: {hostname}-{Component.SUPERSET}",
-        )
-
-        Project.replace(
-            os.path.join(to_path, "docker-compose.yaml"),
-            f"{PROJECT_NAME}",
-            self.project.settings["project"],
-        )
-
-        Project.replace(
-            os.path.join(to_path, "docker-compose.yaml"),
-            f"{PORTS[Component.SUPERSET]}:",
-            f"{port}:",
-        )
-
-        rprint(f"{to_path}[green] created[/green]")
-
-    def __call__(self):
-        """Call layer."""
-        self.superset()
 
 
 class API:
@@ -1834,25 +1698,6 @@ def chat():
     from collections import Counter
 
     KEYWORDS = {
-        # ANALYTICS
-        Component.SUPERSET: {
-            "exploration",
-            "visualization",
-            "business",
-            "intelligence",
-            "bi",
-            "chart",
-            "sql",
-            "analytics",
-            "query",
-            "file",
-            "upload",
-            "csv",
-            "dashboard",
-            "transform",
-            "bar",
-            "geospatial",
-        },
         # API
         Component.API_POSTGRES: {
             "api",
