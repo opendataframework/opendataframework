@@ -1104,28 +1104,6 @@ def status(project: str = "", path: str = ""):
 
 
 @app.command()
-def check(project: str = "", path: str = ""):
-    """Run `pre-commit run --all-files`."""
-    try:
-        if path and not os.path.exists(path):
-            raise ValueError(f"{path} does not exist")
-        elif not path:
-            path = os.getcwd()
-        path = os.path.join(path, project)
-        venv_path = os.path.join(path, ".venv")
-        if not os.path.exists(venv_path):
-            raise ValueError(f"{venv_path} does not exist")
-
-        pre_commit_path = os.path.join(path, ".pre-commit-config.yaml")
-        if not os.path.exists(pre_commit_path):
-            raise ValueError(f"{pre_commit_path} does not exist")
-
-        subprocess.run([".venv/bin/pre-commit", "run", "--all-files"], cwd=path)
-    except Exception as e:
-        rprint(f"[bold red] {e} [/bold red]")
-
-
-@app.command()
 def server(project: str = "", path: str = "", host: str = "127.0.0.1", port: str = "8080", reload: bool = False):
     """Run `uvicorn server.main:app` inside project."""
     try:
