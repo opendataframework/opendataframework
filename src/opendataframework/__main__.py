@@ -88,15 +88,11 @@ class Profile:
 class Layer:
     """Layer names."""
 
-    API: str = "api"
     STORAGE: str = "storage"
 
 
 class Component:
     """Component names."""
-
-    # API
-    API_POSTGRES: str = "api-postgres"
 
     # STORAGE
     POSTGRES: str = "postgres"
@@ -115,22 +111,12 @@ class Settings:
 
 
 COMPONENTS = {
-    Layer.API: [
-        Component.API_POSTGRES,
-    ],
     Layer.STORAGE: [Component.POSTGRES],
 }
 
-DEPENDENCIES = {
-    # API
-    Component.API_POSTGRES: {Layer.STORAGE: [Component.POSTGRES]},
-}
+DEPENDENCIES = {}
 
 ENTIIES = {
-    Component.API_POSTGRES: {
-        "name": "data",
-        "type": "list"
-    },
     Component.POSTGRES: {
         "name": "data",
         "type": "list"
@@ -139,16 +125,12 @@ ENTIIES = {
 
 
 DESCRIPTIONS = {
-    # API
-    Component.API_POSTGRES: "REST Data Access for Postgres",
     # STORAGE
     Component.POSTGRES: "Advanced Relational Database",
 }
 
 
 PORTS = {
-    # API
-    Component.API_POSTGRES: "8000",
     # STORAGE
     Component.POSTGRES: "5432",
 }
@@ -502,19 +484,6 @@ class Project:
         """Configure ports."""
         for component, settings in self.settings["platform"].items():
             port = PORTS.get(component)
-
-            layer = settings["layer"]
-            if layer is Layer.API:
-                if not self._api_ports:
-                    name = component
-                    if settings.get("storage"):
-                        name = f'{layer}-{settings["storage"]}'
-                    port = PORTS.get(name)
-                else:
-                    port = int(self._api_ports[-1])
-                    port += 1
-                port = str(port)
-                self._api_ports.append(port)
             
             if not port:
                 continue
@@ -551,21 +520,13 @@ class Project:
             if component not in COMPONENTS[layer]:
                 raise ValueError(f"Component `{component}` not found")
             if component not in self.settings["platform"]:
-                if entity and layer == Layer.API:
-                    self.settings["platform"][entity.plural_name] = {"layer": layer}
-                    storage = DEPENDENCIES.get(component, {}).get(Layer.STORAGE, [None])[0]
-                    if storage:
-                        self.settings["platform"][entity.plural_name]["storage"] = storage
-                else:
-                    self.settings["platform"][component] = {"layer": layer}
+            
+                self.settings["platform"][component] = {"layer": layer}
                 
                 if component in ENTIIES:
                     name = ENTIIES[component]["name"]
                     if ENTIIES[component]["type"] == "list":
-                        if layer == Layer.API:
-                            self.settings["platform"][entity.plural_name][name] = [entity.plural_name]
-                        else:
-                            self.settings["platform"][component][name] = [entity.plural_name]
+                        self.settings["platform"][component][name] = [entity.plural_name]
                 
                 for layer, components in DEPENDENCIES.get(component, {}).items():
                     for component in components:
@@ -816,10 +777,7 @@ class Project:
             port = settings.get("port")
             if not port:
                 continue
-            if layer == Layer.API:
-                html(data, layer, nav, content, host, port, component)
-            else:
-                html(data, layer, nav, content, host, port)
+            html(data, layer, nav, content, host, port)
         
         nav.append("  </nav>")
         content.append("</div>")
@@ -1114,8 +1072,6 @@ class Project:
             if not os.path.exists(src_path):
                 raise ValueError(f"{src_path} does not exist")
 
-            if layer is Layer.API:
-                self.copy(os.path.join(from_path, Layer.API), self.path, "ingest.py")
             files_data, paths = self.walk(target_path, scripts)
 
             for file_name in scripts:
@@ -1177,121 +1133,6 @@ class Project:
             file.write("networks:\n")
             file.write(f"  {self.name}_default:\n")
             file.write(f"    name: {self.name}_default\n")
-
-
-class API:
-    """API layer."""
-
-    def __init__(self, project: Project):
-        """Create API layer instance."""
-        self.project = project
-
-    def api_postgres(self):
-        """Configure API `API_POSTGRES` component."""
-        from_path = os.path.join(SRC_PATH, Layer.API, Component.API_POSTGRES)
-        if not os.path.exists(from_path):
-            raise ValueError(f"{from_path} does not exist")
-
-        entities = self.project.settings.get("data", {})
-
-        for plural_name, settings in entities.items():
-            components = settings["layers"].get(Layer.API, {})
-            if Component.API_POSTGRES not in components:
-                continue
-
-            to_path = os.path.join(
-                self.project.path,
-                PLATFORM_FOLDER,
-                Layer.API,
-                Component.API_POSTGRES,
-                plural_name,
-            )
-            if os.path.exists(to_path):
-                raise ValueError(f"{to_path} already exists")
-
-            shutil.copytree(
-                from_path,
-                to_path,
-                ignore=shutil.ignore_patterns(
-                    *IGNORE_PATTERNS,
-                ),
-            )
-
-            hostname = self.project.settings["project"].replace("_", "-")
-
-            Project.replace(
-                os.path.join(to_path, "docker-compose.yaml"),
-                f"hostname: {PROJECT_NAME}-{Component.API_POSTGRES}",
-                f"hostname: {hostname}-{Component.API_POSTGRES}",
-            )
-
-            Project.replace(
-                os.path.join(to_path, "docker-compose.yaml"),
-                f"{PROJECT_NAME}",
-                self.project.settings["project"],
-            )
-
-            Project.replace(
-                os.path.join(to_path, "docker-compose.yaml"), "entity", plural_name
-            )
-
-            port = components[Component.API_POSTGRES]["port"]
-            Project.replace(
-                os.path.join(to_path, "docker-compose.yaml"),
-                f"{PORTS[Component.API_POSTGRES]}:",
-                f"{port}:",
-            )
-
-            # model
-            model_path = os.path.join(to_path, "app", "models.py")
-            new_text = "# fields"
-
-            for field_name, value in settings["fields"].items():
-                field_type, _ = value["type"], value["alias"]
-                if field_name in Field.RESERVED_FIELDS:
-                    raise ValueError(
-                        f"Field names `{self.RESERVED_FIELDS}` are reserved"
-                    )
-                if "datetime" in field_type:
-                    # TODO: format validator
-                    field_type = "datetime"
-
-                new_text += f"\n    {field_name}: {field_type}"
-
-            Project.replace(model_path, "# extra fields", new_text)
-            Project.replace(model_path, "entities", plural_name)
-            Project.replace(model_path, "Entity", settings["name"].capitalize())
-
-            # crud
-            crud_path = os.path.join(to_path, "app", "crud.py")
-            Project.replace(crud_path, "entity", settings["name"])
-            Project.replace(crud_path, "entities", plural_name)
-            Project.replace(crud_path, "Entity", settings["name"].capitalize())
-
-            # router
-            router_path = os.path.join(to_path, "app", "router.py")
-            Project.replace(router_path, "entity", settings["name"])
-            Project.replace(router_path, "entities", plural_name)
-            Project.replace(router_path, "Entity", settings["name"].capitalize())
-
-            # env
-            port = self.project.settings["ports"][Component.POSTGRES]
-            env_path = os.path.join(to_path, ".env")
-            Project.replace(
-                env_path, f"{PROJECT_NAME}", self.project.settings["project"]
-            )
-            Project.replace(env_path, "description", settings["description"])
-            Project.replace(env_path, PORTS[Component.POSTGRES], port)
-
-            # main
-            main_path = os.path.join(to_path, "app", "main.py")
-            Project.replace(main_path, "entity", settings["name"])
-
-            rprint(f"{to_path}[green] created[/green]")
-
-    def __call__(self):
-        """Call layer."""
-        self.api_postgres()
 
 
 class Storage:
@@ -1698,16 +1539,6 @@ def chat():
     from collections import Counter
 
     KEYWORDS = {
-        # API
-        Component.API_POSTGRES: {
-            "api",
-            "serve",
-            "endpoint",
-            "url",
-            "postgres",
-            "postgresql",
-            "postgre",
-        },
         # STORAGE
         Component.POSTGRES: {
             "structured",
