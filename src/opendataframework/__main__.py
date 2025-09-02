@@ -111,9 +111,6 @@ class Component:
     # STORAGE
     POSTGRES: str = "postgres"
 
-    # UTILITY
-    TEXLIVE = "texlive"
-
 
 PROJECT_NAME = "project_name"
 JSON_INDENT = 2
@@ -134,7 +131,6 @@ COMPONENTS = {
         Component.API_POSTGRES,
     ],
     Layer.STORAGE: [Component.POSTGRES],
-    Layer.UTILITY: [Component.TEXLIVE],
 }
 
 DEPENDENCIES = {
@@ -168,8 +164,6 @@ DESCRIPTIONS = {
     Component.R: "VS Code devcontainer for R",
     # STORAGE
     Component.POSTGRES: "Advanced Relational Database",
-    # UTILITY
-    Component.TEXLIVE: "TeX Live is intended to be a straightforward way to get up and running with the TeX document production system",  # noqa
 }
 
 
@@ -180,21 +174,6 @@ PORTS = {
     Component.API_POSTGRES: "8000",
     # STORAGE
     Component.POSTGRES: "5432",
-}
-
-
-VOLUMES = {
-    # UTILITY
-    Component.TEXLIVE: {
-        Layout.CUSTOM: {
-            "./utility/texlive/mnt": "/usr/src/app/mnt",
-            "../data": "/usr/src/app/mnt/data",
-        },
-        Layout.RESEARCH: {
-            "../output": "/usr/src/app/mnt/output",
-            "../paper": "/usr/src/app/mnt/paper",
-        },
-    },
 }
 
 
@@ -610,13 +589,6 @@ class Project:
                     for mnt in MOUNTS[component]["mounts"]
                 ]
                 self._settings["platform"][component]["mounts"]["mounts"] = mounts
-
-    def volumes(self) -> None:
-        """Configure volumes."""
-        for component in self.settings["platform"]:
-            if component not in VOLUMES:
-                continue
-            self._settings["platform"][component]["volumes"] = VOLUMES[component].get(self.layout, {})
 
     def ports(self) -> None:
         """Configure ports."""
@@ -1074,7 +1046,6 @@ class Project:
             rprint()
         
         self.mounts()
-        self.volumes()
         self.ports()
         self.configure()
         
@@ -1732,57 +1703,10 @@ class Utility:
     def __init__(self, project: Project):
         """Create Utility layer instance."""
         self.project = project
-    
-    def texlive(self):
-        """Configure Analytics `TEXLIVE` component."""
-        from_path = os.path.join(SRC_PATH, Layer.UTILITY, Component.TEXLIVE)
-        if not os.path.exists(from_path):
-            raise ValueError(f"{from_path} does not exist")
-
-        to_path = os.path.join(
-            self.project.path, PLATFORM_FOLDER, Layer.UTILITY, Component.TEXLIVE
-        )
-        if os.path.exists(to_path):
-            raise ValueError(f"{to_path} already exists")
-
-        entities = self.project.settings.get("data", {})
-
-        for plural_name, settings in entities.items():
-            components = settings["layers"].get(Layer.UTILITY, {})
-            if Component.TEXLIVE not in components:
-                continue
-
-            if not os.path.exists(to_path):
-                shutil.copytree(
-                    from_path,
-                    to_path,
-                    ignore=shutil.ignore_patterns(*IGNORE_PATTERNS),
-                )
-
-        if not os.path.exists(to_path):
-            return
-
-        volumes = self.project.settings["volumes"].get(Component.TEXLIVE)
-
-        if volumes:
-            with open(os.path.join(to_path, "docker-compose.yaml"), "a") as file:
-                lines = [" " * 4 + "volumes:"]
-                for key, value in volumes.items():
-                    lines.append(" " * 6 + "- " + f"{key}:{value}")
-                file.write("\n".join(lines))
-                file.write("\n")
-
-        Project.replace(
-            os.path.join(to_path, "docker-compose.yaml"),
-            f"{PROJECT_NAME}",
-            self.project.settings["project"],
-        )
-
-        rprint(f"{to_path}[green] created[/green]")
 
     def __call__(self):
         """Call layer."""
-        self.texlive()
+        pass
 
 
 class Research:
@@ -1808,8 +1732,9 @@ class Research:
                 entity.plural_name = entity.name + "s"
                 entity.description = f"{entity.plural_name} {Profile.RESEARCH}"
                 entity.read()
+                
+                # self.project.register(...)
                 self.project.register(layer=Layer.DEVCONTAINERS, component=Component.R)
-                self.project.register(layer=Layer.UTILITY, component=Component.TEXLIVE)
 
                 self.project.register(entity)
         self.project.to_json()
@@ -2179,14 +2104,6 @@ def chat():
             "postgresql",
             "postgre",
             "postgres",
-        },
-        # UTILITY
-        Component.TEXLIVE: {
-            "typesetting",
-            "TeX",
-            "mathematical",
-            "formulae",
-            "texlive",
         },
     }
 
