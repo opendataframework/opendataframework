@@ -968,7 +968,6 @@ class Project:
             layer()
 
         self.compose()
-        # self.collect()
 
     @staticmethod
     def replace(path: str, text: str, new_text: str):
@@ -1030,108 +1029,6 @@ class Project:
         """Remove files/dirs."""
         for file_path in paths:
             os.remove(file_path)
-
-    def collect(self):
-        """Collect scripts."""
-        from_path = SRC_PATH
-        if not os.path.exists(from_path):
-            raise ValueError(f"{from_path} does not exist")
-
-        to_path = os.path.join(self.path, PLATFORM_FOLDER)
-        if not os.path.exists(to_path):
-            raise ValueError(f"{to_path} does not exist")
-
-        scripts = ["setup.sh", "requirements.txt"]
-
-        for file_name in scripts:
-            if file_name == "requirements.txt":
-                if os.path.exists(os.path.join(self.path, file_name)):
-                    with open(os.path.join(from_path, file_name), "r") as file:
-                        src_file_data = file.read()
-                    with open(os.path.join(self.path, file_name), "a") as file:
-                        file.write(src_file_data)
-                else:
-                    self.copy(from_path, self.path, file_name)
-            else:
-                self.copy(from_path, to_path, file_name)
-
-        self.copy(from_path, to_path, "docker-compose.yaml")
-        self.copy(from_path, self.path, "expectations.py")
-        self.copy(from_path, self.path, "README.md")
-
-        self.replace(os.path.join(self.path, "README.md"), f"{PROJECT_NAME}", self.name)
-
-        for layer in COMPONENTS:
-
-            target_path = os.path.join(to_path, layer)
-            if not os.path.exists(target_path):
-                continue
-
-            src_path = os.path.join(from_path, layer)
-            if not os.path.exists(src_path):
-                raise ValueError(f"{src_path} does not exist")
-
-            files_data, paths = self.walk(target_path, scripts)
-
-            for file_name in scripts:
-                lines = files_data[file_name] if paths else []
-
-                file_path = f"{src_path}/{file_name}"
-
-                if not os.path.exists(file_path):
-                    continue
-
-                with open(file_path, "r") as file:
-                    src_file_data = file.read()
-
-                if lines and layer == Layer.STORAGE and file_name == "setup.sh":
-                    # put storage setup logic on top of setup.sh
-                    with open(f"{to_path}/{file_name}", "r") as file:
-                        current_file_data = file.readlines()
-                        # keep shebang on top of the file
-                        header, current_file_data = (
-                            current_file_data[:3],
-                            current_file_data[3:],
-                        )
-                        header = [line for line in header if line != "\n"]
-                        header = "".join([*header])
-                        current_file_data = "".join([*current_file_data])
-                    with open(f"{to_path}/{file_name}", "w") as file:
-                        file.write(
-                            "\n".join(
-                                [header, src_file_data, *lines, current_file_data]
-                            )
-                        )
-
-                else:
-                    path = self.path if file_name == "requirements.txt" else to_path
-                    with open(f"{path}/{file_name}", "a") as file:
-                        file.write(src_file_data)
-                        file.write("\n".join(lines))
-
-            if paths:
-                self.remove(paths)
-
-            file_name = "docker-compose.yaml"
-            files_data, paths = self.walk(target_path, [file_name])
-            if paths:
-                contents = files_data[file_name]
-                file_path = f"{to_path}/{file_name}"
-
-                # exclude docker compose header
-                for content in contents:
-                    lines = content.split("\n")[2:]
-                    lines = ["\n".join(lines)]
-
-                    with open(file_path, "a") as file:
-                        file.write("\n".join(lines))
-
-                self.remove(paths)
-
-        with open(os.path.join(to_path, "docker-compose.yaml"), "a") as file:
-            file.write("networks:\n")
-            file.write(f"  {self.name}_default:\n")
-            file.write(f"    name: {self.name}_default\n")
 
 
 class Storage:
