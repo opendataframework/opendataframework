@@ -631,26 +631,6 @@ class Project:
 
         rprint(f"{self.name}: .pre-commit-config.yaml[green] created[/green]")
 
-    def add_workflows(self):
-        """Add github workflows (github pages ci for docs)."""
-        from_path = os.path.join(SRC_PATH, "github")
-        if not os.path.exists(from_path):
-            raise ValueError(f"{from_path} does not exist")
-
-        to_path = os.path.join(self.path, ".github")
-        if os.path.exists(to_path):
-            raise ValueError(f"{to_path} already exists")
-
-        shutil.copytree(
-            from_path,
-            to_path,
-            ignore=shutil.ignore_patterns(
-                *IGNORE_PATTERNS,
-            ),
-        )
-
-        rprint(f"{self.name}: github workflows[green] created[/green]")
-
     def add_tests(self):
         """Add project tests."""
         from_path = os.path.join(SRC_PATH, "tests")
@@ -907,7 +887,6 @@ class Project:
         self,
         docs: bool = True,
         hooks: bool = True,
-        workflows: bool = False,
         tests: bool = True,
         server: bool = True,
     ):
@@ -917,8 +896,6 @@ class Project:
         #     self.add_docs()
         # if hooks:
         #     self.add_hooks()
-        # if workflows:
-        #     self.add_workflows()
         # if tests:
         #     self.add_tests()
         # if server:
@@ -1098,14 +1075,13 @@ def create(
     path: str = "",
     docs: bool = True,
     hooks: bool = True,
-    workflows: bool = False,
     tests: bool = True,
     server: bool = True,
 ):
     """Create PROJECT structure based on settings.json, optionally with a --path."""
     try:
         project = Project(name=project, path=path)
-        project.create(docs=docs, hooks=hooks, workflows=workflows, tests=tests, server=server)
+        project.create(docs=docs, hooks=hooks, tests=tests, server=server)
     except Exception:
         rprint(f"[bold red] {traceback.format_exc()} [/bold red]")
 
