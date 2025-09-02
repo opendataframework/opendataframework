@@ -1104,27 +1104,6 @@ def status(project: str = "", path: str = ""):
 
 
 @app.command()
-def setup(project: str = "", path: str = ""):
-    """Run `platform/setup.sh`."""
-    try:
-        if path and not os.path.exists(path):
-            raise ValueError(f"{path} does not exists")
-        elif not path:
-            path = os.getcwd()
-        path = os.path.join(path, project, "platform")
-
-        setup_path = os.path.join(path, "setup.sh")
-        if not os.path.exists(setup_path):
-            raise ValueError(f"{setup_path} not exists")
-
-        os.chmod(setup_path, os.stat(setup_path).st_mode | stat.S_IEXEC)
-        subprocess.run(["./setup.sh"], cwd=path)
-
-    except Exception as e:
-        rprint(f"[bold red] {e} [/bold red]")
-
-
-@app.command()
 def check(project: str = "", path: str = ""):
     """Run `pre-commit run --all-files`."""
     try:
