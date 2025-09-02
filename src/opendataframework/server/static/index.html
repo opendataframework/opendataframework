@@ -372,7 +372,8 @@
 <button class="toggle-sidebar-btn" aria-label="Toggle Sidebar">☰ project_name</button>
 
 <div class="sidebar" id="sidebar">
-  <h2 style="color:#B36AE2; font-weight: bold;">Layers</h2>
+  <!-- <h2 style="color:#B36AE2; font-weight: bold;">Layers</h2> -->
+  <h2 style="color:#B36AE2; font-weight: bold;"></h2>
   <nav></nav>
 </div>
 
@@ -424,7 +425,8 @@
 
     // Description
     const desc = document.createElement('p');
-    desc.textContent = 'This is a description of the card content.';
+    // desc.textContent = 'This is a description of the card content.';
+    desc.textContent = '';
     card.appendChild(desc);
 
     // Left footer: Open button
@@ -491,7 +493,7 @@
       sections.forEach(section => {
         if (section.id === target) {
           section.classList.add('active');
-          sectionHeader.textContent = link.textContent;
+          // sectionHeader.textContent = link.textContent;
         } else {
           section.classList.remove('active');
         }

@@ -623,7 +623,8 @@ class Project:
                 nav.append(a)
 
                 if len(content) == 1:
-                    header = f'  <div class="header" id="sectionHeader" style="color: #00FA92;">{layer.capitalize()}</div>'
+                    # header = f'  <div class="header" id="sectionHeader" style="color: #00FA92;">{layer.capitalize()}</div>'
+                    header = '  <div class="header" id="sectionHeader" style="color: #00FA92;"></div>'
                     content.append(header)
                     content.append(section.format(layer=layer, section="section active"))
                 else:
@@ -806,8 +807,8 @@ class Project:
     ):
         """Handler for `create` CLI command."""
         self.load()
-        # if server:
-        #     self.add_server()
+        if server:
+            self.add_server()
 
         layers = [
             Storage(project=self),
