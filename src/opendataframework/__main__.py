@@ -135,7 +135,7 @@ PORTS = {
     Component.POSTGRES: "5432",
 }
 
-LAYOUTS = {Layout.CUSTOM, Layout.RESEARCH}
+LAYOUTS = {Layout.CUSTOM}
 
 
 PROFILES = {Profile.CUSTOM, Profile.RESEARCH}
@@ -574,41 +574,6 @@ class Project:
         self._profile = value
         self._settings["profile"] = self._profile
 
-    def add_layout(self):
-        """Add project layout."""
-        if self.layout == Layout.CUSTOM:
-            return
-
-        from_path = os.path.join(SRC_PATH, "layouts", self.layout)
-        if not os.path.exists(from_path):
-            raise ValueError(f"{from_path} does not exist")
-
-        to_path = os.path.join(self.path)
-
-        shutil.copytree(
-            from_path,
-            to_path,
-            ignore=shutil.ignore_patterns(*IGNORE_PATTERNS, *("data")),
-            dirs_exist_ok=True,
-        )
-
-        shutil.copytree(
-            os.path.join(from_path, "data"),
-            os.path.join(to_path, "data"),
-            ignore=shutil.ignore_patterns(*IGNORE_PATTERNS),
-            dirs_exist_ok=True,
-        )
-
-        data_path = os.path.join(to_path, "data")
-        for file_name in os.listdir(data_path):
-            if file_name.endswith(".csv"):
-                source_path = os.path.join(data_path, file_name)
-                dest_path = os.path.join(data_path, "raw", file_name)
-                shutil.move(source_path, dest_path)
-                rprint(f"{file_name}[green] moved to [/green]{dest_path}")
-
-        rprint(f"{self.name}: {self.layout} layout[green] created[/green]")
-
     def add_docs(self):
         """Add project docs."""
         from_path = os.path.join(SRC_PATH, "docs")
@@ -948,7 +913,6 @@ class Project:
     ):
         """Handler for `create` CLI command."""
         self.load()
-        # self.add_layout()
         # if docs:
         #     self.add_docs()
         # if hooks:
