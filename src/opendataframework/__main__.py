@@ -90,7 +90,6 @@ class Layer:
 
     ANALYTICS: str = "analytics"
     API: str = "api"
-    DEVCONTAINERS: str = "devcontainers"
     STORAGE: str = "storage"
 
 
@@ -102,10 +101,6 @@ class Component:
 
     # API
     API_POSTGRES: str = "api-postgres"
-
-    # DEVCONTAINERS
-    PYTHON: str = "python"
-    R: str = "R"
 
     # STORAGE
     POSTGRES: str = "postgres"
@@ -125,7 +120,6 @@ class Settings:
 
 COMPONENTS = {
     Layer.ANALYTICS: [Component.SUPERSET],
-    Layer.DEVCONTAINERS: [Component.PYTHON, Component.R],
     Layer.API: [
         Component.API_POSTGRES,
     ],
@@ -158,9 +152,6 @@ DESCRIPTIONS = {
     Component.SUPERSET: "Apache Superset is a modern, enterprise-ready business intelligence web application",  # noqa
     # API
     Component.API_POSTGRES: "REST Data Access for Postgres",
-    # DEVCONTAINERS
-    Component.PYTHON: "VS Code devcontainer for Python",
-    Component.R: "VS Code devcontainer for R",
     # STORAGE
     Component.POSTGRES: "Advanced Relational Database",
 }
@@ -174,43 +165,6 @@ PORTS = {
     # STORAGE
     Component.POSTGRES: "5432",
 }
-
-
-MOUNTS = {
-    Component.PYTHON: {
-        "workspaceMount": ",".join(
-            ("source=${{localWorkspaceFolder}}", "target=/{project_name}", "type=bind")
-        ),
-        "workspaceFolder": "/{project_name}",
-        "mounts": [
-            ",".join(
-                (
-                    "source=${{localWorkspaceFolder}}/../../../data",
-                    "target=/{project_name}/data",
-                    "type=bind",
-                    "consistency=cached",
-                )
-            )
-        ],
-    },
-    Component.R: {
-        "workspaceMount": ",".join(
-            ("source=${{localWorkspaceFolder}}", "target=/{project_name}", "type=bind")
-        ),
-        "workspaceFolder": "/{project_name}",
-        "mounts": [
-            ",".join(
-                (
-                    "source=${{localWorkspaceFolder}}/../../../data",
-                    "target=/{project_name}/data",
-                    "type=bind",
-                    "consistency=cached",
-                )
-            )
-        ],
-    },
-}
-
 
 LAYOUTS = {Layout.CUSTOM, Layout.RESEARCH}
 
@@ -556,38 +510,6 @@ class Project:
             pass
 
         raise ValueError(f"{os.path.join(self.path)}: settings file does not exist")
-
-
-    def mounts(self) -> None:
-        """Configure mounts."""
-        for component, settings in self.settings["platform"].items():
-            if component not in MOUNTS:
-                continue
-
-            self._settings["platform"][component]["mounts"] = {}
-
-            layer = settings["layer"]
-
-            if layer is Layer.DEVCONTAINERS:
-                workspace_mount = MOUNTS[component]["workspaceMount"].format(
-                    project_name=self.name
-                )
-                self._settings["platform"][component]["mounts"]["workspaceMount"] = (
-                    workspace_mount
-                )
-
-                workspace_folder = MOUNTS[component]["workspaceFolder"].format(
-                    project_name=self.name
-                )
-                self._settings["platform"][component]["mounts"]["workspaceFolder"] = (
-                    workspace_folder
-                )
-
-                mounts = [
-                    mnt.format(project_name=self.name)
-                    for mnt in MOUNTS[component]["mounts"]
-                ]
-                self._settings["platform"][component]["mounts"]["mounts"] = mounts
 
     def ports(self) -> None:
         """Configure ports."""
@@ -1044,7 +966,6 @@ class Project:
                         self.register(layer=layer, component=component)
             rprint()
         
-        self.mounts()
         self.ports()
         self.configure()
         
@@ -1097,7 +1018,6 @@ class Project:
         layers = [
             # Analytics(project=self),
             # API(project=self),
-            # Devcontainers(project=self),
             Storage(project=self),
         ]
 
@@ -1199,8 +1119,6 @@ class Project:
         self.replace(os.path.join(self.path, "README.md"), f"{PROJECT_NAME}", self.name)
 
         for layer in COMPONENTS:
-            if layer is Layer.DEVCONTAINERS:
-                continue
 
             target_path = os.path.join(to_path, layer)
             if not os.path.exists(target_path):
@@ -1512,117 +1430,6 @@ class API:
         self.api_postgres()
 
 
-class Devcontainers:
-    """Devcontainers layer."""
-
-    def __init__(self, project: Project):
-        """Create Devcontainers layer instance."""
-        self.project = project
-
-    def python(self):
-        """Configure Devcontainers `PYTHON` component."""
-        from_path = os.path.join(SRC_PATH, Layer.DEVCONTAINERS, Component.PYTHON)
-        if not os.path.exists(from_path):
-            raise ValueError(f"{from_path} does not exist")
-
-        to_path = os.path.join(
-            self.project.path, PLATFORM_FOLDER, Layer.DEVCONTAINERS, Component.PYTHON
-        )
-        if os.path.exists(to_path):
-            raise ValueError(f"{to_path} already exists")
-
-        entities = self.project.settings.get("data", {})
-
-        for plural_name, settings in entities.items():
-            components = settings["layers"].get(Layer.DEVCONTAINERS, {})
-            if Component.PYTHON not in components:
-                continue
-
-            if os.path.exists(to_path):
-                break
-
-            shutil.copytree(
-                from_path,
-                to_path,
-                ignore=shutil.ignore_patterns(*IGNORE_PATTERNS),
-            )
-
-            mounts = self.project.settings["mounts"].get(Component.PYTHON)
-
-            if not mounts:
-                break
-
-            config_path = os.path.join(to_path, ".devcontainer", "devcontainer.json")
-            if not os.path.exists(os.path.join(config_path)):
-                raise ValueError(f"{config_path} does not exist")
-
-            with open(config_path, "r") as file:
-                config = json.load(file)
-                config["name"] = self.project.settings["project"]
-                config["workspaceMount"] = mounts.get("workspaceMount", "")
-                config["workspaceFolder"] = mounts.get("workspaceFolder", "")
-                config["mounts"] = mounts.get("mounts", [])
-
-            with open(config_path, "w") as file:
-                json.dump(config, file, indent=JSON_INDENT)
-
-            rprint(f"{to_path}[green] created[/green]")
-
-    def r(self):
-        """Configure Devcontainers `R` component."""
-        from_path = os.path.join(SRC_PATH, Layer.DEVCONTAINERS, Component.R)
-        if not os.path.exists(from_path):
-            raise ValueError(f"{from_path} does not exist")
-
-        to_path = os.path.join(
-            self.project.path, PLATFORM_FOLDER, Layer.DEVCONTAINERS, Component.R
-        )
-        if os.path.exists(to_path):
-            raise ValueError(f"{to_path} already exists")
-
-        entities = self.project.settings.get("data", {})
-
-        for plural_name, settings in entities.items():
-            components = settings["layers"].get(Layer.DEVCONTAINERS, {})
-            if Component.R not in components:
-                continue
-
-            if os.path.exists(to_path):
-                break
-
-            shutil.copytree(
-                from_path,
-                to_path,
-                ignore=shutil.ignore_patterns(*IGNORE_PATTERNS),
-            )
-
-            mounts = self.project.settings["mounts"].get(Component.R)
-
-            if not mounts:
-                break
-
-            config_path = os.path.join(to_path, ".devcontainer", "devcontainer.json")
-            if not os.path.exists(os.path.join(config_path)):
-                raise ValueError(f"{config_path} does not exist")
-
-            with open(config_path, "r") as file:
-                config = json.load(file)
-                config["name"] = self.project.settings["project"]
-                config["workspaceMount"] = mounts.get("workspaceMount", "")
-                config["workspaceFolder"] = mounts.get("workspaceFolder", "")
-                config["mounts"] = mounts.get("mounts", [])
-
-            with open(config_path, "w") as file:
-                json.dump(config, file, indent=JSON_INDENT)
-
-            rprint(f"{to_path}[green] created[/green]")
-
-    def __call__(self):
-        """Call layer."""
-        self.python()
-        self.r()
-
-
 class Storage:
     """Storage layer."""
 
@@ -1719,8 +1526,7 @@ class Research:
                 entity.description = f"{entity.plural_name} {Profile.RESEARCH}"
                 entity.read()
                 
-                # self.project.register(...)
-                self.project.register(layer=Layer.DEVCONTAINERS, component=Component.R)
+                # self.project.register(layer=..., component=...)
 
                 self.project.register(entity)
         self.project.to_json()
@@ -2056,25 +1862,6 @@ def chat():
             "postgres",
             "postgresql",
             "postgre",
-        },
-        # DEVCONTAINERS
-        Component.PYTHON: {
-            "devcontainer",
-            "python",
-            "env",
-            "isolated",
-            "containerized",
-            "py",
-            "lang",
-        },
-        Component.R: {
-            "devcontainer",
-            "r",
-            "env",
-            "isolated",
-            "containerized",
-            "rlang",
-            "lang",
         },
         # STORAGE
         Component.POSTGRES: {
