@@ -138,7 +138,7 @@ PORTS = {
 LAYOUTS = {Layout.CUSTOM}
 
 
-PROFILES = {Profile.CUSTOM, Profile.RESEARCH}
+PROFILES = {Profile.CUSTOM}
 
 
 class Field:
@@ -1067,36 +1067,6 @@ class Storage:
         self.postgres()
 
 
-class Research:
-    """Reasearch Profile."""
-
-    def __init__(self, project: Project):
-        """Reasearch Profile instance."""
-        self.project = project
-
-    def __call__(self):
-        """Call Profile."""
-        self.project.layout = Layout.RESEARCH
-        self.project.profile = Profile.RESEARCH
-        data_path = os.path.join(self.project.path, "data")
-        for file_name in os.listdir(data_path):
-            if file_name.endswith(".csv"):
-                file_path = os.path.join(data_path, file_name)
-                name = file_name.split(".csv")[0]
-                if name.endswith("s"):
-                    name = name[:-1]
-
-                entity = Entity(name=name, path=file_path)
-                entity.plural_name = entity.name + "s"
-                entity.description = f"{entity.plural_name} {Profile.RESEARCH}"
-                entity.read()
-                
-                # self.project.register(layer=..., component=...)
-
-                self.project.register(entity)
-        self.project.to_json()
-
-
 # CLI
 
 app = typer.Typer()
@@ -1116,8 +1086,6 @@ def init(
         profile = profile.strip().lower()
         if profile == Profile.CUSTOM:
             project.init(extention=extention)
-        elif profile == Profile.RESEARCH:
-            Research(project)()
         else:
             raise ValueError(f"Invalid Profile. Supported profiles are: {PROFILES}")
     except Exception:
