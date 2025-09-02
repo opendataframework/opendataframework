@@ -92,7 +92,6 @@ class Layer:
     API: str = "api"
     DEVCONTAINERS: str = "devcontainers"
     STORAGE: str = "storage"
-    UTILITY: str = "utility"
 
 
 class Component:
@@ -1100,7 +1099,6 @@ class Project:
             # API(project=self),
             # Devcontainers(project=self),
             Storage(project=self),
-            # Utility(project=self),
         ]
 
         for layer in layers:
@@ -1695,18 +1693,6 @@ class Storage:
     def __call__(self):
         """Call layer."""
         self.postgres()
-
-
-class Utility:
-    """Utility layer."""
-
-    def __init__(self, project: Project):
-        """Create Utility layer instance."""
-        self.project = project
-
-    def __call__(self):
-        """Call layer."""
-        pass
 
 
 class Research:
