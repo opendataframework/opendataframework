@@ -608,29 +608,6 @@ class Project:
 
         rprint(f"{self.name}: docs[green] created[/green]")
 
-    def add_hooks(self):
-        """Add project pre-commit hooks."""
-        from_path = os.path.join(SRC_PATH, "hooks")
-        if not os.path.exists(from_path):
-            raise ValueError(f"{from_path} does not exist")
-
-        if os.path.exists(os.path.join(self.path, ".pre-commit-config.yaml")):
-            raise ValueError(
-                f'{os.path.join(self.path, ".pre-commit-config.yaml")} already exists'
-            )
-
-        self.copy(from_path, self.path, ".pre-commit-config.yaml")
-
-        if os.path.exists(os.path.join(self.path, "requirements.txt")):
-            with open(os.path.join(from_path, "requirements.txt"), "r") as file:
-                src_file_data = file.read()
-            with open(os.path.join(self.path, "requirements.txt"), "a") as file:
-                file.write(src_file_data)
-        else:
-            self.copy(from_path, self.path, "requirements.txt")
-
-        rprint(f"{self.name}: .pre-commit-config.yaml[green] created[/green]")
-
     def add_tests(self):
         """Add project tests."""
         from_path = os.path.join(SRC_PATH, "tests")
@@ -886,7 +863,6 @@ class Project:
     def create(
         self,
         docs: bool = True,
-        hooks: bool = True,
         tests: bool = True,
         server: bool = True,
     ):
@@ -894,8 +870,6 @@ class Project:
         self.load()
         # if docs:
         #     self.add_docs()
-        # if hooks:
-        #     self.add_hooks()
         # if tests:
         #     self.add_tests()
         # if server:
@@ -1074,14 +1048,13 @@ def create(
     project: str,
     path: str = "",
     docs: bool = True,
-    hooks: bool = True,
     tests: bool = True,
     server: bool = True,
 ):
     """Create PROJECT structure based on settings.json, optionally with a --path."""
     try:
         project = Project(name=project, path=path)
-        project.create(docs=docs, hooks=hooks, tests=tests, server=server)
+        project.create(docs=docs, tests=tests, server=server)
     except Exception:
         rprint(f"[bold red] {traceback.format_exc()} [/bold red]")
 
