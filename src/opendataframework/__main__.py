@@ -350,6 +350,9 @@ class Project:
             "platform": {},
             "network": {"name": f"{name}_network", "driver": "bridge"}
         }
+
+        self._env = {}
+        
         self.name = name
         self.path = path
 
@@ -430,6 +433,11 @@ class Project:
         # TODO: validate layer & component names
         self._settings = value
 
+    @property
+    def env(self) -> dict:
+        """Get project env variables."""
+        return self._env
+
     def to_json(self, indent=JSON_INDENT) -> None:
         """Dump settings to json."""
         path = os.path.join(self.path, "settings.json")
@@ -465,7 +473,15 @@ class Project:
         with open(path, "r") as file:
             self.settings = yaml.safe_load(file)
     
-    def load(self) -> None:
+    def to_env_file(self):
+        with open(os.path.join(self.path, ".env"), "w") as f:
+            lines = []
+            for component, env_vars in self._env.items():
+                lines.extend([f"{component.upper()}_{k}={v}" for k, v in env_vars.items()])
+            f.write('\n'.join(lines) + '\n')
+            rprint(f"{self.name}: .env [green] created[/green]")
+
+    def load_settings(self) -> None:
         try:
             self.from_json()
             return
@@ -479,6 +495,28 @@ class Project:
             pass
 
         raise ValueError(f"{os.path.join(self.path)}: settings file does not exist")
+
+    def load_env(self) -> None:
+        env_path = os.path.join(self.path, ".env")
+        if not os.path.exists(env_path):
+            raise ValueError(f"{os.path.join(self.path)}: .env file does not exist")
+        
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" in line:
+                    component, line = line.split("_", 1)
+                    component = component.lower()
+                    key, value = line.split("=", 1)
+                    if component not in self._env:
+                        self._env[component] = {}
+                    self._env[component][key.strip()] = value.strip()
+    
+    def load(self) -> None:
+        self.load_settings()
+        self.load_env()
 
     def ports(self) -> None:
         """Configure ports."""
@@ -502,7 +540,10 @@ class Project:
                 self._settings["platform"][component].update(yaml.safe_load(env.get_template("config.yaml.j2").render(container_port=port, host_port=port)))
             else:
                 self._settings["platform"][component].update(yaml.safe_load(env.get_template("config.yaml.j2").render()))
-            self._settings["platform"][component]["env"] = yaml.safe_load(env.get_template(".env.j2").render())
+            
+            env_vars = yaml.safe_load(env.get_template(".env.j2").render())
+            self._env[component] = {f"{k}": v for k, v in env_vars.items()}
+            
     
     def register(self, layer: str = None, component: str = None, entity: Entity = None) -> None:
         """Register component or entity at project level."""
@@ -781,20 +822,25 @@ class Project:
             self.to_json()
         else:
             self.to_yaml()
+        
+        self.to_env_file()
+
         rprint(f"[#00FA92]Project `[#B36AE2]{self.name}[/#B36AE2]` created[/#00FA92]")
 
         rprint(f"{json.dumps(self.settings, indent=JSON_INDENT)}")
         rprint()
     
     def compose(self) -> None:
-        """Create docker-compose.yaml."""
-        path = os.path.join(self.path, PLATFORM_FOLDER)
-        os.makedirs(path, exist_ok=True)
-        
-        path = os.path.join(path, "docker-compose.yaml")
+        """Create compose.yaml."""
+        path = os.path.join(self.path, "compose.yaml")
         
         services = {"services": self.services}
-        services.update({"networks": self.settings["network"]})
+        networks = {
+            "networks": {
+                self.settings["network"]["name"]: {"driver": self.settings["network"]["driver"]}
+            }
+        }
+        services.update(networks)
         
         with open(path, "w") as file:
             yaml.dump(json.loads(json.dumps(services)), file, sort_keys=False)
@@ -918,7 +964,7 @@ class Storage:
                 else:
                     columns[field] = type_map[fields[field]["type"]]
             tables[table_name] = columns
-            volumes[f"../data/{table_name}.csv"] = f"/docker-entrypoint-initdb.d/{table_name}.csv"
+            volumes[f"./data/{table_name}.csv"] = f"/docker-entrypoint-initdb.d/{table_name}.csv"
 
         path = os.path.join(self.project.path, PLATFORM_FOLDER, Layer.STORAGE, Component.POSTGRES)
         os.makedirs(path, exist_ok=True)
@@ -931,7 +977,8 @@ class Storage:
                 )
             )
         
-        volumes[os.path.join(Layer.STORAGE, Component.POSTGRES, "init.sql")] = "/docker-entrypoint-initdb.d/init.sql"
+        volumes[f"./{os.path.join(PLATFORM_FOLDER, Layer.STORAGE, Component.POSTGRES, 'init.sql')}"] = "/docker-entrypoint-initdb.d/init.sql"
+        volumes[f"./{os.path.join(PLATFORM_FOLDER, Layer.STORAGE, Component.POSTGRES, 'data')}"] = "/var/lib/postgresql/data"
         
         self.project.services.update(
             yaml.safe_load(
@@ -940,7 +987,7 @@ class Storage:
                     image=config["image"], 
                     host_port=config["host_port"],
                     container_port=config["container_port"], 
-                    env=config["env"],
+                    env=self.project.env.get(Component.POSTGRES, {}),
                     volumes=volumes,
                     network=self.project.settings["network"]
                 )
@@ -1011,95 +1058,6 @@ def install(project: str = "", path: str = ""):
 
         venv.create(venv_path, with_pip=True)
         subprocess.run(["bin/pip", "install", "-r", requirements_path], cwd=venv_path)
-    except Exception as e:
-        rprint(f"[bold red] {e} [/bold red]")
-
-
-@app.command()
-def build(project: str = "", path: str = ""):
-    """Run `docker compose --profile {layer} build`."""
-    try:
-        if path and not os.path.exists(path):
-            raise ValueError(f"{path} does not exists")
-        elif not path:
-            path = os.getcwd()
-        path = os.path.join(path, project, "platform")
-
-        compose_path = os.path.join(path, "docker-compose.yaml")
-        if not os.path.exists(compose_path):
-            raise ValueError(f"{compose_path} not exists")
-
-        for layer in COMPONENTS:
-            subprocess.run(
-                ["docker", "compose", "--profile", f"{layer}", "build"], cwd=path
-            )
-
-    except Exception as e:
-        rprint(f"[bold red] {e} [/bold red]")
-
-
-@app.command()
-def start(project: str = "", path: str = ""):
-    """Run `docker compose --profile {layer} up -d`."""
-    try:
-        if path and not os.path.exists(path):
-            raise ValueError(f"{path} does not exists")
-        elif not path:
-            path = os.getcwd()
-        path = os.path.join(path, project, "platform")
-
-        compose_path = os.path.join(path, "docker-compose.yaml")
-        if not os.path.exists(compose_path):
-            raise ValueError(f"{compose_path} not exists")
-
-        for layer in COMPONENTS:
-            subprocess.run(
-                ["docker", "compose", "--profile", f"{layer}", "up", "-d"], cwd=path
-            )
-
-    except Exception as e:
-        rprint(f"[bold red] {e} [/bold red]")
-
-
-@app.command()
-def stop(project: str = "", path: str = ""):
-    """Run `docker compose --profile {layer} stop`."""
-    try:
-        if path and not os.path.exists(path):
-            raise ValueError(f"{path} does not exists")
-        elif not path:
-            path = os.getcwd()
-        path = os.path.join(path, project, "platform")
-
-        compose_path = os.path.join(path, "docker-compose.yaml")
-        if not os.path.exists(compose_path):
-            raise ValueError(f"{compose_path} not exists")
-
-        for layer in COMPONENTS:
-            subprocess.run(
-                ["docker", "compose", "--profile", f"{layer}", "stop"], cwd=path
-            )
-
-    except Exception as e:
-        rprint(f"[bold red] {e} [/bold red]")
-
-
-@app.command()
-def status(project: str = "", path: str = ""):
-    """Run `docker compose ps`."""
-    try:
-        if path and not os.path.exists(path):
-            raise ValueError(f"{path} does not exists")
-        elif not path:
-            path = os.getcwd()
-        path = os.path.join(path, project, "platform")
-
-        compose_path = os.path.join(path, "docker-compose.yaml")
-        if not os.path.exists(compose_path):
-            raise ValueError(f"{compose_path} not exists")
-
-        subprocess.run(["docker", "compose", "ps", "--all"], cwd=path)
-
     except Exception as e:
         rprint(f"[bold red] {e} [/bold red]")
 

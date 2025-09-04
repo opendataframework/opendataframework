@@ -11,6 +11,5 @@
 {%- for k, v in volumes.items() %}
     - {{ k }}:{{ v }}
 {%- endfor %}
-    - {{ service_name }}_data:/var/lib/postgresql/data
   networks:
     - {{ network.name }}
