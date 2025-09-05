@@ -82,6 +82,7 @@ class Profile:
     DATA_ANALYTICS: str = "data_analytics"
     DATA_ENGENEERING: str = "data_engineering"
     DATA_SCIENCE: str = "data_science"
+    DEV: str = "dev"
     RESEARCH: str = "research"
 
 
