@@ -654,7 +654,7 @@ class Project:
         content = ['<div class="main-content" id="mainContent">']
         section = '  <section id="{layer}" class="{section}">\n    <div class="grid" id="grid-{layer}"></div>\n  </section>'
 
-        def html(data, layer, nav, content, host, port, plural_name=None):
+        def html(data, layer, nav, content, host, port, component, plural_name=None):
             if not data.get(layer):
                 data[layer] = {}
                 if len(nav) == 1:
@@ -676,12 +676,17 @@ class Project:
             else:
                 data[layer].update({component: {"url": f"{host}:{port}/"}})
 
+        for entity, settings in self._settings["data"].items():
+            layer = "Data"
+            port = 80
+            html(data, layer, nav, content, host, port, entity)
+
         for component, settings in self._settings["platform"].items():
             layer = settings["layer"]
             port = settings.get("port")
             if not port:
                 continue
-            html(data, layer, nav, content, host, port)
+            html(data, layer, nav, content, host, port, component)
         
         nav.append("  </nav>")
         content.append("</div>")
