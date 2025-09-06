@@ -631,6 +631,8 @@ class Project:
             ),
         )
 
+        self.copy(from_path, self.path, "requirements.txt")
+
         path = os.path.join(TEMPLATES_PATH, "server", "static")
         env = Environment(loader=FileSystemLoader(path))
 
