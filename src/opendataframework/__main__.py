@@ -618,10 +618,7 @@ class Project:
 
     def add_server(self):
         """Add project server."""
-        from_path = os.path.join(SRC_PATH, "server")
-        if not os.path.exists(from_path):
-            raise ValueError(f"{from_path} does not exist")
-
+        from_path = os.path.join(TEMPLATES_PATH, "server")
         to_path = os.path.join(self.path, "server")
         if os.path.exists(to_path):
             raise ValueError(f"{to_path} already exists")
@@ -630,74 +627,40 @@ class Project:
             from_path,
             to_path,
             ignore=shutil.ignore_patterns(
-                *IGNORE_PATTERNS, *("requirements.txt",)
+                *IGNORE_PATTERNS, *("requirements.txt", "index.html.j2")
             ),
         )
 
-        if os.path.exists(os.path.join(self.path, "requirements.txt")):
-            with open(os.path.join(from_path, "requirements.txt"), "r") as file:
-                src_file_data = file.read()
-            with open(os.path.join(self.path, "requirements.txt"), "a") as file:
-                file.write(src_file_data)
-        else:
-            self.copy(from_path, self.path, "requirements.txt")
+        path = os.path.join(TEMPLATES_PATH, "server", "static")
+        env = Environment(loader=FileSystemLoader(path))
 
+        components = {"data": {}, "platform": {}}
+        
         host = "http://localhost"
-        target_path = os.path.join(to_path, "static", "index.html")
 
-        Project.replace(target_path, PROJECT_NAME, self.settings["project"])
-
-        with open(target_path, "r") as file:
-            filedata = file.read()
-
-        data = {}
-        nav = ["<nav>"]
-        content = ['<div class="main-content" id="mainContent">']
-        section = '  <section id="{layer}" class="{section}">\n    <div class="grid" id="grid-{layer}"></div>\n  </section>'
-
-        def html(data, layer, nav, content, host, port, component, plural_name=None):
-            if not data.get(layer):
-                data[layer] = {}
-                if len(nav) == 1:
-                    a = f'    <a href="#" class="active" data-section="{layer}">{layer.capitalize()}</a>'
-                else:
-                    a = f'    <a href="#" data-section="{layer}">{layer.capitalize()}</a>'
-                nav.append(a)
-
-                if len(content) == 1:
-                    # header = f'  <div class="header" id="sectionHeader" style="color: #00FA92;">{layer.capitalize()}</div>'
-                    header = '  <div class="header" id="sectionHeader" style="color: #00FA92;"></div>'
-                    content.append(header)
-                    content.append(section.format(layer=layer, section="section active"))
-                else:
-                    content.append(section.format(layer=layer, section="section"))
-            
-            if plural_name:
-                data[layer].update({f"{plural_name}": {"url": f"{host}:{port}/"}})
-            else:
-                data[layer].update({component: {"url": f"{host}:{port}/"}})
-
-        for entity, settings in self._settings["data"].items():
-            layer = "Data"
-            port = 80
-            html(data, layer, nav, content, host, port, entity)
+        for entity, settings in self.settings["data"].items():
+            config = {"name": settings["name"], "description": settings["description"]}
+            for k, v in settings["fields"].items():
+                config[f"{entity}.{k}"] = f"{v["type"]} | {v["alias"]}"
+            components["data"].update({entity: config})
 
         for component, settings in self._settings["platform"].items():
             layer = settings["layer"]
             port = settings.get("port")
             if not port:
                 continue
-            html(data, layer, nav, content, host, port, component)
-        
-        nav.append("  </nav>")
-        content.append("</div>")
-        
-        filedata = filedata.replace("<nav></nav>", "\n".join(nav))
-        filedata = filedata.replace('<div class="main-content" id="mainContent"></div>', "\n".join(content))
-        filedata = filedata.replace("const components = {}", f"const components = {data}")
+            components["platform"].update({component: {"url": f"{host}:{port}/", "layer": layer}})
 
-        with open(target_path, "w") as file:
-            file.write(filedata)
+        content = env.get_template("index.html.j2").render(
+            project = self.name,
+            sections = {"data": "active", "platform": ""},
+            components = components
+        )
+
+        to_path = os.path.join(to_path, "static")
+
+        with open(os.path.join(to_path, "index.html"), "w") as file:
+            file.write(content)
 
         rprint(f"{self.name}: server[green] created[/green]")
     
