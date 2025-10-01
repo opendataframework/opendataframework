@@ -1,3 +1,28 @@
-image: {{ image | default('postgres:15') }}
-container_port: {{ container_port | default(5432) }}
-host_port: {{ host_port | default(5432) }}
+{% set defaults = {
+    "service_name": "postgres",
+    "image": "postgres:15",
+    "container_port": 5432,
+    "host_port": 5432,
+    "environment": [
+        "POSTGRES_DB=$POSTGRES_DB",
+        "POSTGRES_USER=$POSTGRES_USER",
+        "POSTGRES_PASSWORD=$POSTGRES_PASSWORD",
+    ],
+    "volumes": [
+        "./init.sql:/docker-entrypoint-initdb.d/init.sql",
+        "./data:/var/lib/postgresql/data"
+    ]
+} -%}
+{{ service_name | default(defaults.service_name) }}:
+  container_name: "{{ service_name | default(defaults.service_name) }}"
+  image: "{{ image | default(defaults.image) }}"
+  ports:
+    - "{{ host_port | default(defaults.host_port) }}:{{ container_port |  default(defaults.container_port)}}"
+  environment:
+{%- for value in environment | default(defaults.environment) %}
+    - {{ value }}
+{%- endfor %}
+  volumes:
+{%- for value in volumes | default(defaults.volumes) %}
+    - {{ value }}
+{%- endfor %}

@@ -19,9 +19,8 @@ from jinja2 import Environment, FileSystemLoader
 from rich import print as rprint
 from rich.prompt import Prompt
 
-from opendataframework import __version__
+from opendataframework import __version__, Entity, CSVEntity, Constants, Postgres
 
-PLATFORM_FOLDER = "platform"
 IGNORE_PATTERNS = (
     "__pycache__",
     ".DS_Store",
@@ -29,8 +28,6 @@ IGNORE_PATTERNS = (
     ".venv",
     "venv",
 )
-SRC_PATH = Path(__file__).parent
-TEMPLATES_PATH = os.path.join(SRC_PATH, "templates")
 
 
 def colorized_logo() -> str:
@@ -140,191 +137,6 @@ LAYOUTS = {Layout.CUSTOM}
 
 
 PROFILES = {Profile.CUSTOM}
-
-
-class Field:
-    """Field."""
-
-    UID_FIELD = "uid"
-    TS_FILED = "ts"
-
-    RESERVED_FIELDS = {UID_FIELD, TS_FILED}
-
-    TS_FRMTS = {"%Y-%m-%d %H:%M:%S", "%d.%m.%Y %H:%M:%S"}
-
-    def __init__(self):
-        """Create field instance."""
-        self._field_name = None
-        self._field_type = None
-        self._field_alias = None
-
-    @property
-    def field_name(self) -> str:
-        """Get field name."""
-        return self._field_name
-
-    @field_name.setter
-    def field_name(self, value: str) -> None:
-        """Set field name."""
-        value = re.sub("[^A-Za-z0-9]+", "_", value).lower()
-        if not re.compile("^[a-zA-Z0-9_]+$").match(value):
-            raise ValueError(f"Invalid field name: {value}")
-
-        if value in self.RESERVED_FIELDS:
-            raise ValueError(f"Field names `{self.RESERVED_FIELDS}` are reserved")
-        self._field_name = value
-
-    @property
-    def field_alias(self) -> str:
-        """Get field alias."""
-        return self._field_alias
-
-    @field_alias.setter
-    def field_alias(self, value: str) -> None:
-        """Set field alias."""
-        self._field_alias = value
-
-    @property
-    def field_type(self) -> str:
-        """Get field type."""
-        return self._field_type
-
-    @field_type.setter
-    def field_type(self, value: str) -> None:
-        """Set field type."""
-        if value.isdigit():
-            self._field_type = "int"
-            return
-
-        try:
-            float(value)
-            self._field_type = "float"
-            return
-        except ValueError:
-            pass
-
-        for ts_frmt in self.TS_FRMTS:
-            try:
-                datetime.strptime(value, ts_frmt)
-                self._field_type = f"datetime|{ts_frmt}"
-                return
-            except ValueError:
-                continue
-
-        self._field_type = "str"
-
-    def to_dict(self) -> dict:
-        """Create dict representation."""
-        return {self.field_name: {"type": self.field_type, "alias": self.field_alias}}
-
-
-class Entity:
-    """Entity."""
-
-    def __init__(self, name: str, path: str):
-        """Create entity instance."""
-        self._name = None
-        self._path = None
-        self._plural_name = None
-        self._description = ""
-
-        self.name = name
-        self.path = path
-        self.plural_name = name
-
-        self._fields = {}
-
-    @property
-    def fields(self):
-        """Get fields."""
-        return self._fields
-
-    @property
-    def name(self) -> str:
-        """Get name."""
-        return self._name
-
-    @name.setter
-    def name(self, value: str) -> None:
-        """Set name."""
-        if not re.compile("^[a-zA-Z0-9_]+$").match(value):
-            raise ValueError(f"Invalid name: {value}")
-        self._name = value.lower()
-
-    @property
-    def plural_name(self) -> str:
-        """Get plural name."""
-        return self._plural_name
-
-    @plural_name.setter
-    def plural_name(self, value: str) -> None:
-        """Set plural name."""
-        if not re.compile("^[a-zA-Z0-9_]+$").match(value):
-            raise ValueError(f"Invalid name: {value}")
-        self._plural_name = value
-
-    @property
-    def description(self) -> str:
-        """Get description."""
-        return self._description
-
-    @description.setter
-    def description(self, value: str) -> None:
-        """Set description."""
-        self._description = value
-
-    @property
-    def path(self) -> str:
-        """Get entity path."""
-        return self._path
-
-    @path.setter
-    def path(self, value: str) -> None:
-        """Set entity path."""
-        path = os.path.join(os.getcwd(), value)
-        if not path.endswith(".csv"):
-            raise ValueError("Path should end with `.csv`")
-
-        if not os.path.exists(path):
-            raise ValueError(f"{path} does not exists")
-
-        self._path = path
-
-    def read(self, newline="") -> None:
-        """Read field names & types from csv."""
-        with open(self.path, newline=newline) as csv_file:
-            reader = csv.DictReader(csv_file)
-            try:
-                row = next(reader)
-            except StopIteration:
-                return
-
-            for key, value in row.items():
-                field = Field()
-                field.field_name = key
-                field.field_type = value
-                field.field_alias = key
-                self.add_field(field)
-
-    def add_field(self, field: Field, key: str = None) -> None:
-        """Add field."""
-        if key:
-            self._fields[key] = field
-        else:
-            self._fields[field.field_name] = field
-
-    def to_dict(self) -> dict:
-        """Create dict representation."""
-        return {
-            self.plural_name: {
-                "name": self.name,
-                "description": self.description,
-                "fields": {
-                    k: {"type": v.field_type, "alias": v.field_alias}
-                    for k, v in self.fields.items()
-                }
-            }
-        }
 
 
 class Project:
@@ -531,18 +343,18 @@ class Project:
     
     def configure(self) -> None:
         for component, settings in self.settings["platform"].items():
-            path = os.path.join(SRC_PATH, "templates", settings["layer"], component)
+            path = os.path.join(Constants.SRC_PATH, "templates", settings["layer"], component)
             if not os.path.exists(path):
                 print(f"{path} does not exist")  # TODO
                 continue
             env = Environment(loader=FileSystemLoader(path))
-            port = self._settings["platform"][component].get("port")
-            if port:
-                self._settings["platform"][component].update(yaml.safe_load(env.get_template("config.yaml.j2").render(container_port=port, host_port=port)))
-            else:
-                self._settings["platform"][component].update(yaml.safe_load(env.get_template("config.yaml.j2").render()))
+            # port = self._settings["platform"][component].get("port")
+            # if port:
+            #     self._settings["platform"][component].update(yaml.safe_load(env.get_template("config.yaml.j2").render(container_port=port, host_port=port)))
+            # else:
+            #     self._settings["platform"][component].update(yaml.safe_load(env.get_template("config.yaml.j2").render()))
             
-            env_vars = yaml.safe_load(env.get_template(".env.j2").render())
+            env_vars = yaml.safe_load(env.get_template(".env.j2").render())  # TODO: -> component.env
             self._env[component] = {f"{k}": v for k, v in env_vars.items()}
             
     
@@ -618,7 +430,7 @@ class Project:
 
     def add_server(self):
         """Add project server."""
-        from_path = os.path.join(TEMPLATES_PATH, "server")
+        from_path = os.path.join(Constants.TEMPLATES_PATH, "server")
         to_path = os.path.join(self.path, "server")
         if os.path.exists(to_path):
             raise ValueError(f"{to_path} already exists")
@@ -633,7 +445,7 @@ class Project:
 
         self.copy(from_path, self.path, "requirements.txt")
 
-        path = os.path.join(TEMPLATES_PATH, "server", "static")
+        path = os.path.join(Constants.TEMPLATES_PATH, "server", "static")
         env = Environment(loader=FileSystemLoader(path))
 
         components = {"data": {}, "platform": {}}
@@ -704,7 +516,7 @@ class Project:
                     if user_input:
                         name = user_input
                     try:
-                        entity = Entity(name=name, path=file_path)
+                        entity = CSVEntity(name=name, path=file_path)
                         break
                     except ValueError as e:
                         rprint(f"[bold red] {e} [/bold red]")
@@ -743,8 +555,6 @@ class Project:
                     except ValueError as e:
                         rprint(f"[bold red] {e} [/bold red]")
                         continue
-
-                entity.read()
 
                 rprint()
                 rprint(f"{json.dumps(entity.to_dict(), indent=JSON_INDENT)}")
@@ -910,60 +720,18 @@ class Storage:
         config = self.project.settings["platform"].get(Component.POSTGRES)
         if not config: return
 
-        path = os.path.join(TEMPLATES_PATH, Layer.STORAGE, Component.POSTGRES)
-        env = Environment(loader=FileSystemLoader(path))
+        data = []
+        for name in config["data"]:
+            entity = CSVEntity(name=name, path=os.path.join(self.project.path, "data", f"{name}.csv"))
+            data.append(entity)
 
-        # if not config["data"]:
-        #     return
-
-        type_map = {
-            "str": "TEXT",
-            "int": "INTEGER",
-            "float": "REAL",
-            "datetime": "TIMESTAMP"
-        }
-
-        tables = {}
-        volumes = {}
-
-        for table_name in config["data"]:
-            columns = {}
-            fields = self.project.settings["data"][table_name]["fields"]
-            for field in fields:
-                if "datetime" in fields[field]["type"]:
-                    columns[field] = type_map["datetime"]
-                else:
-                    columns[field] = type_map[fields[field]["type"]]
-            tables[table_name] = columns
-            volumes[f"./data/{table_name}.csv"] = f"/docker-entrypoint-initdb.d/{table_name}.csv"
-
-        path = os.path.join(self.project.path, PLATFORM_FOLDER, Layer.STORAGE, Component.POSTGRES)
+        path = os.path.join(self.project.path, Constants.PLATFORM_FOLDER, Layer.STORAGE, Component.POSTGRES)
         os.makedirs(path, exist_ok=True)
-    
-        path = os.path.join(path, "init.sql")
-        with open(path, "w") as f:
-            f.write(
-                env.get_template("init.sql.j2").render(
-                    tables=tables
-                )
-            )
+
+        postgres = Postgres(path=os.path.join(Constants.TEMPLATES_PATH, Layer.STORAGE, Component.POSTGRES))
+        postgres(path=path, data=data)
         
-        volumes[f"./{os.path.join(PLATFORM_FOLDER, Layer.STORAGE, Component.POSTGRES, 'init.sql')}"] = "/docker-entrypoint-initdb.d/init.sql"
-        volumes[f"./{os.path.join(PLATFORM_FOLDER, Layer.STORAGE, Component.POSTGRES, 'data')}"] = "/var/lib/postgresql/data"
-        
-        self.project.services.update(
-            yaml.safe_load(
-                env.get_template("service.yml.j2").render(
-                    service_name=Component.POSTGRES,
-                    image=config["image"], 
-                    host_port=config["host_port"],
-                    container_port=config["container_port"], 
-                    env=self.project.env.get(Component.POSTGRES, {}),
-                    volumes=volumes,
-                    network=self.project.settings["network"]
-                )
-            )
-        )
+        self.project.services.update(postgres.config)
         rprint(f"{path} [green]created[/green]")
 
     def __call__(self):
