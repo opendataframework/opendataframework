@@ -615,6 +615,9 @@ class Project:
         """Create compose.yaml."""
         path = os.path.join(self.path, "compose.yaml")
         
+        for service in self.services.values():
+            service["network"] = [self.settings["network"]["name"]]
+
         services = {"services": self.services}
         networks = {
             "networks": {
