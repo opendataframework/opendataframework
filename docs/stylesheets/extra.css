@@ -1,8 +1,42 @@
-[data-md-color-scheme="slate"] {
-    --md-primary-fg-color:        #B36AE2;
-    --md-default-bg-color:        #212020;
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #00fa92;
+  --md-primary-fg-color--light: #00fa92;
+  --md-primary-fg-color--dark: #00c977;
+  --md-accent-fg-color: #00fa92;
+  --md-typeset-a-color: #00fa92;
 }
 
-[data-md-color-scheme="default"] {
-    --md-primary-fg-color:        #00FA92;
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #b36ae2;
+  --md-primary-fg-color--light: #b36ae2;
+  --md-primary-fg-color--dark: #8f4fbd;
+  --md-accent-fg-color: #b36ae2;
+  --md-typeset-a-color: #b36ae2;
+  --md-default-bg-color: #212020;
+}
+
+/* Bright link color reads as glare on inline code spans (e.g. linked example
+   names) — a tinted pill background keeps the accent hue but restores contrast. */
+.md-typeset a code {
+  padding: 0.1em 0.4em;
+  border-radius: 0.2rem;
+}
+
+[data-md-color-scheme="default"] .md-typeset a code {
+  background-color: rgba(0, 140, 83, 0.16);
+  color: #00873f;
+}
+
+[data-md-color-scheme="slate"] .md-typeset a code {
+  background-color: rgba(179, 106, 226, 0.28);
+  color: #dcb8f7;
+}
+
+/* Logo's green background blends into the header (same --md-primary-fg-color
+   in light mode), so give it a thin border to separate the edges. Kept on
+   dark mode too for visual consistency between themes. */
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+  border: 1px solid rgba(0, 0, 0, 0.3);
+  border-radius: 2px;
 }

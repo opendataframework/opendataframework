@@ -1,0 +1,5 @@
+[project]
+name = "service-example"
+
+[heartbeat]
+interval = 1.0

@@ -5,9 +5,6 @@ authors:
   - family-names: Pavlov
     given-names: Mykyta
     email: mykytapavlov@users.noreply.github.com
-  - family-names: Polovnikov
-    given-names: Illia
-    email: polovnikov.illia@gmail.com
-version: 0.0.4
+version: 0.1.0
 license: MIT
 repository-code: "https://github.com/opendataframework/opendataframework"

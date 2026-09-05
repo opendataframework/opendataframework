@@ -1,0 +1,5 @@
+[project]
+name = "component-and-context-example"
+
+[database]
+dsn = "postgres://localhost/app"
