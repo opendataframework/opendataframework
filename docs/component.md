@@ -268,6 +268,59 @@ entirely optional.
 
 ---
 
+## MCP Tools
+
+A `Component` may optionally implement `mcp_tools()` to expose its own
+custom MCP tools, in addition to the fixed lifecycle/task/pipeline
+surface. Like `details()`/`chart()`, it is independent of
+`on_start()`/`on_stop()` and is never called by the `Context` — it's
+detected structurally and consumed on demand by whatever builds an MCP
+tool surface.
+
+```python
+@Component
+class Weather:
+
+    def __init__(self, config: Config):
+        self.api_key = config.weather_api_key
+
+    def forecast(self, city: str) -> dict:
+        ...
+
+    def mcp_tools(self) -> list[McpTool]:
+        return [
+            McpTool(
+                name="forecast",
+                description="Get the weather forecast for a city.",
+                handler=self.forecast,
+            )
+        ]
+```
+
+`mcp_tools()` is detected structurally via `McpToolsProtocol`
+(`opendataframework.component.McpToolsProtocol`, `@runtime_checkable`) — no
+base class or decorator required:
+
+```python
+class McpToolsProtocol(Protocol):
+    def mcp_tools(self) -> list[McpTool]: ...
+```
+
+Each returned `McpTool` carries a `name`, `description`, `handler` (a
+bound method), and `structured_output` flag. A component with no
+`mcp_tools()` method simply exposes no custom tools — this is entirely
+optional.
+
+!!! tip "Seeing it in practice"
+    This package only defines the `McpTool`/`McpToolsProtocol` shape —
+    it has no MCP server of its own. The sibling
+    [`odf`](https://opendataframework.github.io/odf/) package's
+    `McpServer` is the consumer: it registers each returned `McpTool`
+    under `<kebab(cls.__name__)>.<tool.name>`, alongside its six fixed
+    built-in tools.
+
+---
+
 ## What Component is Not
 
 * **Not a base class.** `Classifier` does not inherit from `Component`. The decorator
