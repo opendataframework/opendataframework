@@ -21,6 +21,30 @@ def test_missing_attribute_raises():
         _ = cfg.missing
 
 
+# --- Config immutability -----------------------------------------------------
+
+
+def test_mutating_original_dict_after_construction_does_not_leak():
+    data = {"host": "localhost"}
+    cfg = Config(data)
+
+    data["host"] = "mutated"
+    data["new-key"] = "new-value"
+
+    assert cfg.host == "localhost"
+    with pytest.raises(AttributeError):
+        _ = cfg.new_key
+
+
+def test_mutating_original_nested_dict_after_construction_does_not_leak():
+    data = {"postgres": {"port": 5432}}
+    cfg = Config(data)
+
+    data["postgres"]["port"] = 9999
+
+    assert cfg.postgres.port == 5432
+
+
 # --- Config item access ------------------------------------------------------
 
 

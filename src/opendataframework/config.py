@@ -7,6 +7,7 @@ components declare it like any other constructor dependency.
 """
 
 import tomllib
+from copy import deepcopy
 from pathlib import Path
 
 from opendataframework.utils import normalize
@@ -37,8 +38,14 @@ class Config:
     """
 
     def __init__(self, data: dict) -> None:
-        """Wrap ``data``, a (possibly nested) configuration dict."""
-        self._data = data
+        """Wrap a deep copy of ``data``, a (possibly nested) configuration dict.
+
+        ``data`` is copied rather than stored by reference, so mutating the
+        original dict after construction (e.g. one the caller keeps a
+        reference to and mutates after passing to ``Project.from_dict()``)
+        does not leak through this ``Config``.
+        """
+        self._data = deepcopy(data)
 
     def __getattr__(self, name: str) -> Config | object:
         """Return value by snake_case attribute name, normalised to kebab-case.

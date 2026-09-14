@@ -201,4 +201,7 @@ on config structure.
   that do not need configuration simply omit the parameter.
 
 * **Not mutable.** `Config` provides read-only access. Configuration is set at
-  project creation time and does not change at runtime.
+  project creation time and does not change at runtime. `Config` deep-copies
+  the dict it's given at construction time, so mutating a dict you passed to
+  `Project.from_dict()` after the fact has no effect on the `Config` a
+  component already received.
