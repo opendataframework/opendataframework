@@ -109,13 +109,10 @@ key is absent. It does not raise:
 config.get("host", "localhost")   # "localhost" if key absent
 ```
 
-!!! note "get() does not normalize the key — only attribute access does"
-    `normalize()` only runs on the dot-access path. `get()` and `[]` look up
-    `key` exactly as given, against whatever casing appears in the loaded
-    config. For a `[postgres]` TOML section, `config.get("postgres")` and
-    `config["postgres"]` find it, but `config.get("Postgres")` misses —
-    silently returning an empty `Config` rather than raising, since a
-    missing key with no `default` doesn't error.
+!!! note "get() and [] normalize the key too"
+    `normalize()` runs on every access path — attribute, `[]`, and `get()`
+    alike. For a `[postgres]` TOML section, `config.get("postgres")`,
+    `config["postgres"]`, and `config.get("Postgres")` all find it.
 
 If `default` is omitted and the key is absent, `get()` returns an empty
 `Config` rather than `None`. This makes scoping into a section safe by
@@ -187,9 +184,10 @@ on config structure.
 !!! tip "Same convention, everywhere"
     The sibling [`odf`](https://opendataframework.github.io/odf/) package's
     UI and CLI also address components by this same class-derived name. It's
-    a convention, not something `Config` enforces — since `get()`/`[]` don't
-    normalize casing, the TOML section key has to match it exactly for
-    lookups to find it.
+    a convention, not something `Config` enforces — but since `get()`/`[]`
+    normalize casing like attribute access does, looking a section up by its
+    class name (e.g. `config.get("Postgres")`) works regardless of how the
+    TOML section itself is cased.
 
 ---
 

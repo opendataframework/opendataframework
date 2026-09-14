@@ -29,6 +29,12 @@ def test_item_access_exact_key():
     assert cfg["database-url"] == "postgres://localhost/db"
 
 
+def test_item_access_normalizes_snake_and_pascal_case():
+    cfg = Config({"database-url": "postgres://localhost/db"})
+    assert cfg["database_url"] == "postgres://localhost/db"
+    assert cfg["DatabaseUrl"] == "postgres://localhost/db"
+
+
 def test_missing_item_raises():
     cfg = Config({"host": "localhost"})
     with pytest.raises(KeyError):
@@ -60,6 +66,12 @@ def test_nested_item_access():
 def test_get_existing_key():
     cfg = Config({"host": "localhost"})
     assert cfg.get("host") == "localhost"
+
+
+def test_get_normalizes_snake_and_pascal_case():
+    cfg = Config({"postgres": {"port": 5432}})
+    assert cfg.get("postgres") is not None
+    assert cfg.get("Postgres").port == 5432
 
 
 def test_get_missing_key_returns_default():
