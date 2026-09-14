@@ -181,6 +181,17 @@ Each sub-pipeline is independently testable and reusable across other pipelines.
     is injected into (a prediction task, an API endpoint) sees the same,
     now-fitted object.
 
+!!! tip "Passing a step's result directly"
+    Steps don't have to communicate only through a shared dependency like
+    `Metrics`. Since a `Pipeline`'s `execute()` is plain Python, a `Task` can
+    declare an optional parameter and receive the previous step's return
+    value directly — e.g. `def execute(self, data=None): ...` called as
+    `self.validator.execute(self.fetcher.execute())`. This only works for
+    steps called from *within* another `Pipeline`'s own `execute()`;
+    `Context.execute(name)` (the CLI/UI/MCP entry point) always calls with
+    zero arguments, so a step meant to be triggered directly by name still
+    needs a no-arg-callable signature.
+
 ---
 
 ## Full Example
