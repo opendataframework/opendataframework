@@ -199,11 +199,11 @@ cell.
 
 ## Replay — scrubbing over time
 
-A repository may separately implement `replay_field()` to say that its
+A repository may separately implement `field()` to say that its
 records can be scrubbed through over time, by naming which timestamp field
 drives that. This is independent of `data_view()` — a `LocationView`,
 `VideoView`, or `AudioView` repository describes *what* representation fits
-its data; `replay_field()` separately says *whether* (and by which field)
+its data; `field()` separately says *whether* (and by which field)
 that representation can be replayed chronologically.
 
 ```python
@@ -218,28 +218,28 @@ class Pings:
     def data_view(self) -> LocationView:
         return LocationView(fields=("lat", "lon"))
 
-    def replay_field(self) -> str:
+    def field(self) -> str:
         return "recorded_at"
 ```
 
 `Pings` declares both: `LocationView` fixes its representation as a map,
-and `replay_field()` says the map can be scrubbed through time using
+and `field()` says the map can be scrubbed through time using
 `recorded_at`. A consumer like `odf`'s UI turns this into a timeline
 scrubber alongside the map.
 
-`replay_field()` is detected structurally via `ReplayProtocol`
+`field()` is detected structurally via `ReplayProtocol`
 (`opendataframework.view.ReplayProtocol`, `@runtime_checkable`) — no base
 class or decorator required, mirroring `DataViewProtocol`:
 
 ```python
 class ReplayProtocol(Protocol):
-    def replay_field(self) -> str: ...
+    def field(self) -> str: ...
 ```
 
 A `TimeseriesView` repository is always replayable already — it names its
-own timestamp field via `field` — so `replay_field()` only adds an
+own timestamp field via `field` — so `field()` only adds an
 affordance for `LocationView`/`VideoView`/`AudioView`-backed repositories. A
-repository with no `replay_field()` simply gets no replay affordance.
+repository with no `field()` simply gets no replay affordance.
 
 ---
 

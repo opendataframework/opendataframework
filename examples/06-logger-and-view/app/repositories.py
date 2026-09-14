@@ -29,5 +29,5 @@ class Readings:
     def data_view(self) -> LocationView:
         return LocationView(fields=("lat", "lon"))
 
-    def replay_field(self) -> str:
+    def field(self) -> str:
         return "recorded_at"

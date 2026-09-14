@@ -69,15 +69,15 @@ def test_timeseries_view_holds_a_single_field():
     assert TimeseriesView(field="timestamp").field == "timestamp"
 
 
-def test_replay_protocol_detects_replay_field_method():
+def test_replay_protocol_detects_field_method():
     class Replayed:
-        def replay_field(self):
+        def field(self):
             return "recorded_at"
 
     assert isinstance(Replayed(), ReplayProtocol)
 
 
-def test_replay_protocol_rejects_repository_without_replay_field():
+def test_replay_protocol_rejects_repository_without_field():
     class NotReplayed:
         def all(self):
             return []
