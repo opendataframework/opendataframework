@@ -125,9 +125,6 @@ Startup runs in dependency order — dependencies first, dependents after.
 For each component, the framework applies the appropriate lifecycle:
 
 ```text
-Config
-    → instantiated        ← Component, no lifecycle
-
 Postgres
     → setup()             ← Service lifecycle, blocking
     → run()               ← backgrounded by framework, continues to next
@@ -143,16 +140,27 @@ UsersApi
 `project.start()` blocks until all components have completed their initialisation
 stage. After it returns, everything is ready — no hidden latency, no partial state.
 
-**Readiness** — services should complete all setup work inside `setup()`. The framework
-waits for `setup()` to return before proceeding to the next component, so any service
-that opens connections or runs migrations in `setup()` is guaranteed to be ready before
-dependents start.
+!!! note "Config isn't part of this walk"
+    `Config` isn't decorated with `@Component` and isn't registered in any
+    namespace, so it's never collected into the dependency-ordered list
+    above. `Project`/`Context` construct it upfront and seed it directly
+    into the resolved instances, before dependency resolution even starts
+    — it's simply already there for anything that declares `config: Config`
+    to receive, with no lifecycle of its own.
 
-**Component/Repository startup hook** — if `Users` (or any `Component`/`Repository`)
-defines `on_start()`, it's called at this same point in dependency order, blocking,
-right where "instantiated" appears above. It's optional and independent of `on_stop()`
-— see `docs/repository.md` for the full pattern (connections, file handles, and
-similar lightweight setup that should happen once, at `Project` start).
+!!! tip "Readiness — do setup work inside setup()"
+    Services should complete all setup work inside `setup()`. The framework
+    waits for `setup()` to return before proceeding to the next component,
+    so any service that opens connections or runs migrations in `setup()`
+    is guaranteed to be ready before dependents start.
+
+!!! tip "Component/Repository startup hook"
+    If `Users` (or any `Component`/`Repository`) defines `on_start()`, it's
+    called at this same point in dependency order, blocking, right where
+    "instantiated" appears above. It's optional and independent of
+    `on_stop()` — see [Repository](repository.md) for the full pattern
+    (connections, file handles, and similar lightweight setup that should
+    happen once, at `Project` start).
 
 ---
 
@@ -165,14 +173,19 @@ dependencies.
 UsersApi    → stop()      ← Service stopped first
 Users       → (none)      ← Repository (no on_stop() defined here)
 Postgres    → stop()      ← Service stopped last
-Config      → (none)      ← Component, no lifecycle
 ```
 
 This ensures no component is stopped while something that depends on it is still running.
 
-**Component/Repository shutdown hook** — if `Users` (or any `Component`/`Repository`)
-defines `on_stop()`, it's called at this same point in reverse dependency order,
-blocking.
+!!! note "Config isn't part of this walk either"
+    Just as in [Startup Order](#startup-order), `Config` was never collected
+    into the dependency-ordered list, so it doesn't appear above at all —
+    unlike `Users`, which is listed with `(none)` because it *is* part of
+    the walk but simply has no `on_stop()` to call.
+
+!!! tip "Component/Repository shutdown hook"
+    If `Users` (or any `Component`/`Repository`) defines `on_stop()`, it's
+    called at this same point in reverse dependency order, blocking.
 
 ---
 
