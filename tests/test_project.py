@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 import pytest
@@ -144,6 +145,48 @@ def test_from_config_merges_directory(tmp_path):
 def test_from_config_missing_path_raises():
     with pytest.raises(FileNotFoundError):
         Project.from_config("/nonexistent/path/config.toml")
+
+
+# --- app import -----------------------------------------------------------------
+
+
+@pytest.fixture
+def importable_app_package(tmp_path, monkeypatch):
+    """Write a throwaway package mirroring the app/ convention used by
+    examples/: a Namespace + a class registered on it, imported by the
+    package's own __init__.py — isolated from the global Component/
+    Service/etc. namespaces used elsewhere in the codebase."""
+    pkg = tmp_path / "dummy_app"
+    pkg.mkdir()
+    (pkg / "ns.py").write_text(
+        "from opendataframework.namespace import Namespace\n\nclass NS(Namespace): ...\n"
+    )
+    (pkg / "components.py").write_text(
+        "from dummy_app.ns import NS\n\n@NS\nclass DummyThing: ...\n"
+    )
+    (pkg / "__init__.py").write_text("from dummy_app import components\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    yield "dummy_app"
+    for name in ("dummy_app", "dummy_app.ns", "dummy_app.components"):
+        sys.modules.pop(name, None)
+
+
+def test_from_dict_imports_configured_app(importable_app_package):
+    from dummy_app import ns
+
+    Project.from_dict({"project": {"app": importable_app_package}})
+
+    assert ns.NS.get("dummy-thing") is not None
+
+
+def test_from_dict_missing_app_module_raises():
+    with pytest.raises(ImportError):
+        Project.from_dict({"project": {"app": "this_module_does_not_exist_xyz"}})
+
+
+def test_from_dict_app_is_optional():
+    project = Project.from_dict({"project": {"log-dir": "custom"}})
+    assert isinstance(project, Project)
 
 
 # --- logging --------------------------------------------------------------------

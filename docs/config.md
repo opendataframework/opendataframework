@@ -191,6 +191,24 @@ on config structure.
 
 ---
 
+## The `[project]` section is reserved
+
+Unlike every other top-level section (which is a convention, not enforced),
+`[project]` is read directly by `Project.from_config()`/`Project.from_dict()`
+itself, before any `Config` object exists — so its keys must be written
+exactly as shown, not normalized like the accessors above:
+
+```toml
+[project]
+log-dir = "logs"   # see Logger
+app = "app"        # see Project — imports the app package
+```
+
+See [Project](project.md#pointing-at-the-app-package) and
+[Logger](logger.md) for what each key does.
+
+---
+
 ## What Config is Not
 
 * **Not a validator.** `Config` does not validate types, required fields, or

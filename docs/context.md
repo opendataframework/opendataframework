@@ -45,6 +45,17 @@ exposes `project.context.get(cls)` to fetch any resolved instance by its class.
     isn't shared is state: each `Project` owns its own `Context`, so its
     instances stay separate from any other `Project` in the same process.
 
+!!! note "`[project] app` controls import timing, not scope"
+    `[project] app = "app"` in `config.toml` just runs
+    `importlib.import_module("app")` before the `Context` resolves —
+    equivalent to writing `import app` by hand before
+    `Project.from_config()`/`Project.from_dict()` is called. It doesn't
+    create a new per-`Project` component-isolation mechanism: the
+    global-registration behavior described above still fully applies — once
+    a module is imported (by this key or by any other means), every
+    `Project`'s `Context` in the process can see the classes it registers.
+    See [Project](project.md#pointing-at-the-app-package).
+
 ---
 
 ## How it Works
