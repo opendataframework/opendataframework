@@ -25,20 +25,20 @@ def test_bare_decorator():
 
 
 def test_keyword_name():
-    class DailyAnalytics: ...
+    class DailyAnalyticsKw: ...
 
-    result = Pipeline(name="daily-analytics")(DailyAnalytics)
+    result = Pipeline(name="daily-analytics-kw")(DailyAnalyticsKw)
 
-    assert result is DailyAnalytics
-    assert Pipeline.get("daily-analytics") is DailyAnalytics
+    assert result is DailyAnalyticsKw
+    assert Pipeline.get("daily-analytics-kw") is DailyAnalyticsKw
 
 
 def test_bare_decorator_returns_class_unchanged():
-    class DailyAnalytics: ...
+    class DailyAnalyticsUnchanged: ...
 
-    result = Pipeline(DailyAnalytics)
+    result = Pipeline(DailyAnalyticsUnchanged)
 
-    assert result is DailyAnalytics
+    assert result is DailyAnalyticsUnchanged
 
 
 def test_get_returns_none_for_unknown_name():

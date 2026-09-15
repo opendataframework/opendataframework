@@ -43,11 +43,11 @@ def test_keyword_name():
 
 
 def test_bare_decorator_returns_class_unchanged():
-    class Postgres: ...
+    class PostgresUnchanged: ...
 
-    result = Service(Postgres)
+    result = Service(PostgresUnchanged)
 
-    assert result is Postgres
+    assert result is PostgresUnchanged
 
 
 def test_positional_name_returns_class_unchanged():

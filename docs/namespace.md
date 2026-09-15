@@ -94,6 +94,17 @@ The dual-use decorator protocol is implemented through `__new__` and `__call__`:
   the explicit name; `__call__` writes into `_namespace` when the instance is
   applied to the class.
 
+!!! warning "Duplicate names raise"
+    Registering two classes under the same name within one `Namespace`
+    subclass raises `ValueError`, naming both classes — whether the collision
+    comes from two bare decorators (two classes that happen to kebab-case to
+    the same name), two factory decorators with the same explicit `name=`,
+    or one of each. This happens at class-definition time (when the
+    decorator runs), not at `Context`/`Project` start time. It previously
+    silently overwrote the first registration with the second — that
+    behavior is no longer supported; rename one of the classes, or give one
+    an explicit `name=`.
+
 ---
 
 ## What Namespace is Not

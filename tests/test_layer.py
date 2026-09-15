@@ -16,9 +16,9 @@ def test_bare_decorator_registers_layer():
 
 def test_layer_class_is_namespace_subclass():
     @Layer
-    class Infra(Namespace): ...
+    class Infra5(Namespace): ...
 
-    assert issubclass(Infra, Namespace)
+    assert issubclass(Infra5, Namespace)
 
 
 def test_bare_decorator_derives_kebab_name():

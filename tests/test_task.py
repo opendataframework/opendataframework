@@ -25,20 +25,20 @@ def test_bare_decorator():
 
 
 def test_keyword_name():
-    class MetricsFetcher: ...
+    class MetricsFetcherKw: ...
 
-    result = Task(name="metrics-fetcher")(MetricsFetcher)
+    result = Task(name="metrics-fetcher-kw")(MetricsFetcherKw)
 
-    assert result is MetricsFetcher
-    assert Task.get("metrics-fetcher") is MetricsFetcher
+    assert result is MetricsFetcherKw
+    assert Task.get("metrics-fetcher-kw") is MetricsFetcherKw
 
 
 def test_bare_decorator_returns_class_unchanged():
-    class MetricsFetcher: ...
+    class MetricsFetcherUnchanged: ...
 
-    result = Task(MetricsFetcher)
+    result = Task(MetricsFetcherUnchanged)
 
-    assert result is MetricsFetcher
+    assert result is MetricsFetcherUnchanged
 
 
 def test_get_returns_none_for_unknown_name():
