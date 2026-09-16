@@ -8,6 +8,7 @@ docs_dir: docs
 nav:
   - Overview: index.md
   - Examples: examples.md
+  - Release Notes: release-notes.md
   - Reference:
       - Entity: entity.md
       - Repository: repository.md
