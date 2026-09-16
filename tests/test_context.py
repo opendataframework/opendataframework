@@ -704,11 +704,11 @@ def test_is_running_false_for_non_service():
 
     @NS
     @Task
-    class T2:
+    class T:
         def execute(self) -> None: ...
 
     with Context(namespaces={NS}) as ctx:
-        assert ctx.is_running("T2") is False
+        assert ctx.is_running("T") is False
 
 
 # --- task / pipeline — no lifecycle ------------------------------------------
@@ -813,16 +813,16 @@ def test_task_execute_is_logged(tmp_path):
 
     @NS
     @Task
-    class T3:
+    class T:
         def execute(self) -> int:
             return 42
 
     with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
-        instance = ctx.instances[T3]
+        instance = ctx.instances[T]
         result = instance.execute()
 
     assert result == 42
-    messages = [e["message"] for e in ctx.tail_logs("T3")]
+    messages = [e["message"] for e in ctx.tail_logs("T")]
     assert "execute() started" in messages
     assert any("execute() completed" in m for m in messages)
 
@@ -832,16 +832,16 @@ def test_task_execute_exception_is_logged_and_reraised(tmp_path):
 
     @NS
     @Task
-    class T4:
+    class T:
         def execute(self) -> None:
             raise ValueError("nope")
 
     with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
-        instance = ctx.instances[T4]
+        instance = ctx.instances[T]
         with pytest.raises(ValueError):
             instance.execute()
 
-    messages = [e["message"] for e in ctx.tail_logs("T4")]
+    messages = [e["message"] for e in ctx.tail_logs("T")]
     assert any("execute() raised" in m and "nope" in m for m in messages)
 
 
@@ -850,13 +850,13 @@ def test_pipeline_execute_is_logged(tmp_path):
 
     @NS
     @Pipeline
-    class P2:
+    class P:
         def execute(self) -> None: ...
 
     with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
-        ctx.instances[P2].execute()
+        ctx.instances[P].execute()
 
-    messages = [e["message"] for e in ctx.tail_logs("P2")]
+    messages = [e["message"] for e in ctx.tail_logs("P")]
     assert "execute() started" in messages
 
 

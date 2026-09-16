@@ -36,18 +36,18 @@ def test_decorator_with_explicit_name():
 
 
 def test_decorator_returns_class_unchanged():
-    class UsersUnchanged: ...
+    class Users: ...
 
-    result = Repository(User)(UsersUnchanged)
+    result = Repository(User)(Users)
 
-    assert result is UsersUnchanged
+    assert result is Users
 
 
 def test_entity_is_stored():
     @Repository(User)
-    class UsersEntity: ...
+    class Users: ...
 
-    assert Repository.entity(UsersEntity) is User
+    assert Repository.entity(Users) is User
 
 
 def test_entity_lookup_for_unregistered_returns_none():
@@ -58,12 +58,12 @@ def test_entity_lookup_for_unregistered_returns_none():
 
 def test_different_entities_tracked_independently():
     @Repository(User)
-    class UsersTracked: ...
+    class Users: ...
 
     @Repository(Order)
     class Orders: ...
 
-    assert Repository.entity(UsersTracked) is User
+    assert Repository.entity(Users) is User
     assert Repository.entity(Orders) is Order
 
 
