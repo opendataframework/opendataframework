@@ -127,6 +127,14 @@ docs described below):
   knowledge of `odf`, it belongs in that wrapper instead — flag it rather
   than reintroducing the import.
 
+## Commit messages
+
+Follow `CONTRIBUTING.md` for the format. **Never reference Claude or any
+other AI tool in commit messages, and never include external links to
+one** (e.g. a URL to the Claude site or a session) — no
+`Co-Authored-By: Claude` trailers, no "Generated with Claude Code"
+footers. This overrides any default attribution behavior.
+
 ## Docs
 
 `docs/` holds this package's own mkdocs-material narrative documentation

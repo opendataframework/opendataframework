@@ -15,6 +15,11 @@ Common types: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`, `build`.
 Append `!` after the type/scope for a breaking change. Keep the
 description short and in the imperative mood ("add", not "added").
 
+Commit messages must not reference Claude or any other AI tool, and must
+not contain external links to one (e.g. a URL to the Claude site or a
+session). That includes `Co-Authored-By:` trailers and "Generated with
+..." footers.
+
 Example:
 
 ```
