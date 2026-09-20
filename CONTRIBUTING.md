@@ -88,6 +88,22 @@ Fixes discovered after a release go into the next release branch (a patch
 or minor bump); every PyPI version corresponds to exactly one release
 branch.
 
+### Patching an older version
+
+Fixes normally go into the next release branch. If you must publish a
+patch (say `0.2.1`) while a newer release is in development:
+
+- **Newer version not yet tagged:** nothing special. Cut
+  `release/0.2.1` from `main`, release it as usual, then merge `main`
+  into the in-progress release branch so it picks up the fix.
+- **Newer version already tagged on `main`:** `main` has moved on, so
+  the patch can't go through it. Cut `maint/0.2` from the `0.2.0` tag,
+  fix and tag `0.2.1` there, then cherry-pick the fix into the next
+  release branch so it isn't lost. PyPI serves the highest version by
+  default, so users on 0.3.0 are unaffected. The docs workflow only
+  deploys for the highest tag, so the site keeps showing the newest
+  version.
+
 ### Why this way
 
 - **Squash into the release branch** keeps one clean, conventionally
