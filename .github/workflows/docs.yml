@@ -2,17 +2,40 @@ name: docs
 
 on:
   push:
-    branches: [main]
-    paths:
-      - "docs/**"
-      - "mkdocs.yml"
-      - ".github/workflows/docs.yml"
+    tags: ["[0-9]+.[0-9]+.[0-9]+"]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
+  # Only the highest version's docs are published. Tagging an older
+  # version (e.g. 0.2.1 after 0.3.0) must not overwrite the current site.
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      deploy: ${{ steps.latest.outputs.deploy }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: latest
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          latest=$(git tag --list '[0-9]*' | sort -V | tail -1)
+          if [ "$latest" = "$GITHUB_REF_NAME" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::$GITHUB_REF_NAME is not the latest version ($latest); skipping docs deploy"
+          fi
+
   deploy:
+    needs: check
+    if: needs.check.outputs.deploy == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -1,0 +1,50 @@
+name: ci
+
+on:
+  pull_request:
+    branches: [main, "release/**"]
+  push:
+    branches: ["release/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - run: pipx install poetry
+      - run: poetry install --no-root
+      - run: poetry run pytest
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - run: pip install pre-commit
+      # The `pytest` hook shells out to poetry; the `test` job covers it.
+      - run: pre-commit run --all-files --show-diff-on-failure
+        env:
+          SKIP: pytest
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - run: pipx install poetry
+      - run: poetry install --with docs --no-root
+      - run: poetry run mkdocs build --strict
