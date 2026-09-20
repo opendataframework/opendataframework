@@ -46,16 +46,14 @@ startup. The class is returned unchanged.
 
 ```python
 @Service
-class Postgres:
-    ...
+class Postgres: ...
 ```
 
 ### With a name
 
 ```python
 @Service("postgres")
-class PostgresConnectionPoolManager:
-    ...
+class PostgresConnectionPoolManager: ...
 ```
 
 ### Combined with a Layer
@@ -63,15 +61,13 @@ class PostgresConnectionPoolManager:
 ```python
 @Storage
 @Service
-class Postgres:
-    ...
+class Postgres: ...
 ```
 
 ```python
 @Api
 @Service
-class UsersApi:
-    ...
+class UsersApi: ...
 ```
 
 ---
@@ -116,11 +112,10 @@ the service's responsibility.
 @Storage
 @Service
 class Postgres:
-
     def setup(self): ...
 
     def run(self):
-        self.pool.serve()   # blocks — framework handles the thread
+        self.pool.serve()  # blocks — framework handles the thread
 
     def stop(self): ...
 ```
@@ -132,7 +127,6 @@ class Postgres:
 ```python
 @Service
 class Postgres:
-
     def setup(self):
         # blocking setup: pull image, run migrations, open connection pool
         # framework waits for this to return before proceeding
@@ -176,7 +170,6 @@ Like all components, a `Service` declares its dependencies through the construct
 @Storage
 @Service
 class Postgres:
-
     def __init__(
         self,
         config: Config,
@@ -195,14 +188,11 @@ class Postgres:
     def stop(self):
         self.pool.close()
 
-    def _pull_image(self, image):
-        ...
+    def _pull_image(self, image): ...
 
-    def _create_pool(self, url):
-        ...
+    def _create_pool(self, url): ...
 
-    def _run_migrations(self):
-        ...
+    def _run_migrations(self): ...
 ```
 
 ---
@@ -215,7 +205,6 @@ class Postgres:
 @Api
 @Service
 class UsersApi:
-
     def __init__(
         self,
         config: Config,
@@ -235,8 +224,7 @@ class UsersApi:
     def stop(self):
         self.server.shutdown()
 
-    def _create_server(self, config):
-        ...
+    def _create_server(self, config): ...
 ```
 
 ### Scheduler
@@ -245,9 +233,9 @@ class UsersApi:
 import time
 from datetime import datetime, timedelta
 
+
 @Service
 class Scheduler:
-
     def __init__(
         self,
         config: Config,
@@ -303,6 +291,7 @@ unconditionally.
 
 ```python
 from opendataframework import ServiceProtocol
+
 
 class ServiceProtocol(Protocol):
     def setup(self) -> None: ...

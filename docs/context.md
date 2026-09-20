@@ -94,7 +94,6 @@ No explicit dependency declarations are needed.
 @Api
 @Service
 class UsersApi:
-
     def __init__(self, users: Users):
         self.users = users
 
@@ -102,7 +101,6 @@ class UsersApi:
 @Storage
 @Repository(User)
 class Users:
-
     def __init__(self, postgres: Postgres):
         self.postgres = postgres
 
@@ -110,7 +108,6 @@ class Users:
 @Storage
 @Service
 class Postgres:
-
     def __init__(self, config: Config):
         self.config = config
 ```
@@ -220,12 +217,15 @@ of the dependencies with an event or callback:
 class A:
     def __init__(self, b: B): ...
 
+
 class B:
     def __init__(self, a: A): ...  # circular
+
 
 # solution — extract shared concern into C
 class A:
     def __init__(self, c: C): ...
+
 
 class B:
     def __init__(self, c: C): ...
@@ -274,8 +274,8 @@ normal dependency-order startup/shutdown driven by `project.start()`/
 `project.stop()`:
 
 ```python
-project.context.start("Postgres")       # no-op if already running
-project.context.stop("Postgres")        # no-op if not running
+project.context.start("Postgres")  # no-op if already running
+project.context.stop("Postgres")  # no-op if not running
 project.context.is_running("Postgres")  # → bool
 ```
 
@@ -285,9 +285,9 @@ Each raises `TypeError` if the matched instance isn't a `Service`.
 repository's background stream (see [Repository](repository.md)):
 
 ```python
-project.context.start_stream("Webcam")       # spawns the background thread
-project.context.stop_stream("Webcam")        # no-op if not streaming
-project.context.is_streaming("Webcam")       # → bool
+project.context.start_stream("Webcam")  # spawns the background thread
+project.context.stop_stream("Webcam")  # no-op if not streaming
+project.context.is_streaming("Webcam")  # → bool
 
 for frame in project.context.iter_stream("Webcam"):
     ...  # one subscriber; detaches when the stream stops or iteration ends

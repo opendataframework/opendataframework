@@ -66,9 +66,7 @@ class User:
 class SQLite:
     def __init__(self, config: Config):
         self.conn = sqlite3.connect(config.sqlite.path)
-        self.conn.execute(
-            "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT)"
-        )
+        self.conn.execute("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT)")
 
 
 @Repository(User)
@@ -265,7 +263,7 @@ No circular dependencies — restructure with a shared third collaborator
 instead.
 
 ```python
-component = project.context.get(UsersApi)   # typed, by class
+component = project.context.get(UsersApi)  # typed, by class
 ```
 
 ## Project
@@ -318,7 +316,7 @@ Project owns everything.
 See [`examples/`](examples/README.md) — small, focused projects each
 isolating one core abstraction.
 
-> For the CLI, UI, MCP server, and chat surface 
+> For the CLI, UI, MCP server, and chat surface
 > built on top of this package, see `odf`.
 
 ---

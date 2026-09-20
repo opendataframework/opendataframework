@@ -14,9 +14,9 @@ still lands in that component's own log file.
 ```python
 from opendataframework import Logger, Task
 
+
 @Task
 class ExportUsers:
-
     def __init__(self, users: Users, logger: Logger) -> None:
         self.users = users
         self.logger = logger

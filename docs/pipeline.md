@@ -42,16 +42,14 @@ startup. The class is returned unchanged.
 
 ```python
 @Pipeline
-class DailyAnalytics:
-    ...
+class DailyAnalytics: ...
 ```
 
 ### With a name
 
 ```python
 @Pipeline(name="daily-analytics")
-class DailyAnalyticsIngestAndReportingPipeline:
-    ...
+class DailyAnalyticsIngestAndReportingPipeline: ...
 ```
 
 ### Combined with a Layer
@@ -59,8 +57,7 @@ class DailyAnalyticsIngestAndReportingPipeline:
 ```python
 @Analytics
 @Pipeline
-class DailyAnalytics:
-    ...
+class DailyAnalytics: ...
 ```
 
 ---
@@ -72,7 +69,6 @@ A `Pipeline` implements a single method — `execute()`. It may return a value o
 ```python
 @Pipeline
 class DailyAnalytics:
-
     def execute(self):
         # coordinate tasks and sub-pipelines
         # return a result, or None
@@ -90,7 +86,6 @@ and injects them automatically — including their own dependencies.
 @Analytics
 @Pipeline
 class DailyAnalytics:
-
     def __init__(
         self,
         fetcher: MetricsFetcher,
@@ -118,7 +113,6 @@ the constructor. This allows complex workflows to be built from smaller, reusabl
 @Analytics
 @Pipeline
 class IngestPipeline:
-
     def __init__(
         self,
         fetcher: MetricsFetcher,
@@ -138,7 +132,6 @@ class IngestPipeline:
 @Analytics
 @Pipeline
 class TrainPipeline:
-
     def __init__(
         self,
         trainer: ModelTrainer,
@@ -155,7 +148,6 @@ class TrainPipeline:
 @Analytics
 @Pipeline
 class DailyAnalytics:
-
     def __init__(
         self,
         ingest: IngestPipeline,
@@ -203,7 +195,6 @@ including the `Task`s it coordinates, in full:
 @Analytics
 @Task
 class MetricsFetcher:
-
     def __init__(self, config: Config, metrics: Metrics):
         self.config = config
         self.metrics = metrics
@@ -212,14 +203,12 @@ class MetricsFetcher:
         data = self._fetch(self.config.source_url)
         self.metrics.save(data)
 
-    def _fetch(self, url):
-        ...
+    def _fetch(self, url): ...
 
 
 @Analytics
 @Task
 class ModelTrainer:
-
     def __init__(self, config: Config, classifier: Classifier, metrics: Metrics):
         self.config = config
         self.classifier = classifier
@@ -233,7 +222,6 @@ class ModelTrainer:
 @Analytics
 @Task
 class ReportGenerator:
-
     def __init__(self, config: Config, metrics: Metrics):
         self.config = config
         self.metrics = metrics
@@ -244,17 +232,14 @@ class ReportGenerator:
         self._export(report, self.config.output_path)
         return report
 
-    def _build(self, data):
-        ...
+    def _build(self, data): ...
 
-    def _export(self, report, path):
-        ...
+    def _export(self, report, path): ...
 
 
 @Analytics
 @Pipeline
 class DailyAnalytics:
-
     def __init__(
         self,
         fetcher: MetricsFetcher,

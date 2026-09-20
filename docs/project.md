@@ -39,15 +39,17 @@ config/
 For programmatic use — testing, tooling, dynamic configuration:
 
 ```python
-project = Project.from_dict({
-    "users": {
-        "table": "users",
-        "schema": "public",
-    },
-    "postgres": {
-        "database_url": "postgresql://localhost/mydb",
-    },
-})
+project = Project.from_dict(
+    {
+        "users": {
+            "table": "users",
+            "schema": "public",
+        },
+        "postgres": {
+            "database_url": "postgresql://localhost/mydb",
+        },
+    }
+)
 ```
 
 ### Pointing at the app package
@@ -142,9 +144,9 @@ After `project.start()`, `project.context` is the entry point to every resolved
 instance:
 
 ```python
-project.context.get(UsersApi)     # typed, by class — the common case
+project.context.get(UsersApi)  # typed, by class — the common case
 project.context.instances[UsersApi]  # lower-level dict access, primarily for
-                                      # framework extension authors
+# framework extension authors
 ```
 
 ```python

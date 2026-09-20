@@ -40,16 +40,14 @@ is returned unchanged.
 
 ```python
 @Task
-class MetricsFetcher:
-    ...
+class MetricsFetcher: ...
 ```
 
 ### With a name
 
 ```python
 @Task(name="metrics-fetcher")
-class DailySalesMetricsFetcher:
-    ...
+class DailySalesMetricsFetcher: ...
 ```
 
 ### Combined with a Layer
@@ -57,8 +55,7 @@ class DailySalesMetricsFetcher:
 ```python
 @Analytics
 @Task
-class MetricsFetcher:
-    ...
+class MetricsFetcher: ...
 ```
 
 ---
@@ -70,7 +67,6 @@ A `Task` implements a single method — `execute()`. It may return a value or `N
 ```python
 @Task
 class MetricsFetcher:
-
     def execute(self):
         # perform the work
         # return a result, or None if the task has only side effects
@@ -87,7 +83,6 @@ Like all components, a `Task` declares its dependencies through the constructor:
 @Analytics
 @Task
 class MetricsFetcher:
-
     def __init__(
         self,
         config: Config,
@@ -101,8 +96,7 @@ class MetricsFetcher:
         self.metrics.save(data)
         return data
 
-    def _fetch(self, url):
-        ...
+    def _fetch(self, url): ...
 ```
 
 ---
@@ -115,7 +109,6 @@ class MetricsFetcher:
 @Analytics
 @Task
 class MetricsFetcher:
-
     def __init__(
         self,
         config: Config,
@@ -129,8 +122,7 @@ class MetricsFetcher:
         self.metrics.save(data)
         return data
 
-    def _fetch(self, url):
-        ...
+    def _fetch(self, url): ...
 ```
 
 ### Model training
@@ -139,7 +131,6 @@ class MetricsFetcher:
 @Analytics
 @Task
 class ModelTrainer:
-
     def __init__(
         self,
         config: Config,
@@ -161,7 +152,6 @@ class ModelTrainer:
 @Analytics
 @Task
 class ReportGenerator:
-
     def __init__(
         self,
         config: Config,
@@ -176,11 +166,9 @@ class ReportGenerator:
         self._export(report, self.config.output_path)
         return report
 
-    def _build(self, data):
-        ...
+    def _build(self, data): ...
 
-    def _export(self, report, path):
-        ...
+    def _export(self, report, path): ...
 ```
 
 ---
@@ -198,7 +186,6 @@ Or directly within a `Pipeline` that coordinates multiple tasks:
 ```python
 @Pipeline
 class DailyAnalytics:
-
     def __init__(
         self,
         fetcher: MetricsFetcher,

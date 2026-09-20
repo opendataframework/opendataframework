@@ -29,7 +29,10 @@ receives its own empty `_namespace` dict at definition time:
 ```python
 from opendataframework.namespace import Namespace
 
+
 class Component(Namespace): ...
+
+
 class Service(Namespace): ...
 ```
 
@@ -69,10 +72,10 @@ unchanged.
 `Namespace` exposes two class methods for reading the mapping:
 
 ```python
-Component.get("Classifier")         # → Classifier, or None
-Component.get("metrics-classifier") # → Classifier registered under a custom name
+Component.get("Classifier")  # → Classifier, or None
+Component.get("metrics-classifier")  # → Classifier registered under a custom name
 
-dict(Component.items())             # → {"classifier": Classifier, ...}
+dict(Component.items())  # → {"classifier": Classifier, ...}
 ```
 
 These are used by the `Context` at startup to discover registered classes and

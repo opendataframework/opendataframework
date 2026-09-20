@@ -22,8 +22,7 @@ belongs to. This is what most application code interacts with.
 ```python
 @Analytics
 @Task
-class MetricsFetcher:
-    ...
+class MetricsFetcher: ...
 ```
 
 **As a framework concept** — a `Namespace` subclass in its own right, providing
@@ -58,8 +57,7 @@ A layer is a `Namespace` subclass registered with `@Layer`. The class inherits f
 
 ```python
 @Layer
-class MachineLearning(Namespace):
-    ...
+class MachineLearning(Namespace): ...
 ```
 
 !!! tip "The framework converts the class name automatically"
@@ -80,8 +78,7 @@ class MachineLearning(Namespace):
 
 ```python
 @Layer("ml")
-class MachineLearning(Namespace):
-    ...
+class MachineLearning(Namespace): ...
 ```
 
 Now the layer is looked up as `Layer.get("ml")` instead of
@@ -98,18 +95,17 @@ The layer decorator is stacked above the execution type decorator. Layer comes f
 ```python
 @Storage
 @Service
-class Postgres:
-    ...
+class Postgres: ...
+
 
 @Analytics
 @Task
-class MetricsFetcher:
-    ...
+class MetricsFetcher: ...
+
 
 @Api
 @Component
-class Validator:
-    ...
+class Validator: ...
 ```
 
 The name identifying a component within its layer belongs on the execution type
@@ -119,13 +115,12 @@ says *what it is* and optionally *what it is called*:
 ```python
 @Api
 @Service("users-api")
-class UsersApi:
-    ...
+class UsersApi: ...
+
 
 @Analytics
 @Task("metrics-fetcher")
-class MetricsFetcher:
-    ...
+class MetricsFetcher: ...
 ```
 
 ---
@@ -149,8 +144,9 @@ An explicit name on the decorator overrides the derived name entirely:
 
 ```python
 @Layer("ml")
-class MachineLearning(Namespace):
-    ...
+class MachineLearning(Namespace): ...
+
+
 # → Layer.get("ml")  (not Layer.get("machine-learning"))
 ```
 
@@ -162,26 +158,22 @@ Custom layers follow exactly the same pattern as built-in layers:
 
 ```python
 @Layer
-class MachineLearning(Namespace):
-    ...
+class MachineLearning(Namespace): ...
 
 
 @MachineLearning
 @Component
-class Classifier:
-    ...
+class Classifier: ...
 
 
 @MachineLearning
 @Task
-class ModelTrainer:
-    ...
+class ModelTrainer: ...
 
 
 @MachineLearning
 @Pipeline
-class TrainPipeline:
-    ...
+class TrainPipeline: ...
 ```
 
 Accessible by class through the resolved `Context`, or by name through the layer
@@ -192,8 +184,8 @@ project.context.get(Classifier)
 project.context.get(ModelTrainer)
 project.context.get(TrainPipeline)
 
-MachineLearning.get("classifier")      # → Classifier
-dict(MachineLearning.items())          # → {"classifier": Classifier, ...}
+MachineLearning.get("classifier")  # → Classifier
+dict(MachineLearning.items())  # → {"classifier": Classifier, ...}
 ```
 
 ---
@@ -205,25 +197,25 @@ Two lookup directions are available, depending on what you know:
 **`Layer.get(name)`** — given a kebab-case name, return the layer class:
 
 ```python
-Layer.get("storage")    # → Storage
+Layer.get("storage")  # → Storage
 Layer.get("analytics")  # → Analytics
-Layer.get("unknown")    # → None
+Layer.get("unknown")  # → None
 ```
 
 **`<layer>.get(name)`** — given a component name, return the component class:
 
 ```python
-Storage.get("postgres")          # → Postgres
-Analytics.get("metrics-fetcher") # → MetricsFetcher
+Storage.get("postgres")  # → Postgres
+Analytics.get("metrics-fetcher")  # → MetricsFetcher
 ```
 
 Together, the two-level namespace hierarchy gives structured access without any
 reverse-lookup machinery:
 
 ```python
-dict(Layer.items())              # → {"api": Api, "storage": Storage, …}
-dict(Storage.items())            # → {"postgres": Postgres, …}
-dict(Analytics.items())          # → {"metrics-fetcher": MetricsFetcher, …}
+dict(Layer.items())  # → {"api": Api, "storage": Storage, …}
+dict(Storage.items())  # → {"postgres": Postgres, …}
+dict(Analytics.items())  # → {"metrics-fetcher": MetricsFetcher, …}
 ```
 
 ---
@@ -266,23 +258,23 @@ participates in the system. Any combination is valid:
 ```python
 @Storage
 @Service
-class Postgres:
-    ...
+class Postgres: ...
+
 
 @Analytics
 @Task
-class MetricsFetcher:
-    ...
+class MetricsFetcher: ...
+
 
 @Api
 @Component
-class Validator:
-    ...
+class Validator: ...
+
 
 @Api
 @Pipeline
-class UserOnboarding:
-    ...
+class UserOnboarding: ...
+
 
 @Service
 class Scheduler:
@@ -294,8 +286,8 @@ A component tagged with a layer is registered in **both** the execution type nam
 and the layer namespace — two independent views of the same class:
 
 ```python
-Service.get("postgres")   # → Postgres  (execution type view)
-Storage.get("postgres")   # → Postgres  (layer view)
+Service.get("postgres")  # → Postgres  (execution type view)
+Storage.get("postgres")  # → Postgres  (layer view)
 ```
 
 ---

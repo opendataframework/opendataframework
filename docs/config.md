@@ -41,9 +41,7 @@ config/
 Primarily for testing or programmatic configuration:
 
 ```python
-project = Project.from_dict({
-    "postgres": {"database-url": "postgresql://localhost/mydb"}
-})
+project = Project.from_dict({"postgres": {"database-url": "postgresql://localhost/mydb"}})
 ```
 
 ---
@@ -55,6 +53,7 @@ the full project config automatically:
 
 ```python
 from opendataframework import Component, Config
+
 
 @Component
 class Postgres:
@@ -78,7 +77,7 @@ database-url = "postgresql://localhost/mydb"
 ```
 
 ```python
-config.database_url   # "postgresql://localhost/mydb"
+config.database_url  # "postgresql://localhost/mydb"
 config["database-url"]  # same
 ```
 
@@ -106,7 +105,7 @@ config["postgres"]["port"]
 key is absent. It does not raise:
 
 ```python
-config.get("host", "localhost")   # "localhost" if key absent
+config.get("host", "localhost")  # "localhost" if key absent
 ```
 
 !!! note "get() and [] normalize the key too"
@@ -122,8 +121,8 @@ further access onto it without guarding against the section being missing:
 ```python
 cfg = config.get("postgres")
 
-cfg.database_url          # AttributeError if missing
-cfg.get("port", 5432)     # 5432 if key absent
+cfg.database_url  # AttributeError if missing
+cfg.get("port", 5432)  # 5432 if key absent
 ```
 
 This lets each component retrieve its own slice without coupling it to the

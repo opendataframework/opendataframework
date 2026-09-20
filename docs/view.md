@@ -63,7 +63,6 @@ plain table by default — every field as a column, in declaration order:
 @Storage
 @Repository(User)
 class Users:
-
     def all(self) -> list[User]: ...
     def save(self, user: User) -> None: ...
     def delete(self, user_id: int) -> None: ...
@@ -78,10 +77,10 @@ than the default table, or wants to override which columns show:
 ```python
 from opendataframework import DataViewProtocol, TableView
 
+
 @Storage
 @Repository(User)
 class Users:
-
     def all(self) -> list[User]: ...
 
     def data_view(self) -> TableView:
@@ -136,10 +135,10 @@ declaration.
 ```python
 from opendataframework import LocationView, Repository, Storage
 
+
 @Storage
 @Repository(Store)
 class Stores:
-
     def all(self) -> list[Store]: ...
     def save(self, store: Store) -> None: ...
     def delete(self, store_id: int) -> None: ...
@@ -158,10 +157,10 @@ the same fields that would have shown as table columns.
 ```python
 from opendataframework import Repository, Storage, StreamingVideoView
 
+
 @Storage
 @Repository(Frame)
 class Webcam:
-
     def open_stream(self) -> None: ...
     def close_stream(self) -> None: ...
     def stream(self) -> Iterator[Frame]: ...
@@ -180,10 +179,10 @@ actually drives the background thread that produces them.
 ```python
 from opendataframework import DocumentView, Repository, Storage
 
+
 @Storage
 @Repository(WebhookEvent)
 class WebhookEvents:
-
     def all(self) -> list[WebhookEvent]: ...
 
     def data_view(self) -> DocumentView:
@@ -209,10 +208,10 @@ that representation can be replayed chronologically.
 ```python
 from opendataframework import LocationView, Repository, Storage
 
+
 @Storage
 @Repository(Ping)
 class Pings:
-
     def all(self) -> list[Ping]: ...
 
     def data_view(self) -> LocationView:

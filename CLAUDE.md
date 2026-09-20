@@ -63,12 +63,13 @@ their own.)
 ### Decorator usage
 
 ```python
-@Storage          # Layer decorator (optional, organisational grouping)
-@Service          # Execution type
+@Storage  # Layer decorator (optional, organisational grouping)
+@Service  # Execution type
 class Postgres:
     def __init__(self, config: Config): ...
 
-@Repository(User) # Declares managed entity
+
+@Repository(User)  # Declares managed entity
 class Users:
     def __init__(self, postgres: Postgres): ...
 ```
@@ -90,7 +91,7 @@ needed.
 ### Configuration
 
 ```python
-project = Project.from_config("config.toml")   # single file
+project = Project.from_config("config.toml")  # single file
 project = Project.from_config("config/prod/")  # directory
 ```
 
