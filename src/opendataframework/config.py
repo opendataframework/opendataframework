@@ -7,6 +7,7 @@ components declare it like any other constructor dependency.
 """
 
 import tomllib
+from copy import deepcopy
 from pathlib import Path
 
 from opendataframework.utils import normalize
@@ -37,8 +38,14 @@ class Config:
     """
 
     def __init__(self, data: dict) -> None:
-        """Wrap ``data``, a (possibly nested) configuration dict."""
-        self._data = data
+        """Wrap a deep copy of ``data``, a (possibly nested) configuration dict.
+
+        ``data`` is copied rather than stored by reference, so mutating the
+        original dict after construction (e.g. one the caller keeps a
+        reference to and mutates after passing to ``Project.from_dict()``)
+        does not leak through this ``Config``.
+        """
+        self._data = deepcopy(data)
 
     def __getattr__(self, name: str) -> Config | object:
         """Return value by snake_case attribute name, normalised to kebab-case.
@@ -60,10 +67,10 @@ class Config:
         return Config(value) if isinstance(value, dict) else value
 
     def __getitem__(self, key: str) -> Config | object:
-        """Return value by key (any name form accepted).
+        """Return value by key, normalised to kebab-case (any name form accepted).
 
         Args:
-            key: Config key in any supported form.
+            key: Config key (snake_case, kebab-case, or PascalCase).
 
         Returns:
             A ``Config`` wrapping the value if it is a dict, otherwise the
@@ -73,13 +80,13 @@ class Config:
             KeyError: If the key is not present.
         """
         try:
-            value = self._data[key]
+            value = self._data[normalize(key)]
         except KeyError as err:
             raise KeyError(key) from err
         return Config(value) if isinstance(value, dict) else value
 
     def get(self, key: str, default: object = None) -> Config | object | None:
-        """Return value by key, or ``default`` if absent.
+        """Return value by key (any name form accepted), or ``default`` if absent.
 
         If ``default`` is not given and the key is absent, an empty
         ``Config`` is returned instead of ``None``, so callers can safely
@@ -91,7 +98,7 @@ class Config:
             port = cfg.get("port", 5432)    # safe fallback
 
         Args:
-            key: Config key.
+            key: Config key (snake_case, kebab-case, or PascalCase).
             default: Fallback value when the key is not present.
 
         Returns:
@@ -100,7 +107,7 @@ class Config:
             or an empty ``Config`` if the key is absent and no default was
             given.
         """
-        value = self._data.get(key)
+        value = self._data.get(normalize(key))
         if value is None:
             return default if default is not None else Config({})
         return Config(value) if isinstance(value, dict) else value

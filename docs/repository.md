@@ -36,16 +36,14 @@ makes the relationship between repository and entity explicit and visible.
 
 ```python
 @Repository(User)
-class Users:
-    ...
+class Users: ...
 ```
 
 ### With a name
 
 ```python
 @Repository(User, name="users")
-class Users:
-    ...
+class Users: ...
 ```
 
 ### Combined with a Layer
@@ -53,8 +51,7 @@ class Users:
 ```python
 @Storage
 @Repository(User)
-class Users:
-    ...
+class Users: ...
 ```
 
 ---
@@ -72,15 +69,14 @@ implement all of them:
 ```python
 from opendataframework.repository import ReadableProtocol, StreamableProtocol, WritableProtocol
 
-isinstance(users, ReadableProtocol)    # True if `all()` is implemented
-isinstance(users, WritableProtocol)    # True if `save()` and `delete()` are implemented
-isinstance(webcam, StreamableProtocol) # True if `stream()` is implemented
+isinstance(users, ReadableProtocol)  # True if `all()` is implemented
+isinstance(users, WritableProtocol)  # True if `save()` and `delete()` are implemented
+isinstance(webcam, StreamableProtocol)  # True if `stream()` is implemented
 ```
 
 ```python
 @Repository(User)
 class Users:
-
     def get(self, user_id: int) -> User:
         # retrieve a single entity by identifier
         ...
@@ -113,10 +109,10 @@ repository's answer to that case:
 ```python
 from opendataframework.repository import StreamableProtocol
 
+
 @Storage
 @Repository(Frame)
 class Webcam:
-
     def stream(self) -> Iterator[Frame]:
         while True:
             frame = self._read_next_frame()
@@ -152,7 +148,6 @@ Two more, both optional, hooks bracket that background thread's lifetime:
 @Storage
 @Repository(Frame)
 class Webcam:
-
     def __init__(self, config: Config):
         self.device = config.get("webcam").get("device", 0)
         self.capture = None
@@ -195,7 +190,6 @@ The `Context` resolves and injects them automatically.
 @Storage
 @Repository(User)
 class Users:
-
     def __init__(
         self,
         config: Config,
@@ -209,14 +203,11 @@ class Users:
     def on_stop(self):
         self.connection.close()
 
-    def get(self, user_id: int) -> User:
-        ...
+    def get(self, user_id: int) -> User: ...
 
-    def save(self, user: User) -> None:
-        ...
+    def save(self, user: User) -> None: ...
 
-    def _connect(self, url):
-        ...
+    def _connect(self, url): ...
 ```
 
 ---
@@ -229,7 +220,6 @@ class Users:
 @Storage
 @Repository(User)
 class Users:
-
     def __init__(
         self,
         config: Config,
@@ -244,9 +234,7 @@ class Users:
         self.connection.close()
 
     def get(self, user_id: int) -> User:
-        row = self.connection.query(
-            "SELECT * FROM users WHERE id = ?", user_id
-        )
+        row = self.connection.query("SELECT * FROM users WHERE id = ?", user_id)
         return User(**row)
 
     def all(self) -> list[User]:
@@ -256,16 +244,15 @@ class Users:
     def save(self, user: User) -> None:
         self.connection.execute(
             "INSERT OR REPLACE INTO users VALUES (?, ?, ?)",
-            user.id, user.name, user.email,
+            user.id,
+            user.name,
+            user.email,
         )
 
     def delete(self, user_id: int) -> None:
-        self.connection.execute(
-            "DELETE FROM users WHERE id = ?", user_id
-        )
+        self.connection.execute("DELETE FROM users WHERE id = ?", user_id)
 
-    def _connect(self, url):
-        ...
+    def _connect(self, url): ...
 ```
 
 ### Read-only external source
@@ -276,7 +263,6 @@ Not all repositories write. An external API or data stream may be read-only:
 @Storage
 @Repository(Reading)
 class SensorFeed:
-
     def __init__(
         self,
         config: Config,
@@ -298,8 +284,7 @@ class SensorFeed:
         raw = self.client.fetch_all()
         return [Reading(**r) for r in raw]
 
-    def _connect(self, url):
-        ...
+    def _connect(self, url): ...
 ```
 
 ### Live streaming feed
@@ -312,7 +297,6 @@ start/stop rather than the whole `Project`'s lifetime:
 @Storage
 @Repository(Frame)
 class Webcam:
-
     def __init__(
         self,
         config: Config,
@@ -334,11 +318,9 @@ class Webcam:
                 break
             yield self._encode(image)
 
-    def _open_device(self, device):
-        ...
+    def _open_device(self, device): ...
 
-    def _encode(self, image):
-        ...
+    def _encode(self, image): ...
 ```
 
 ### Using a repository in a Task
@@ -347,7 +329,6 @@ class Webcam:
 @Analytics
 @Task
 class MetricsFetcher:
-
     def __init__(
         self,
         feed: SensorFeed,

@@ -36,10 +36,10 @@ def test_positional_name():
 def test_keyword_name():
     class Postgres: ...
 
-    result = Service(name="pg-kw")(Postgres)
+    result = Service(name="pg")(Postgres)
 
     assert result is Postgres
-    assert Service.get("pg-kw") is Postgres
+    assert Service.get("pg") is Postgres
 
 
 def test_bare_decorator_returns_class_unchanged():
@@ -53,7 +53,7 @@ def test_bare_decorator_returns_class_unchanged():
 def test_positional_name_returns_class_unchanged():
     class Postgres: ...
 
-    result = Service("pg-unchanged")(Postgres)
+    result = Service("pg")(Postgres)
 
     assert result is Postgres
 

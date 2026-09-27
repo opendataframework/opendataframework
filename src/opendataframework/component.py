@@ -6,6 +6,8 @@ injected by the ``Context`` with no execution contract of its own. The
 implement to opt into lifecycle callbacks or inspection tooling.
 """
 
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 from opendataframework.namespace import Namespace
@@ -84,6 +86,50 @@ class ChartProtocol(Protocol):
 
     def chart(self) -> str:
         """Return a self-contained HTML document rendering the component's chart."""
+        ...
+
+
+@dataclass
+class McpTool:
+    """One MCP tool a Component exposes, returned from ``mcp_tools()``.
+
+    Attributes:
+        name: The tool's local name — namespaced by whatever builds the
+            tool surface (today, the sibling ``odf`` package's
+            ``McpServer`` prefixes it with the component's kebab-case
+            class name) to avoid collisions with the fixed built-in
+            tools and with other components' tools.
+        description: Human-readable description shown to the MCP client.
+        handler: The bound method implementing the tool call.
+        structured_output: Whether the handler's return value should be
+            reported as structured (JSON) output. ``None`` defers to
+            the MCP server's own default behavior, mirroring how this
+            field is expected to be forwarded verbatim by whatever
+            registers the tool.
+    """
+
+    name: str
+    description: str
+    handler: Callable[..., object]
+    structured_output: bool | None = None
+
+
+@runtime_checkable
+class McpToolsProtocol(Protocol):
+    """Capability interface for a Component's optional custom MCP tools.
+
+    Independent of ``DetailsProtocol``/``ChartProtocol``/
+    ``OnStartProtocol``/``OnStopProtocol``. Never invoked by ``Context``
+    — detected structurally via ``isinstance(instance, McpToolsProtocol)``
+    and consumed on demand by whatever builds an MCP tool surface. (Today,
+    that's the sibling ``odf`` package's ``McpServer``, which registers
+    each returned ``McpTool`` under
+    ``<kebab(cls.__name__)>.<tool.name>``, alongside its six fixed
+    built-in tools.)
+    """
+
+    def mcp_tools(self) -> list[McpTool]:
+        """Return the component's custom MCP tools, in addition to the fixed built-in surface."""
         ...
 
 

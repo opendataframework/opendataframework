@@ -45,6 +45,17 @@ exposes `project.context.get(cls)` to fetch any resolved instance by its class.
     isn't shared is state: each `Project` owns its own `Context`, so its
     instances stay separate from any other `Project` in the same process.
 
+!!! note "`[project] app` controls import timing, not scope"
+    `[project] app = "app"` in `config.toml` just runs
+    `importlib.import_module("app")` before the `Context` resolves —
+    equivalent to writing `import app` by hand before
+    `Project.from_config()`/`Project.from_dict()` is called. It doesn't
+    create a new per-`Project` component-isolation mechanism: the
+    global-registration behavior described above still fully applies — once
+    a module is imported (by this key or by any other means), every
+    `Project`'s `Context` in the process can see the classes it registers.
+    See [Project](project.md#pointing-at-the-app-package).
+
 ---
 
 ## How it Works
@@ -83,7 +94,6 @@ No explicit dependency declarations are needed.
 @Api
 @Service
 class UsersApi:
-
     def __init__(self, users: Users):
         self.users = users
 
@@ -91,7 +101,6 @@ class UsersApi:
 @Storage
 @Repository(User)
 class Users:
-
     def __init__(self, postgres: Postgres):
         self.postgres = postgres
 
@@ -99,7 +108,6 @@ class Users:
 @Storage
 @Service
 class Postgres:
-
     def __init__(self, config: Config):
         self.config = config
 ```
@@ -125,9 +133,6 @@ Startup runs in dependency order — dependencies first, dependents after.
 For each component, the framework applies the appropriate lifecycle:
 
 ```text
-Config
-    → instantiated        ← Component, no lifecycle
-
 Postgres
     → setup()             ← Service lifecycle, blocking
     → run()               ← backgrounded by framework, continues to next
@@ -143,16 +148,27 @@ UsersApi
 `project.start()` blocks until all components have completed their initialisation
 stage. After it returns, everything is ready — no hidden latency, no partial state.
 
-**Readiness** — services should complete all setup work inside `setup()`. The framework
-waits for `setup()` to return before proceeding to the next component, so any service
-that opens connections or runs migrations in `setup()` is guaranteed to be ready before
-dependents start.
+!!! note "Config isn't part of this walk"
+    `Config` isn't decorated with `@Component` and isn't registered in any
+    namespace, so it's never collected into the dependency-ordered list
+    above. `Project`/`Context` construct it upfront and seed it directly
+    into the resolved instances, before dependency resolution even starts
+    — it's simply already there for anything that declares `config: Config`
+    to receive, with no lifecycle of its own.
 
-**Component/Repository startup hook** — if `Users` (or any `Component`/`Repository`)
-defines `on_start()`, it's called at this same point in dependency order, blocking,
-right where "instantiated" appears above. It's optional and independent of `on_stop()`
-— see `docs/repository.md` for the full pattern (connections, file handles, and
-similar lightweight setup that should happen once, at `Project` start).
+!!! tip "Readiness — do setup work inside setup()"
+    Services should complete all setup work inside `setup()`. The framework
+    waits for `setup()` to return before proceeding to the next component,
+    so any service that opens connections or runs migrations in `setup()`
+    is guaranteed to be ready before dependents start.
+
+!!! tip "Component/Repository startup hook"
+    If `Users` (or any `Component`/`Repository`) defines `on_start()`, it's
+    called at this same point in dependency order, blocking, right where
+    "instantiated" appears above. It's optional and independent of
+    `on_stop()` — see [Repository](repository.md) for the full pattern
+    (connections, file handles, and similar lightweight setup that should
+    happen once, at `Project` start).
 
 ---
 
@@ -165,14 +181,19 @@ dependencies.
 UsersApi    → stop()      ← Service stopped first
 Users       → (none)      ← Repository (no on_stop() defined here)
 Postgres    → stop()      ← Service stopped last
-Config      → (none)      ← Component, no lifecycle
 ```
 
 This ensures no component is stopped while something that depends on it is still running.
 
-**Component/Repository shutdown hook** — if `Users` (or any `Component`/`Repository`)
-defines `on_stop()`, it's called at this same point in reverse dependency order,
-blocking.
+!!! note "Config isn't part of this walk either"
+    Just as in [Startup Order](#startup-order), `Config` was never collected
+    into the dependency-ordered list, so it doesn't appear above at all —
+    unlike `Users`, which is listed with `(none)` because it *is* part of
+    the walk but simply has no `on_stop()` to call.
+
+!!! tip "Component/Repository shutdown hook"
+    If `Users` (or any `Component`/`Repository`) defines `on_stop()`, it's
+    called at this same point in reverse dependency order, blocking.
 
 ---
 
@@ -196,12 +217,15 @@ of the dependencies with an event or callback:
 class A:
     def __init__(self, b: B): ...
 
+
 class B:
     def __init__(self, a: A): ...  # circular
+
 
 # solution — extract shared concern into C
 class A:
     def __init__(self, c: C): ...
+
 
 class B:
     def __init__(self, c: C): ...
@@ -250,8 +274,8 @@ normal dependency-order startup/shutdown driven by `project.start()`/
 `project.stop()`:
 
 ```python
-project.context.start("Postgres")       # no-op if already running
-project.context.stop("Postgres")        # no-op if not running
+project.context.start("Postgres")  # no-op if already running
+project.context.stop("Postgres")  # no-op if not running
 project.context.is_running("Postgres")  # → bool
 ```
 
@@ -261,9 +285,9 @@ Each raises `TypeError` if the matched instance isn't a `Service`.
 repository's background stream (see [Repository](repository.md)):
 
 ```python
-project.context.start_stream("Webcam")       # spawns the background thread
-project.context.stop_stream("Webcam")        # no-op if not streaming
-project.context.is_streaming("Webcam")       # → bool
+project.context.start_stream("Webcam")  # spawns the background thread
+project.context.stop_stream("Webcam")  # no-op if not streaming
+project.context.is_streaming("Webcam")  # → bool
 
 for frame in project.context.iter_stream("Webcam"):
     ...  # one subscriber; detaches when the stream stops or iteration ends

@@ -5,6 +5,8 @@ pure DI lifecycle boundary. It has no knowledge of any UI/CLI/MCP layer
 — those are composed on top of it by consuming packages (e.g. ``odf``).
 """
 
+import importlib
+
 from opendataframework.config import load as load_config
 from opendataframework.context import Context
 
@@ -143,12 +145,24 @@ class Project:
         (default ``"logs"``, relative to the current working directory) —
         see ``opendataframework.logger.LogManager``.
 
+        Imports the module named under ``[project] app`` (if present)
+        before constructing the ``Context`` — equivalent to writing
+        ``import app`` by hand before calling ``from_config``/``from_dict``.
+        That module's own imports (e.g. an ``app/__init__.py`` that imports
+        ``app.components``, ``app.repositories``, ...) are what actually
+        register framework-decorated classes; this just ensures the root
+        import happens before resolution needs it.
+
         Args:
             config: Mapping of configuration values, equivalent to what
                 ``from_config`` would parse from a ``.toml`` file.
 
         Returns:
             A new ``Project`` configured from the given dict.
+
+        Raises:
+            ImportError: If the module named under ``[project] app`` cannot
+                be imported.
 
         Example:
             ::
@@ -159,5 +173,8 @@ class Project:
                     }
                 })
         """
+        app = config.get("project", {}).get("app")
+        if app is not None:
+            importlib.import_module(app)
         log_dir = config.get("project", {}).get("log-dir", "logs")
         return cls(context=Context(config=config, log_dir=log_dir), config=config)

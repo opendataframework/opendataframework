@@ -44,22 +44,22 @@ def test_keyword_name_overrides_derived():
 
 def test_layer_registers_tagged_class():
     @Layer
-    class Infra2(Namespace): ...
+    class Infra(Namespace): ...
 
-    @Infra2
+    @Infra
     class Database: ...
 
-    assert Infra2.get("database") is Database
+    assert Infra.get("database") is Database
 
 
 def test_layer_returns_user_class_unchanged():
     @Layer
-    class Infra3(Namespace): ...
+    class Infra(Namespace): ...
 
     class Database: ...
 
     original = Database
-    Database = Infra3(Database)
+    Database = Infra(Database)
 
     assert Database is original
 
@@ -100,11 +100,11 @@ def test_builtin_layer_names():
 
 def test_layer_and_component_namespaces_are_independent():
     @Layer
-    class Infra4(Namespace): ...
+    class Infra(Namespace): ...
 
-    @Infra4
+    @Infra
     @Component
     class Processor: ...
 
     assert Component.get("processor") is Processor
-    assert Infra4.get("processor") is Processor
+    assert Infra.get("processor") is Processor

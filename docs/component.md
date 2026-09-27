@@ -44,12 +44,9 @@ The class itself is returned unchanged — no base class is added, no methods ar
 ```python
 @Component
 class Classifier:
+    def fit(self, data): ...
 
-    def fit(self, data):
-        ...
-
-    def predict(self, data):
-        ...
+    def predict(self, data): ...
 ```
 
 ### With a name
@@ -61,12 +58,9 @@ you'd rather look it up by a short alias via `Component.get(...)`.
 ```python
 @Component(name="churn-risk")
 class CustomerChurnRiskClassifier:
+    def fit(self, data): ...
 
-    def fit(self, data):
-        ...
-
-    def predict(self, data):
-        ...
+    def predict(self, data): ...
 ```
 
 ### Combined with a Layer
@@ -78,12 +72,9 @@ component belongs to. Layer comes first (outermost), component type second:
 @Analytics
 @Component
 class Classifier:
+    def fit(self, data): ...
 
-    def fit(self, data):
-        ...
-
-    def predict(self, data):
-        ...
+    def predict(self, data): ...
 ```
 
 ---
@@ -97,7 +88,6 @@ them automatically when the component is created.
 @Analytics
 @Component
 class Report:
-
     def __init__(
         self,
         classifier: Classifier,
@@ -125,7 +115,6 @@ A realistic component in a data analytics project:
 @Analytics
 @Component
 class Classifier:
-
     def __init__(
         self,
         config: Config,
@@ -142,8 +131,7 @@ class Classifier:
     def predict(self, data):
         return self.model.predict(data)
 
-    def _load_model(self, path):
-        ...
+    def _load_model(self, path): ...
 ```
 
 ---
@@ -154,10 +142,10 @@ class Classifier:
 Two class methods are available for inspection:
 
 ```python
-Component.get("Classifier")          # → Classifier class, or None if not registered
+Component.get("Classifier")  # → Classifier class, or None if not registered
 Component.get("metrics-classifier")  # → Classifier class registered under a custom name
 
-dict(Component.items())              # → {"classifier": Classifier, ...}
+dict(Component.items())  # → {"classifier": Classifier, ...}
 ```
 
 !!! tip "get() accepts any name form"
@@ -185,7 +173,6 @@ startup are reflected rather than frozen at resolve time.
 @Api
 @Service
 class Dashboard:
-
     def __init__(self, config: Config):
         self.port = config.port
 
@@ -232,7 +219,6 @@ external file references — so a caller can embed it safely:
 @Analytics
 @Component
 class UsersByStore:
-
     def __init__(self, users: Users, stores: Stores):
         self.users = users
         self.stores = stores
@@ -265,6 +251,57 @@ entirely optional.
     `text/html`, and renders it inside a same-origin `<iframe>` — which is
     why the HTML must be self-contained. That's just today's one consumer,
     though — nothing here depends on it.
+
+---
+
+## MCP Tools
+
+A `Component` may optionally implement `mcp_tools()` to expose its own
+custom MCP tools, in addition to the fixed lifecycle/task/pipeline
+surface. Like `details()`/`chart()`, it is independent of
+`on_start()`/`on_stop()` and is never called by the `Context` — it's
+detected structurally and consumed on demand by whatever builds an MCP
+tool surface.
+
+```python
+@Component
+class Weather:
+    def __init__(self, config: Config):
+        self.api_key = config.weather_api_key
+
+    def forecast(self, city: str) -> dict: ...
+
+    def mcp_tools(self) -> list[McpTool]:
+        return [
+            McpTool(
+                name="forecast",
+                description="Get the weather forecast for a city.",
+                handler=self.forecast,
+            )
+        ]
+```
+
+`mcp_tools()` is detected structurally via `McpToolsProtocol`
+(`opendataframework.component.McpToolsProtocol`, `@runtime_checkable`) — no
+base class or decorator required:
+
+```python
+class McpToolsProtocol(Protocol):
+    def mcp_tools(self) -> list[McpTool]: ...
+```
+
+Each returned `McpTool` carries a `name`, `description`, `handler` (a
+bound method), and `structured_output` flag. A component with no
+`mcp_tools()` method simply exposes no custom tools — this is entirely
+optional.
+
+!!! tip "Seeing it in practice"
+    This package only defines the `McpTool`/`McpToolsProtocol` shape —
+    it has no MCP server of its own. The sibling
+    [`odf`](https://opendataframework.github.io/odf/) package's
+    `McpServer` is the consumer: it registers each returned `McpTool`
+    under `<kebab(cls.__name__)>.<tool.name>`, alongside its six fixed
+    built-in tools.
 
 ---
 

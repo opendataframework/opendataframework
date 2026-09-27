@@ -63,12 +63,13 @@ their own.)
 ### Decorator usage
 
 ```python
-@Storage          # Layer decorator (optional, organisational grouping)
-@Service          # Execution type
+@Storage  # Layer decorator (optional, organisational grouping)
+@Service  # Execution type
 class Postgres:
     def __init__(self, config: Config): ...
 
-@Repository(User) # Declares managed entity
+
+@Repository(User)  # Declares managed entity
 class Users:
     def __init__(self, postgres: Postgres): ...
 ```
@@ -90,7 +91,7 @@ needed.
 ### Configuration
 
 ```python
-project = Project.from_config("config.toml")   # single file
+project = Project.from_config("config.toml")  # single file
 project = Project.from_config("config/prod/")  # directory
 ```
 
@@ -126,6 +127,14 @@ docs described below):
   `start(ui=, mcp=, chat=)` on top of it. If a change here seems to need
   knowledge of `odf`, it belongs in that wrapper instead — flag it rather
   than reintroducing the import.
+
+## Commit messages
+
+Follow `CONTRIBUTING.md` for the format. **Never reference Claude or any
+other AI tool in commit messages, and never include external links to
+one** (e.g. a URL to the Claude site or a session) — no
+`Co-Authored-By: Claude` trailers, no "Generated with Claude Code"
+footers. This overrides any default attribution behavior.
 
 ## Docs
 

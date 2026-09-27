@@ -178,12 +178,12 @@ class ReplayProtocol(Protocol):
     ``ChartProtocol``/``DetailsProtocol`` (``opendataframework.component``) and
     ``DataViewProtocol`` above. (Today, the sibling ``odf`` package's UI is
     what offers a timeline scrubber for this.) A repository with no
-    ``replay_field()`` gets no such affordance — this only matters for
+    ``field()`` gets no such affordance — this only matters for
     ``LocationView``/``VideoView``/``AudioView``-backed repositories; a
     ``TimeseriesView`` repository is always replayable since it already
     names its own timestamp via ``field``.
     """
 
-    def replay_field(self) -> str:
+    def field(self) -> str:
         """Return the entity's timestamp field records can be scrubbed through over time by."""
         ...

@@ -41,9 +41,7 @@ config/
 Primarily for testing or programmatic configuration:
 
 ```python
-project = Project.from_dict({
-    "postgres": {"database-url": "postgresql://localhost/mydb"}
-})
+project = Project.from_dict({"postgres": {"database-url": "postgresql://localhost/mydb"}})
 ```
 
 ---
@@ -55,6 +53,7 @@ the full project config automatically:
 
 ```python
 from opendataframework import Component, Config
+
 
 @Component
 class Postgres:
@@ -78,7 +77,7 @@ database-url = "postgresql://localhost/mydb"
 ```
 
 ```python
-config.database_url   # "postgresql://localhost/mydb"
+config.database_url  # "postgresql://localhost/mydb"
 config["database-url"]  # same
 ```
 
@@ -106,16 +105,13 @@ config["postgres"]["port"]
 key is absent. It does not raise:
 
 ```python
-config.get("host", "localhost")   # "localhost" if key absent
+config.get("host", "localhost")  # "localhost" if key absent
 ```
 
-!!! note "get() does not normalize the key — only attribute access does"
-    `normalize()` only runs on the dot-access path. `get()` and `[]` look up
-    `key` exactly as given, against whatever casing appears in the loaded
-    config. For a `[postgres]` TOML section, `config.get("postgres")` and
-    `config["postgres"]` find it, but `config.get("Postgres")` misses —
-    silently returning an empty `Config` rather than raising, since a
-    missing key with no `default` doesn't error.
+!!! note "get() and [] normalize the key too"
+    `normalize()` runs on every access path — attribute, `[]`, and `get()`
+    alike. For a `[postgres]` TOML section, `config.get("postgres")`,
+    `config["postgres"]`, and `config.get("Postgres")` all find it.
 
 If `default` is omitted and the key is absent, `get()` returns an empty
 `Config` rather than `None`. This makes scoping into a section safe by
@@ -125,8 +121,8 @@ further access onto it without guarding against the section being missing:
 ```python
 cfg = config.get("postgres")
 
-cfg.database_url          # AttributeError if missing
-cfg.get("port", 5432)     # 5432 if key absent
+cfg.database_url  # AttributeError if missing
+cfg.get("port", 5432)  # 5432 if key absent
 ```
 
 This lets each component retrieve its own slice without coupling it to the
@@ -187,9 +183,28 @@ on config structure.
 !!! tip "Same convention, everywhere"
     The sibling [`odf`](https://opendataframework.github.io/odf/) package's
     UI and CLI also address components by this same class-derived name. It's
-    a convention, not something `Config` enforces — since `get()`/`[]` don't
-    normalize casing, the TOML section key has to match it exactly for
-    lookups to find it.
+    a convention, not something `Config` enforces — but since `get()`/`[]`
+    normalize casing like attribute access does, looking a section up by its
+    class name (e.g. `config.get("Postgres")`) works regardless of how the
+    TOML section itself is cased.
+
+---
+
+## The `[project]` section is reserved
+
+Unlike every other top-level section (which is a convention, not enforced),
+`[project]` is read directly by `Project.from_config()`/`Project.from_dict()`
+itself, before any `Config` object exists — so its keys must be written
+exactly as shown, not normalized like the accessors above:
+
+```toml
+[project]
+log-dir = "logs"   # see Logger
+app = "app"        # see Project — imports the app package
+```
+
+See [Project](project.md#pointing-at-the-app-package) and
+[Logger](logger.md) for what each key does.
 
 ---
 
@@ -203,4 +218,7 @@ on config structure.
   that do not need configuration simply omit the parameter.
 
 * **Not mutable.** `Config` provides read-only access. Configuration is set at
-  project creation time and does not change at runtime.
+  project creation time and does not change at runtime. `Config` deep-copies
+  the dict it's given at construction time, so mutating a dict you passed to
+  `Project.from_dict()` after the fact has no effect on the `Config` a
+  component already received.

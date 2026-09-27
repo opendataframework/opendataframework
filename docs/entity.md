@@ -152,12 +152,9 @@ class User:
 
 @Repository(User)
 class Users:
+    def get(self, user_id: int) -> User: ...
 
-    def get(self, user_id: int) -> User:
-        ...
-
-    def save(self, user: User) -> None:
-        ...
+    def save(self, user: User) -> None: ...
 ```
 
 The `@Repository(User)` decorator links the repository to its entity explicitly,

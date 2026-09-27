@@ -39,16 +39,50 @@ config/
 For programmatic use — testing, tooling, dynamic configuration:
 
 ```python
-project = Project.from_dict({
-    "users": {
-        "table": "users",
-        "schema": "public",
-    },
-    "postgres": {
-        "database_url": "postgresql://localhost/mydb",
-    },
-})
+project = Project.from_dict(
+    {
+        "users": {
+            "table": "users",
+            "schema": "public",
+        },
+        "postgres": {
+            "database_url": "postgresql://localhost/mydb",
+        },
+    }
+)
 ```
+
+### Pointing at the app package
+
+`[project] app` names the module to import before the `Context` is built —
+typically your app's root package, so a hand-written `import app` doesn't
+have to sit before every `Project.from_config()` call:
+
+```toml
+[project]
+app = "app"
+```
+
+```python
+project = Project.from_config("config.toml")  # imports `app` first
+```
+
+This doesn't scan or auto-discover anything — it's exactly one
+`importlib.import_module()` call, equivalent to writing `import app`
+yourself. Registering `@Component`/`@Service`/`@Repository`/`@Task`/
+`@Pipeline` classes is still the job of that module's own imports, the same
+way every example in this repo structures its `app/__init__.py`:
+
+```python
+# app/__init__.py
+from app import components, repositories, tasks
+```
+
+`[project] app` is optional — omit it and import your app package by hand
+before calling `from_config`/`from_dict`, exactly as before this existed. A
+missing or broken module raises immediately (`ImportError`), consistent
+with the framework's fail-fast posture elsewhere (e.g. `from_config`'s
+`FileNotFoundError` for a missing config path).
 
 ---
 
@@ -110,9 +144,9 @@ After `project.start()`, `project.context` is the entry point to every resolved
 instance:
 
 ```python
-project.context.get(UsersApi)     # typed, by class — the common case
+project.context.get(UsersApi)  # typed, by class — the common case
 project.context.instances[UsersApi]  # lower-level dict access, primarily for
-                                      # framework extension authors
+# framework extension authors
 ```
 
 ```python

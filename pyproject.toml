@@ -1,6 +1,6 @@
 [project]
 name = "opendataframework"
-version = "0.1.0"
+version = "0.2.0"
 description = "Lightweight, config-driven dependency-injection framework for data applications."
 authors = [
     {name = "mykytapavlov",email = "mykytapavlov@users.noreply.github.com"}

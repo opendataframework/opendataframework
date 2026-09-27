@@ -21,12 +21,42 @@ def test_missing_attribute_raises():
         _ = cfg.missing
 
 
+# --- Config immutability -----------------------------------------------------
+
+
+def test_mutating_original_dict_after_construction_does_not_leak():
+    data = {"host": "localhost"}
+    cfg = Config(data)
+
+    data["host"] = "mutated"
+    data["new-key"] = "new-value"
+
+    assert cfg.host == "localhost"
+    with pytest.raises(AttributeError):
+        _ = cfg.new_key
+
+
+def test_mutating_original_nested_dict_after_construction_does_not_leak():
+    data = {"postgres": {"port": 5432}}
+    cfg = Config(data)
+
+    data["postgres"]["port"] = 9999
+
+    assert cfg.postgres.port == 5432
+
+
 # --- Config item access ------------------------------------------------------
 
 
 def test_item_access_exact_key():
     cfg = Config({"database-url": "postgres://localhost/db"})
     assert cfg["database-url"] == "postgres://localhost/db"
+
+
+def test_item_access_normalizes_snake_and_pascal_case():
+    cfg = Config({"database-url": "postgres://localhost/db"})
+    assert cfg["database_url"] == "postgres://localhost/db"
+    assert cfg["DatabaseUrl"] == "postgres://localhost/db"
 
 
 def test_missing_item_raises():
@@ -60,6 +90,12 @@ def test_nested_item_access():
 def test_get_existing_key():
     cfg = Config({"host": "localhost"})
     assert cfg.get("host") == "localhost"
+
+
+def test_get_normalizes_snake_and_pascal_case():
+    cfg = Config({"postgres": {"port": 5432}})
+    assert cfg.get("postgres") is not None
+    assert cfg.get("Postgres").port == 5432
 
 
 def test_get_missing_key_returns_default():

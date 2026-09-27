@@ -29,7 +29,10 @@ receives its own empty `_namespace` dict at definition time:
 ```python
 from opendataframework.namespace import Namespace
 
+
 class Component(Namespace): ...
+
+
 class Service(Namespace): ...
 ```
 
@@ -69,10 +72,10 @@ unchanged.
 `Namespace` exposes two class methods for reading the mapping:
 
 ```python
-Component.get("Classifier")         # → Classifier, or None
-Component.get("metrics-classifier") # → Classifier registered under a custom name
+Component.get("Classifier")  # → Classifier, or None
+Component.get("metrics-classifier")  # → Classifier registered under a custom name
 
-dict(Component.items())             # → {"classifier": Classifier, ...}
+dict(Component.items())  # → {"classifier": Classifier, ...}
 ```
 
 These are used by the `Context` at startup to discover registered classes and
@@ -93,6 +96,17 @@ The dual-use decorator protocol is implemented through `__new__` and `__call__`:
 - **Factory usage** — `__new__` returns a `Namespace` instance; `__init__` stores
   the explicit name; `__call__` writes into `_namespace` when the instance is
   applied to the class.
+
+!!! warning "Duplicate names raise"
+    Registering two classes under the same name within one `Namespace`
+    subclass raises `ValueError`, naming both classes — whether the collision
+    comes from two bare decorators (two classes that happen to kebab-case to
+    the same name), two factory decorators with the same explicit `name=`,
+    or one of each. This happens at class-definition time (when the
+    decorator runs), not at `Context`/`Project` start time. It previously
+    silently overwrote the first registration with the second — that
+    behavior is no longer supported; rename one of the classes, or give one
+    an explicit `name=`.
 
 ---
 

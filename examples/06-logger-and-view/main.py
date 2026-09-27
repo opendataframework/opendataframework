@@ -40,7 +40,7 @@ for reading in readings.all():
     print(f"  {reading}")
 
 print(f"\ndata_view():    {readings.data_view()}")
-print(f"replay_field():  {readings.replay_field()!r}")
+print(f"field():         {readings.field()!r}")
 
 print("\nRecent log entries for Readings (see logs/readings.log):")
 for entry in project.context.tail_logs("Readings"):

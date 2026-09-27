@@ -13,14 +13,22 @@ signatures alone — no explicit wiring — then calls `on_start()` in dependenc
 order (`Database` before `Cache`) and `on_stop()` in reverse (`Cache` before
 `Database`).
 
+It also demonstrates `[project] app` (see
+[`docs/project.md`](../../docs/project.md#pointing-at-the-app-package)):
+`config.toml` names `app`, so `Project.from_config()` imports the package
+before the `Context` resolves anything — `app/__init__.py`'s own
+`from app import components` is what actually registers `@Database`/
+`@Cache`, same as it always has, just no longer requiring the entrypoint
+to know to import `app` itself first.
+
 ## Structure
 
 ```
 02-component-and-context/
-├── config.toml          # Database dsn
+├── config.toml          # Database dsn + [project] app = "app"
 ├── main.py              # entry point — plain script, no Service/UI involved
 └── app/
-    ├── __init__.py      # imports components.py so decorators register at startup
+    ├── __init__.py      # imports components.py so decorators register
     └── components.py    # Database, Cache — @Component
 ```
 

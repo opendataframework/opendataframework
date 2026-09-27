@@ -1,3 +1,5 @@
+import pytest
+
 from opendataframework.namespace import Namespace
 
 
@@ -92,3 +94,42 @@ def test_registration_does_not_leak_between_namespaces():
     class MetricsFetcher: ...
 
     assert B.get("metrics-fetcher") is None
+
+
+def test_bare_decorator_duplicate_name_raises():
+    class NS(Namespace): ...
+
+    @NS
+    class MetricsFetcher: ...
+
+    with pytest.raises(ValueError, match="Duplicate registration"):
+
+        @NS
+        class MetricsFetcher: ...  # noqa: F811
+
+
+def test_factory_decorator_duplicate_name_raises():
+    class NS(Namespace): ...
+
+    @NS(name="custom-foo")
+    class Foo: ...
+
+    with pytest.raises(ValueError, match="Duplicate registration"):
+
+        @NS(name="custom-foo")
+        class Bar: ...
+
+
+def test_duplicate_registration_names_both_classes():
+    class NS(Namespace): ...
+
+    @NS(name="dup")
+    class First: ...
+
+    with pytest.raises(ValueError) as excinfo:
+
+        @NS(name="dup")
+        class Second: ...
+
+    assert "First" in str(excinfo.value)
+    assert "Second" in str(excinfo.value)

@@ -94,7 +94,14 @@ class Namespace:
             # reveal_type(Classifier) -> type[Classifier], from __call__ below
         """
         if isinstance(_, type):
-            cls._namespace[kebab(_.__name__)] = _
+            key = kebab(_.__name__)
+            if key in cls._namespace:
+                existing = cls._namespace[key]
+                raise ValueError(
+                    f"Duplicate registration for {key!r} in {cls.__name__}: "
+                    f"{existing.__name__} and {_.__name__}"
+                )
+            cls._namespace[key] = _
             return _
         return super().__new__(cls)
 
@@ -129,7 +136,14 @@ class Namespace:
         Returns:
             The original class, unmodified.
         """
-        self.__class__._namespace[self._name or kebab(wrapped.__name__)] = wrapped
+        key = self._name or kebab(wrapped.__name__)
+        if key in self.__class__._namespace:
+            existing = self.__class__._namespace[key]
+            raise ValueError(
+                f"Duplicate registration for {key!r} in {self.__class__.__name__}: "
+                f"{existing.__name__} and {wrapped.__name__}"
+            )
+        self.__class__._namespace[key] = wrapped
         return wrapped
 
     @classmethod
