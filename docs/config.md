@@ -81,6 +81,12 @@ config.database_url  # "postgresql://localhost/mydb"
 config["database-url"]  # same
 ```
 
+This works in both directions: keys in the file are normalised too, so
+`database_url = "..."` in TOML is found by `config.database_url`,
+`config["database-url"]` and `config.get("database_url")` alike. Two keys
+in the same table that normalise to the same name (e.g. `database_url` and
+`database-url`) raise a `ValueError` rather than one silently winning.
+
 ### Nested sections
 
 Accessing a key whose value is a dict returns a nested `Config` object,

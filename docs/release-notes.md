@@ -1,5 +1,18 @@
 # Release Notes
 
+## 0.3.0 (unreleased)
+
+### Fixed
+
+- **Config**: key normalisation only applied to the name being looked up, not to the keys
+  in the data, so a key written as `exclude_years` (or `ExcludeYears`) in TOML couldn't be
+  found by any access path. `config.exclude_years` and `config["exclude_years"]` raised,
+  and `config.get("exclude_years", default)` silently returned the default. `Config` now
+  normalises its keys to kebab-case on construction (recursively through nested tables),
+  so snake_case/kebab-case/PascalCase are interchangeable on both sides. Two keys in the
+  same table that normalise to the same name (e.g. `exclude_years` and `exclude-years`)
+  now raise `ValueError` instead of one silently shadowing the other. See [Config](config.md).
+
 ## 0.2.0
 
 ### Added
