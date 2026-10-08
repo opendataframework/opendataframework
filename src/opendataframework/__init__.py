@@ -19,6 +19,8 @@ from opendataframework.service import Service, ServiceProtocol
 from opendataframework.task import Task, TaskProtocol
 from opendataframework.view import (
     AudioView,
+    ContentMetadata,
+    ContentMetadataProtocol,
     DataView,
     DataViewProtocol,
     DocumentView,
@@ -38,6 +40,8 @@ __all__ = [
     "AudioView",
     "Component",
     "Config",
+    "ContentMetadata",
+    "ContentMetadataProtocol",
     "Context",
     "DataView",
     "DataViewProtocol",

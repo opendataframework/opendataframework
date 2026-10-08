@@ -13,6 +13,11 @@ on the other end (e.g. the sibling ``odf`` package's UI).
 Every variant points at its field(s) generically (``field``/``fields``),
 never with a domain-specific attribute name — the meaning comes from which
 ``View`` subclass it is, not from the attribute name.
+
+A view says nothing about the content itself, though. A repository whose
+view points at content (``ImageView``/``VideoView``/``AudioView``/
+``DocumentView``) may separately implement ``ContentMetadataProtocol`` to
+declare, per record, what that content is called and which format it's in.
 """
 
 from dataclasses import dataclass
@@ -147,6 +152,26 @@ DataView = (
 )
 
 
+@dataclass
+class ContentMetadata:
+    """What one record's content is called and which format it's in.
+
+    A declaration, not a guarantee — nothing here inspects the content, so
+    a consumer should treat these as hints: check them against the content
+    where it can, rely on them where it can't, and never let them override
+    its own rules for what is safe to render.
+
+    Attributes:
+        filename: The content's file name, extension included (e.g.
+            ``"report.pdf"``). ``None`` means not declared.
+        content_type: The content's MIME type (e.g. ``"image/png"``).
+            ``None`` means not declared.
+    """
+
+    filename: str | None = None
+    content_type: str | None = None
+
+
 @runtime_checkable
 class DataViewProtocol(Protocol):
     """Capability interface for a repository's optional data-representation declaration.
@@ -186,4 +211,32 @@ class ReplayProtocol(Protocol):
 
     def field(self) -> str:
         """Return the entity's timestamp field records can be scrubbed through over time by."""
+        ...
+
+
+@runtime_checkable
+class ContentMetadataProtocol(Protocol):
+    """Capability interface for a repository's optional per-record content metadata.
+
+    ``DataViewProtocol`` answers, once per repository, which representation
+    fits its records and which field holds the content.
+    ``ContentMetadataProtocol`` answers a per-record question about that
+    same content: what is it called, and which format is it in? It only
+    matters for a repository whose view points at content — ``ImageView``/
+    ``VideoView``/``AudioView``/``DocumentView``.
+
+    The metadata needn't live on the entity: a repository may take it from
+    entity fields, derive it from the record's key, or return a constant
+    for content that's always the same format. Detected structurally via
+    ``isinstance(instance, ContentMetadataProtocol)`` and called on demand
+    by whatever's inspecting the repository, mirroring ``DataViewProtocol``/
+    ``ReplayProtocol`` above. (Today, the sibling ``odf`` package's UI is
+    what would label, type and offer the content for download with this.)
+    A repository with no ``content_metadata()`` declares nothing — a
+    consumer is left to work the content out for itself, unchanged from
+    before this protocol existed.
+    """
+
+    def content_metadata(self, entity: object) -> ContentMetadata:
+        """Return the ``ContentMetadata`` describing the given record's content."""
         ...

@@ -1,5 +1,9 @@
+from dataclasses import dataclass
+
 from opendataframework.view import (
     AudioView,
+    ContentMetadata,
+    ContentMetadataProtocol,
     DataViewProtocol,
     DocumentView,
     ImageView,
@@ -83,3 +87,48 @@ def test_replay_protocol_rejects_repository_without_field():
             return []
 
     assert not isinstance(NotReplayed(), ReplayProtocol)
+
+
+def test_content_metadata_defaults_to_nothing_declared():
+    metadata = ContentMetadata()
+
+    assert metadata.filename is None
+    assert metadata.content_type is None
+
+
+def test_content_metadata_holds_filename_and_content_type():
+    metadata = ContentMetadata(filename="report.pdf", content_type="application/pdf")
+
+    assert metadata.filename == "report.pdf"
+    assert metadata.content_type == "application/pdf"
+
+
+def test_content_metadata_protocol_detects_content_metadata_method():
+    class Described:
+        def content_metadata(self, entity):
+            return ContentMetadata()
+
+    assert isinstance(Described(), ContentMetadataProtocol)
+
+
+def test_content_metadata_protocol_rejects_repository_without_content_metadata():
+    class Undescribed:
+        def data_view(self):
+            return ImageView(field="data")
+
+    assert not isinstance(Undescribed(), ContentMetadataProtocol)
+
+
+def test_content_metadata_can_be_derived_without_entity_fields():
+    @dataclass
+    class Photo:
+        id: int
+        data: bytes
+
+    class Photos:
+        def content_metadata(self, photo):
+            return ContentMetadata(filename=f"{photo.id}.png", content_type="image/png")
+
+    assert Photos().content_metadata(Photo(id=7, data=b"")) == ContentMetadata(
+        filename="7.png", content_type="image/png"
+    )

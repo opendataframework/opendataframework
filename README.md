@@ -143,7 +143,10 @@ class Users:
 
 An optional, single declaration a `Repository` attaches to itself: which
 representation (table, map, image, video, ...) and field(s) best fit its
-data. Metadata only — this package renders nothing itself. See
+data. Metadata only — this package renders nothing itself. A repository
+whose view points at content (an image, a clip, a document) may also
+implement `content_metadata()` to declare each record's file name and
+MIME type. See
 [View](https://opendataframework.github.io/opendataframework/view/).
 
 ```python

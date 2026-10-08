@@ -2,6 +2,16 @@
 
 ## 0.3.0 (unreleased)
 
+### Added
+
+- **View**: added `ContentMetadata`/`ContentMetadataProtocol` so a `Repository` whose view
+  points at content (`ImageView`/`VideoView`/`AudioView`/`DocumentView`) can declare, per
+  record, that content's `filename` and `content_type` via an optional
+  `content_metadata(entity)` method, detected structurally like `DataViewProtocol`/
+  `ReplayProtocol`. The values needn't be entity fields — a repository may derive them or
+  return constants. Existing views are unchanged. Using this to label, type and offer
+  content for download happens on the `odf` side. See [View](view.md).
+
 ### Fixed
 
 - **Config**: key normalisation only applied to the name being looked up, not to the keys
