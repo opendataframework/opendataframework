@@ -158,7 +158,9 @@ class Users:
 ```
 
 The `@Repository(User)` decorator links the repository to its entity explicitly,
-making the relationship visible without requiring inheritance.
+making the relationship visible without requiring inheritance. The link requires
+the `@Entity` marker — passing a class that isn't registered with `@Entity` raises
+`TypeError`.
 
 !!! tip "Looking up registered entities"
     `Entity` is a namespace — `Entity.get("user")` returns the `User` class (or

@@ -12,6 +12,17 @@
   return constants. Existing views are unchanged. Using this to label, type and offer
   content for download happens on the `odf` side. See [View](view.md).
 
+### Changed
+
+- **Repository** (breaking): `@Repository(...)` now requires its argument to be a class
+  registered with `@Entity`, and raises `TypeError` at decoration time otherwise. The docs
+  always described the argument as the `Entity` class, but any class was accepted — so
+  `@Repository` written directly above the repository class (entity left out) took that
+  class for its own entity, registered nothing, and left the repository silently missing
+  from the `Context`. To migrate, add `@Entity` to the entity class; for a type you don't
+  own, call `Entity(SomeType)` once or wrap it in a small entity class. See
+  [Repository](repository.md).
+
 ### Fixed
 
 - **Config**: key normalisation only applied to the name being looked up, not to the keys

@@ -39,6 +39,15 @@ makes the relationship between repository and entity explicit and visible.
 class Users: ...
 ```
 
+!!! warning "The entity must be an `@Entity`"
+    The argument has to be a class registered with [`@Entity`](entity.md);
+    anything else raises `TypeError` at decoration time. This also catches
+    the entity being left out — `@Repository` written directly above the
+    repository class would otherwise take that class for its own entity,
+    register nothing, and leave the repository silently missing from the
+    `Context`. To manage a type you don't own, register it explicitly with
+    `Entity(SomeType)`, or wrap it in a small entity class of your own.
+
 ### With a name
 
 ```python

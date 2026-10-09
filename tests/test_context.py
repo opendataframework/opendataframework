@@ -4,6 +4,7 @@ import time
 import pytest
 
 from opendataframework.context import Context
+from opendataframework.entity import Entity
 from opendataframework.logger import Logger
 from opendataframework.namespace import Namespace
 from opendataframework.pipeline import Pipeline
@@ -224,10 +225,11 @@ def test_repository_on_start_and_on_stop_are_called():
     NS = make_ns()
     calls = []
 
-    class Entity: ...
+    @Entity
+    class Record: ...
 
     @NS
-    @Repository(Entity)
+    @Repository(Record)
     class Repo:
         def on_start(self) -> None:
             calls.append("on_start")

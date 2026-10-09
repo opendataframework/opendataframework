@@ -1,5 +1,6 @@
 import pytest
 
+from opendataframework.entity import Entity
 from opendataframework.namespace import Namespace
 from opendataframework.repository import (
     ReadableProtocol,
@@ -13,6 +14,14 @@ class User: ...
 
 
 class Order: ...
+
+
+@pytest.fixture(autouse=True)
+def _entities():
+    # Registered per test rather than decorated at module level: the registry
+    # is process-wide, and other test modules register their own ``User``.
+    Entity(User)
+    Entity(Order)
 
 
 def test_repository_is_namespace_subclass():
@@ -119,3 +128,33 @@ def test_function_as_entity_raises():
 
         @Repository
         def users(): ...
+
+
+def test_entity_left_out_raises():
+    with pytest.raises(TypeError, match="expects a class registered with @Entity, got 'Users'"):
+
+        @Repository
+        class Users: ...
+
+    assert Repository.get("users") is None
+
+
+def test_unregistered_entity_raises():
+    class Plain: ...
+
+    with pytest.raises(TypeError, match="expects a class registered with @Entity, got 'Plain'"):
+
+        @Repository(Plain)
+        class Plains: ...
+
+    assert Repository.get("plains") is None
+
+
+def test_entity_registered_under_explicit_name_is_accepted():
+    @Entity(name="customer")
+    class Client: ...
+
+    @Repository(Client)
+    class Clients: ...
+
+    assert Repository.entity(Clients) is Client

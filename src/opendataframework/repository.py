@@ -11,6 +11,7 @@ inheritance.
 from collections.abc import Iterator
 from typing import Any, Protocol, TypeVar, runtime_checkable
 
+from opendataframework.entity import Entity
 from opendataframework.namespace import C, Namespace
 
 E = TypeVar("E")
@@ -107,12 +108,24 @@ class Repository(Namespace):
     and registers it for dependency injection. The entity relationship is
     explicit and inspectable — no inheritance required.
 
+    The entity must itself be registered with ``@Entity`` — anything else
+    raises ``TypeError`` at decoration time. That includes leaving the entity
+    out (``@Repository`` directly on the repository class), which would
+    otherwise take the repository class for its own entity and register
+    nothing.
+
     The decorated class is returned unchanged. No base class is added and no
     methods are injected. The interface (``get``, ``all``, ``save``,
     ``delete``, etc.) is defined by the repository itself — only the
     operations relevant to the data source need to be implemented.
 
     Basic usage::
+
+        @Entity
+        @dataclass
+        class User:
+            id: int
+            name: str
 
         @Repository(User)
         class Users:
@@ -164,14 +177,23 @@ class Repository(Namespace):
             A new ``Repository`` instance to be used as a decorator.
 
         Raises:
-            TypeError: If ``entity`` is not a class — e.g. ``@Repository``
-                applied directly to a function, with the entity left out.
+            TypeError: If ``entity`` is not a class registered with
+                ``@Entity`` — most commonly ``@Repository`` applied directly
+                to the repository class or a function, with the entity left
+                out.
         """
         if not isinstance(entity, type):
             name = getattr(entity, "__name__", repr(entity))
             raise TypeError(
                 f"{cls.__name__} expects an entity class, "
                 f"got {type(entity).__name__} {name!r}"
+            )
+        if not any(entity is registered for _, registered in Entity.items()):
+            raise TypeError(
+                f"{cls.__name__} expects a class registered with @Entity, "
+                f"got {entity.__name__!r}. Decorate it with @Entity — or, if "
+                f"{entity.__name__} is the repository itself, pass its entity: "
+                f"@{cls.__name__}(SomeEntity)"
             )
         return object.__new__(cls)
 
