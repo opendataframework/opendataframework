@@ -185,8 +185,7 @@ class Repository(Namespace):
         if not isinstance(entity, type):
             name = getattr(entity, "__name__", repr(entity))
             raise TypeError(
-                f"{cls.__name__} expects an entity class, "
-                f"got {type(entity).__name__} {name!r}"
+                f"{cls.__name__} expects an entity class, got {type(entity).__name__} {name!r}"
             )
         if not any(entity is registered for _, registered in Entity.items()):
             raise TypeError(

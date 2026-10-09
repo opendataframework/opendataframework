@@ -4,7 +4,7 @@
 produces a named scope — a decorator that registers user-defined classes under a
 `name → class` mapping and exposes that mapping for inspection.
 
-[Component](component.md), [Service](service.md), [Task](task.md), and [Pipeline](pipeline.md) are all `Namespace` subclasses.
+[Component](component.md), [Service](service.md), [Task](task.md), [Pipeline](pipeline.md), and [Agent](agent.md) are all `Namespace` subclasses.
 [Function](function.md) is one too — the only one that registers functions rather than classes.
 Each maintains its own independent mapping; registering a class with `@Component`
 does not affect `Service`, and vice versa.

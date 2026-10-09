@@ -316,4 +316,5 @@ or aggregating results across steps may be introduced in a future version.
 | Run a process indefinitely                | [Service](service.md)   |
 | Execute a bounded unit of work once       | [Task](task.md)      |
 | Coordinate multiple tasks into a workflow | `Pipeline`  |
+| Work towards a goal handed over at call time | [Agent](agent.md) |
 | Manage persistent data                    | [Repository](repository.md)|

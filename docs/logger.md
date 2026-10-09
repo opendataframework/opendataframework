@@ -53,8 +53,8 @@ file on its behalf:
 * **Lifecycle** — `setup()`/`run()`/`stop()` for a `Service`, `on_start()`/
   `on_stop()` for a `Component`/`Repository` — start, completion, and any
   raised exception.
-* **Execution** — `execute()` for a `Task`/`Pipeline` — start, duration, and
-  any raised exception.
+* **Execution** — `execute()` for a `Task`/`Pipeline`, `invoke()` for an
+  `Agent` — start, duration, and any raised exception.
 
 `logger: Logger` is only needed for messages specific to what a component is
 actually doing — the framework-level lifecycle noise above is covered either
@@ -99,7 +99,7 @@ project.context.tail_logs("Postgres", lines=100)
 ## Not a Singleton — Special-Cased Resolution
 
 Every other registered class (`Component`, `Service`, `Task`, `Pipeline`,
-`Repository`) is a per-`Context` singleton: `Context` creates exactly one
+`Agent`, `Repository`) is a per-`Context` singleton: `Context` creates exactly one
 instance and stores it under that class in `Context.instances`, which is what
 `project.context.get(cls)` looks up (see [Context](context.md#direct-access)).
 

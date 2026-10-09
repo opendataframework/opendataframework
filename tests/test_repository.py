@@ -122,9 +122,7 @@ def test_decorator_on_function_raises():
 
 
 def test_function_as_entity_raises():
-    with pytest.raises(
-        TypeError, match="Repository expects an entity class, got function 'users'"
-    ):
+    with pytest.raises(TypeError, match="Repository expects an entity class, got function 'users'"):
 
         @Repository
         def users(): ...

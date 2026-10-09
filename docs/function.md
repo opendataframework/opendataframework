@@ -233,4 +233,5 @@ re-implementing the injection rule.
 | Provide a reusable, injectable capability           | [Component](component.md) |
 | Execute a bounded unit of work once, no arguments   | [Task](task.md)           |
 | Coordinate multiple tasks into a workflow           | [Pipeline](pipeline.md)   |
+| Work towards a goal handed over at call time        | [Agent](agent.md)         |
 | Run a process indefinitely                          | [Service](service.md)     |

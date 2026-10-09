@@ -4,6 +4,16 @@
 
 ### Added
 
+- **Agent**: added `@Agent`, an execution type for goal-driven work whose steps are decided
+  at run time — typically by a language model. An agent is a class with a single `invoke()`
+  method whose signature is its author's to choose; everything it may act on is declared
+  through its constructor like any other dependency, so it can also be injected into a
+  `Pipeline`, a `Service`, or another agent. `context.call("librarian", question=...)`
+  invokes one by registered name, `context.parameters(Librarian)` returns the parameters of
+  its `invoke()`, and every invocation is logged like a `Task`'s `execute()`. `@Agent` on a
+  class without `invoke()` raises `TypeError` at decoration time. `AgentProtocol` documents
+  the interface. The framework still ships no model client and no agent loop — `invoke()` is
+  where a library or provider SDK of your choice goes. See [Agent](agent.md).
 - **Function**: added `@Function`, a marker that makes a plain function known to the
   framework the way `@Component` does a class — so an existing function-based codebase can
   be adopted without a class refactor first. The function is returned unchanged, and direct

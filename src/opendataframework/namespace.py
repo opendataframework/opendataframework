@@ -1,6 +1,6 @@
 """The ``Namespace`` base class underlying every framework decorator.
 
-``Entity``, ``Component``, ``Service``, ``Task``, ``Pipeline``,
+``Entity``, ``Component``, ``Service``, ``Task``, ``Pipeline``, ``Agent``,
 ``Function``, ``Repository``, and ``Layer`` all subclass ``Namespace`` to get the same
 name → class registration and dual bare/factory decorator dispatch, each
 maintaining its own independent name-to-class mapping.
@@ -173,8 +173,7 @@ class Namespace:
         if not isinstance(wrapped, type):
             name = getattr(wrapped, "__name__", repr(wrapped))
             raise TypeError(
-                f"{cls.__name__} can only decorate a class, "
-                f"got {type(wrapped).__name__} {name!r}"
+                f"{cls.__name__} can only decorate a class, got {type(wrapped).__name__} {name!r}"
             )
 
     @classmethod

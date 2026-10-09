@@ -66,7 +66,7 @@ Most end users never interact with it directly.
 
 ```text
 Decorators register components at definition time
-    → @Component, @Service, @Task, @Pipeline, @Repository
+    → @Component, @Service, @Task, @Pipeline, @Agent, @Repository
 
 project.start() triggers context initialisation
     → Context builds the dependency graph from constructor signatures
@@ -334,6 +334,22 @@ project.context.call("load-data", path="data.csv")  # db injected
 The name is the registered one (`"load-data"`, or `"load_data"`), not a
 class name. Raises `KeyError` if no resolved function matches, and
 `TypeError` if a required argument is neither managed nor supplied.
+
+**Agents** — `call()` also invokes a single resolved [Agent](agent.md) by
+its registered name, passing the keywords on to its `invoke()`. An agent's
+dependencies were already injected through its constructor, so every
+keyword here is one of `invoke()`'s own arguments:
+
+```python
+project.context.call("librarian", question="Anything by Herbert?")
+```
+
+Raises `ValueError` if the name matches both a resolved function and a
+resolved agent.
+
+`project.context.parameters(target)` returns what a caller must supply to
+`call()` — a function's parameters minus the injected ones, or the
+parameters of an agent's `invoke()`.
 
 **Logs** — read back a component's recent log lines (see
 [Logger](logger.md)):

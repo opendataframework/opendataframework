@@ -9,8 +9,8 @@ Lightweight dependency-injection framework for data applications.
 
 This package provides structural abstractions —
 `Entity`, `Repository`, `Component`, `Service`, `Task`, `Pipeline`,
-`Function`, `Layer`, `Namespace`, `Context`, `Project`, `Config`, `Logger`,
-`View` — with zero third-party dependencies. No UI, no CLI, no MCP server.
+`Agent`, `Function`, `Layer`, `Namespace`, `Context`, `Project`, `Config`,
+`Logger`, `View` — with zero third-party dependencies. No UI, no CLI, no MCP server.
 
 > Need the CLI, UI, or MCP server? That's the
 > [`odf`](https://opendataframework.github.io/odf/) package, which
@@ -207,6 +207,24 @@ class DailyAnalytics:
     def execute(self): ...
 ```
 
+## Agent
+
+A finite executable whose steps are decided at run time, typically by a
+language model — handed its goal as arguments to `invoke()`. What it may act
+on is declared through its constructor. The framework ships no model client;
+`invoke()` is where a library of your choice goes.
+
+```python
+@Agent
+class Librarian:
+    def __init__(self, books: Books, model: Model): ...
+
+    def invoke(self, question: str) -> str: ...
+
+
+project.context.call("librarian", question="Anything by Herbert?")
+```
+
 ## Function
 
 A plain function made framework-aware — for adopting existing code without
@@ -236,8 +254,8 @@ class Postgres: ...
 ## Namespace
 
 The base class underlying every framework decorator — `Entity`,
-`Component`, `Service`, `Task`, `Pipeline`, `Repository`, and `Layer` are
-all `Namespace` subclasses, each with its own independent name → class
+`Component`, `Service`, `Task`, `Pipeline`, `Agent`, `Function`,
+`Repository`, and `Layer` are all `Namespace` subclasses, each with its own independent name → class
 mapping. A framework extension point, not something end users subclass
 directly. See
 [Namespace](https://opendataframework.github.io/opendataframework/namespace/).
@@ -320,6 +338,7 @@ Components provide capabilities.
 Services run for extended periods.
 Tasks execute bounded work.
 Pipelines coordinate tasks (and other pipelines).
+Agents pursue a goal handed to them.
 
 Layers organize components.
 Context manages components and repositories.

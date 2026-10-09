@@ -18,6 +18,7 @@ from pathlib import Path
 from queue import Empty, Full, Queue
 from typing import TypeVar, cast, overload
 
+from opendataframework.agent import Agent
 from opendataframework.component import Component, OnStartProtocol, OnStopProtocol
 from opendataframework.config import Config
 from opendataframework.function import Function, bind
@@ -39,7 +40,7 @@ T = TypeVar("T")
 R = TypeVar("R")
 
 _DEFAULT_NAMESPACES: frozenset[type[Namespace]] = frozenset(
-    {Component, Repository, Service, Task, Pipeline, Function}
+    {Component, Repository, Service, Task, Pipeline, Agent, Function}
 )
 
 
@@ -47,7 +48,8 @@ def _logged_execute(execute, name: str, log_manager: LogManager, label: str = "e
     """Wrap a bound ``execute`` method to log its start, duration, and errors.
 
     ``label`` names the operation in the log lines, so the same wrapper also
-    serves a ``Function`` called through the ``Context``.
+    serves an ``Agent``'s ``invoke()`` and a ``Function`` called through the
+    ``Context``.
     """
 
     @functools.wraps(execute)
@@ -647,13 +649,14 @@ class Context:
     Composes a ``Resolver`` (pure DI: gather → sort → instantiate) and a
     ``Lifecycle`` (protocol dispatch: setup → run → stop for services).
 
-    By default, collects classes from all four built-in namespaces:
-    ``Component``, ``Service``, ``Task``, and ``Pipeline``. Pass ``namespaces``
-    to override — primarily useful for testing.
+    By default, collects from every built-in namespace: ``Component``,
+    ``Repository``, ``Service``, ``Task``, ``Pipeline``, ``Agent``, and
+    ``Function``. Pass ``namespaces`` to override — primarily useful for
+    testing.
 
     Args:
         namespaces: Namespace subclasses to collect registered classes from.
-            Defaults to ``{Component, Service, Task, Pipeline}``.
+            Defaults to all of the built-in ones listed above.
         config: Configuration dict, pre-seeded as ``Config`` into the
             container.
         log_dir: Directory to write per-component ``<name>.log`` files under.
@@ -771,15 +774,15 @@ class Context:
         """Resolve all registered classes and drive their startup lifecycle.
 
         Runs ``Resolver.resolve()``, wraps every ``Task``/``Pipeline``
-        instance's ``execute()`` and every bound ``Function`` for automatic
-        logging, then constructs a
+        instance's ``execute()``, every ``Agent`` instance's ``invoke()`` and
+        every bound ``Function`` for automatic logging, then constructs a
         ``Lifecycle`` from the result and calls ``Lifecycle.on_start()``.
 
         Raises:
             ValueError: If a circular dependency is detected.
         """
         self._resolver.resolve()
-        self._instrument_execute()
+        self._instrument()
         self._functions = {
             func: _logged_execute(bound, func.__name__, self._log_manager, label="call")
             for func, bound in self._resolver.functions.items()
@@ -933,52 +936,79 @@ class Context:
         return instance.execute()
 
     def call(self, name: str, /, **kwargs: object) -> object:
-        """Call a resolved ``Function`` by registered name, injecting its dependencies.
+        """Call a resolved ``Function`` or ``Agent`` by registered name, with arguments.
 
-        The counterpart of ``execute()`` for functions, which — unlike a
-        ``Task`` — take arguments. Parameters whose type the ``Context``
-        manages are filled in; ``kwargs`` supplies the rest. An argument
-        passed explicitly wins over the injected value.
+        The counterpart of ``execute()`` for what — unlike a ``Task`` — takes
+        arguments.
+
+        For a ``Function``, parameters whose type the ``Context`` manages are
+        filled in and ``kwargs`` supplies the rest; an argument passed
+        explicitly wins over the injected value. For an ``Agent``, whose
+        dependencies were already injected through its constructor,
+        ``kwargs`` is passed to its ``invoke()`` as is.
 
         Args:
-            name: The function's registered name, in any casing
-                (``"load-data"`` or ``"load_data"``). Positional-only, so a
-                function parameter that is itself called ``name`` can still
-                be passed.
-            **kwargs: The function's remaining arguments.
+            name: The registered name, in any casing (``"load-data"``,
+                ``"load_data"``, ``"Librarian"``). Positional-only, so a
+                parameter that is itself called ``name`` can still be passed.
+            **kwargs: The function's remaining arguments, or the agent's
+                ``invoke()`` arguments.
 
         Returns:
-            Whatever the function returns.
+            Whatever the function, or the agent's ``invoke()``, returns.
 
         Raises:
-            KeyError: If no resolved function matches ``name``.
+            KeyError: If no resolved function or agent matches ``name``.
+            ValueError: If ``name`` matches both a resolved function and a
+                resolved agent.
             TypeError: If a required argument is neither managed by the
                 ``Context`` nor supplied.
 
         Example:
             >>> context.call("load-data", path="data.csv")  # db injected
             42
+            >>> context.call("librarian", question="Anything by Herbert?")
+            'Dune, by Frank Herbert'
         """
         func = Function.get(name)
-        if func is None or func not in self._functions:
-            raise KeyError(name)
-        return self._functions[func](**kwargs)
+        if func not in self._functions:
+            func = None
+        agent = Agent.get(name)
+        if agent not in self._resolver.instances:
+            agent = None
+        if func is not None and agent is not None:
+            raise ValueError(
+                f"{name!r} is ambiguous: it names both the function {func.__name__} "
+                f"and the agent {agent.__name__}"
+            )
+        if func is not None:
+            return self._functions[func](**kwargs)
+        if agent is not None:
+            return self._resolver.instances[agent].invoke(**kwargs)
+        raise KeyError(name)
 
-    def parameters(self, func: Callable[..., object]) -> dict[str, inspect.Parameter]:
-        """Return the parameters of a resolved ``Function`` that the caller must supply.
+    def parameters(self, func: type | Callable[..., object]) -> dict[str, inspect.Parameter]:
+        """Return the parameters a caller must supply to ``call()`` a function or agent.
 
-        That is, its signature minus the parameters the ``Context`` injects —
-        what a caller building a form or a tool schema needs to ask for.
+        For a ``Function``, that is its signature minus the parameters the
+        ``Context`` injects. For an ``Agent`` class, it is the signature of
+        its ``invoke()``. Either way, it is what a caller building a form or
+        a tool schema needs to ask for.
 
         Args:
-            func: The registered function.
+            func: The registered function, or agent class.
 
         Returns:
             Parameter name → ``inspect.Parameter``, in signature order.
 
         Raises:
-            KeyError: If ``func`` was not resolved.
+            KeyError: If ``func`` was not resolved, or is a resolved class
+                that is not an ``Agent``.
         """
+        if isinstance(func, type):
+            if func not in set(dict(Agent.items()).values()):
+                raise KeyError(func)
+            return dict(inspect.signature(self._resolver.instances[func].invoke).parameters)
         injected = self._resolver.injected(func)
         return {
             name: parameter
@@ -1010,18 +1040,25 @@ class Context:
         """
         return self._log_manager.tail(component, lines)
 
-    def _instrument_execute(self) -> None:
-        """Wrap ``execute()`` on every resolved ``Task``/``Pipeline`` instance.
+    def _instrument(self) -> None:
+        """Wrap every resolved ``Task``/``Pipeline``'s ``execute()`` and ``Agent``'s ``invoke()``.
 
         Logs start, completion (with duration), and any exception to that
         component's own log file — with no code changes required in the
-        Task/Pipeline classes themselves.
+        classes themselves. The wrapper is set on the instance, so a call
+        made directly (from a ``Pipeline``, say) is logged the same as one
+        made through the ``Context``.
         """
         executable = set(dict(Task.items()).values()) | set(dict(Pipeline.items()).values())
+        agents = set(dict(Agent.items()).values())
         for cls, instance in self._resolver.instances.items():
             if cls in executable and hasattr(instance, "execute"):
                 instance.execute = _logged_execute(
                     instance.execute, cls.__name__, self._log_manager
+                )
+            if cls in agents:
+                instance.invoke = _logged_execute(
+                    instance.invoke, cls.__name__, self._log_manager, label="invoke()"
                 )
 
     def __enter__(self) -> Context:

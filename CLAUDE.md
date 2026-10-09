@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 `opendataframework` is the **core framework** package of Open Data
 Framework (ODF) — the structural abstractions with zero third-party
 dependencies: `Entity`, `Repository`, `Component`, `Service`, `Task`,
-`Pipeline`, `Function`, `Layer`, `Namespace`, `Context`, `Project`,
+`Pipeline`, `Agent`, `Function`, `Layer`, `Namespace`, `Context`, `Project`,
 `Config`, `Logger`, `View`. No UI, no CLI, no MCP server live here.
 
 ## Commands
@@ -53,6 +53,7 @@ Project                  ← composition root; owns everything
 | `Service` | Long-running Component (worker, backing service) | `setup()` → `run()` → `stop()`; `run()` is backgrounded by the framework |
 | `Task` | Finite work unit; called explicitly | `execute()` |
 | `Pipeline` | Ordered composition of Tasks/Pipelines | `execute()` |
+| `Agent` | Goal-driven work unit whose steps are decided at run time; no model client or loop ships here | `invoke(...)` with free-form arguments; called via `context.call(name, **kwargs)` |
 | `Function` | Plain function made framework-aware (adoption on-ramp); consumes dependencies, can't be injected | none; called via `context.call(name, **kwargs)` |
 | `Layer` | Decorator that assigns a Component to a subsystem (`@Api`, `@Storage`, …) | — |
 
@@ -142,7 +143,7 @@ footers. This overrides any default attribution behavior.
 `docs/` holds this package's own mkdocs-material narrative documentation
 (`docs/entity.md`, `docs/repository.md`, `docs/view.md`,
 `docs/component.md`, `docs/service.md`, `docs/task.md`, `docs/pipeline.md`,
-`docs/function.md`, `docs/layer.md`, `docs/namespace.md`, `docs/context.md`, `docs/project.md`,
+`docs/agent.md`, `docs/function.md`, `docs/layer.md`, `docs/namespace.md`, `docs/context.md`, `docs/project.md`,
 `docs/config.md`, `docs/logger.md` — one page per module in
 `src/opendataframework/`, plus `docs/index.md`/`docs/examples.md`),
 built with `mkdocs.yml` at the repo root and deployed to GitHub Pages by

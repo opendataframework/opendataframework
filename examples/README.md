@@ -2,7 +2,7 @@
 
 Small, focused `opendataframework` projects, each isolating exactly one
 core abstraction. Every example here has nothing else competing for
-attention. Read 1–8 in order; each one builds on ideas from the last.
+attention. Read 1–9 in order; each one builds on ideas from the last.
 
 | # | Example | Concept(s) | Docs |
 |---|---|---|---|
@@ -14,6 +14,7 @@ attention. Read 1–8 in order; each one builds on ideas from the last.
 | 6 | [`06-logger-and-view/`](06-logger-and-view/) | A `Repository` with an injected `logger: Logger` and `data_view()`/`field()` — per-component logging and self-describing data representation. | `logger.md`, `view.md` |
 | 7 | [`07-config-environments/`](07-config-environments/) | Same `app/` code, two config directories (`config/dev/`, `config/prod/`) — no environment flag, just a different path. | `config.md` |
 | 8 | [`08-function/`](08-function/) | Plain functions made framework-aware with `@Function`: called by name through `project.context.call(...)` with an injected `@Component`, and still callable directly, unchanged. | `function.md` |
+| 9 | [`09-agent/`](09-agent/) | A `Librarian` `@Agent`: handed a question through `project.context.call(...)`, it works towards an answer step by step, acting on an injected `@Component`. The model is a rule-based stand-in — no provider, no API key. | `agent.md` |
 
 Every example is self-contained: `config.toml` (or a `config/` directory) plus
 an `app/` package, runnable with `python main.py` from inside the example's

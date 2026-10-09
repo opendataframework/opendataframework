@@ -1,5 +1,6 @@
 """Open Data Framework (ODF) package."""
 
+from opendataframework.agent import Agent, AgentProtocol
 from opendataframework.component import Component
 from opendataframework.config import Config
 from opendataframework.context import Context, Lifecycle, Resolver
@@ -36,6 +37,8 @@ from opendataframework.view import (
 )
 
 __all__ = [
+    "Agent",
+    "AgentProtocol",
     "Analytics",
     "Api",
     "AudioView",

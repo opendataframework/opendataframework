@@ -3,6 +3,7 @@ import time
 
 import pytest
 
+from opendataframework.agent import Agent
 from opendataframework.context import Context, Resolver
 from opendataframework.entity import Entity
 from opendataframework.function import Function
@@ -1155,3 +1156,241 @@ def test_dependencies_reads_a_functions_own_signature():
     def load_data(self: Db, path: str, limit=10): ...
 
     assert Resolver.dependencies(load_data) == {"self": Db, "path": str}
+
+
+# --- agents -------------------------------------------------------------------
+
+
+def test_call_invokes_an_agent_by_name_with_arguments():
+    NS = make_ns()
+
+    @NS
+    @Agent
+    class Researcher:
+        def invoke(self, question: str, limit: int = 3):
+            return (question, limit)
+
+    with Context(namespaces={NS}) as ctx:
+        assert ctx.call("researcher", question="dune?") == ("dune?", 3)
+        assert ctx.call("Researcher", question="dune?", limit=1) == ("dune?", 1)
+
+
+def test_call_invokes_an_agent_registered_under_an_explicit_name():
+    NS = make_ns()
+
+    @NS
+    @Agent(name="assistant")
+    class Researcher:
+        def invoke(self):
+            return "ok"
+
+    with Context(namespaces={NS}) as ctx:
+        assert ctx.call("assistant") == "ok"
+
+
+def test_agent_dependencies_are_injected_through_the_constructor():
+    NS = make_ns()
+
+    @NS
+    class Books: ...
+
+    @NS
+    @Agent
+    class Researcher:
+        def __init__(self, books: Books):
+            self.books = books
+
+        def invoke(self):
+            return self.books
+
+    with Context(namespaces={NS}) as ctx:
+        assert ctx.call("researcher") is ctx.instances[Books]
+        assert ctx.get(Researcher).invoke() is ctx.instances[Books]
+
+
+def test_call_agent_missing_argument_raises_type_error():
+    NS = make_ns()
+
+    @NS
+    @Agent
+    class Researcher:
+        def invoke(self, question: str): ...
+
+    with Context(namespaces={NS}) as ctx:
+        with pytest.raises(TypeError, match="question"):
+            ctx.call("researcher")
+
+
+def test_call_unresolved_agent_raises_key_error():
+    @Agent
+    class Researcher:
+        def invoke(self): ...
+
+    with Context(namespaces=set()) as ctx:
+        with pytest.raises(KeyError):
+            ctx.call("researcher")
+
+
+def test_call_name_shared_by_function_and_agent_raises_value_error():
+    NS = make_ns()
+
+    @Function
+    def researcher(): ...
+
+    @NS
+    @Agent
+    class Researcher:
+        def invoke(self): ...
+
+    with Context(namespaces={NS, Function}) as ctx:
+        with pytest.raises(ValueError, match="ambiguous"):
+            ctx.call("researcher")
+
+
+def test_agent_can_be_injected_into_a_pipeline():
+    NS = make_ns()
+
+    @NS
+    @Agent
+    class Researcher:
+        def invoke(self, question: str):
+            return question.upper()
+
+    @NS
+    @Pipeline
+    class Digest:
+        def __init__(self, researcher: Researcher):
+            self.researcher = researcher
+
+        def execute(self):
+            return self.researcher.invoke("dune?")
+
+    with Context(namespaces={NS}) as ctx:
+        assert ctx.execute("Digest") == "DUNE?"
+
+
+def test_agent_on_start_and_on_stop_are_called():
+    NS = make_ns()
+    calls = []
+
+    @NS
+    @Agent
+    class Researcher:
+        def on_start(self):
+            calls.append("start")
+
+        def on_stop(self):
+            calls.append("stop")
+
+        def invoke(self): ...
+
+    with Context(namespaces={NS}):
+        assert calls == ["start"]
+
+    assert calls == ["start", "stop"]
+
+
+def test_execute_rejects_an_agent():
+    NS = make_ns()
+
+    @NS
+    @Agent
+    class Researcher:
+        def invoke(self): ...
+
+    with Context(namespaces={NS}) as ctx:
+        with pytest.raises(TypeError):
+            ctx.execute("Researcher")
+
+
+def test_agent_invoke_is_logged_through_call(tmp_path):
+    NS = make_ns()
+
+    @NS
+    @Agent
+    class Researcher:
+        def invoke(self) -> int:
+            return 42
+
+    with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
+        assert ctx.call("researcher") == 42
+
+    messages = [e["message"] for e in ctx.tail_logs("Researcher")]
+    assert "invoke() started" in messages
+    assert any("invoke() completed" in m for m in messages)
+
+
+def test_agent_direct_invoke_is_logged(tmp_path):
+    NS = make_ns()
+
+    @NS
+    @Agent
+    class Researcher:
+        def invoke(self, question: str) -> str:
+            return question
+
+    with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
+        assert ctx.get(Researcher).invoke("dune?") == "dune?"
+
+    messages = [e["message"] for e in ctx.tail_logs("Researcher")]
+    assert "invoke() started" in messages
+    assert any("invoke() completed" in m for m in messages)
+
+
+def test_agent_invoke_exception_is_logged_and_reraised(tmp_path):
+    NS = make_ns()
+
+    @NS
+    @Agent
+    class Researcher:
+        def invoke(self) -> None:
+            raise ValueError("nope")
+
+    with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
+        with pytest.raises(ValueError):
+            ctx.call("researcher")
+
+    messages = [e["message"] for e in ctx.tail_logs("Researcher")]
+    assert any("invoke() raised" in m and "nope" in m for m in messages)
+
+
+def test_parameters_returns_an_agents_invoke_parameters():
+    NS = make_ns()
+
+    @NS
+    class Books: ...
+
+    @NS
+    @Agent
+    class Researcher:
+        def __init__(self, books: Books): ...
+
+        def invoke(self, question: str, limit: int = 3): ...
+
+    with Context(namespaces={NS}) as ctx:
+        parameters = ctx.parameters(Researcher)
+
+    assert list(parameters) == ["question", "limit"]
+    assert parameters["question"].annotation is str
+    assert parameters["limit"].default == 3
+
+
+def test_parameters_unresolved_agent_raises_key_error():
+    @Agent
+    class Researcher:
+        def invoke(self): ...
+
+    with Context(namespaces=set()) as ctx:
+        with pytest.raises(KeyError):
+            ctx.parameters(Researcher)
+
+
+def test_parameters_non_agent_class_raises_key_error():
+    NS = make_ns()
+
+    @NS
+    class Books: ...
+
+    with Context(namespaces={NS}) as ctx:
+        with pytest.raises(KeyError):
+            ctx.parameters(Books)
