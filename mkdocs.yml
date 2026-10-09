@@ -17,6 +17,7 @@ nav:
       - Service: service.md
       - Task: task.md
       - Pipeline: pipeline.md
+      - Function: function.md
       - Layer: layer.md
       - Context: context.md
       - Config: config.md

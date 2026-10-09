@@ -258,6 +258,20 @@ constructor dependency that breaks this: it isn't registered in any
 namespace and has no slot in `instances` at all, so `context.get(Logger)`
 doesn't work — see [Logger](logger.md#not-a-singleton-special-cased-resolution).
 
+`get()` also accepts a registered [Function](function.md), returning it with
+its managed dependencies already filled in:
+
+```python
+load = project.context.get(load_data)
+load("data.csv")  # db injected
+```
+
+Functions are kept out of `instances` — that mapping holds classes only.
+`project.context.functions` is the equivalent for functions (function →
+bound callable), and `project.context.parameters(func)` returns the
+parameters a caller still has to supply. See
+[Function](function.md#inspecting-functions).
+
 ---
 
 ## By Name — Single-Component Control
@@ -307,6 +321,19 @@ project.context.execute("DailyAnalytics")  # → whatever execute() returns
 ```
 
 Raises `TypeError` if the matched instance is neither.
+
+**Functions** — call a single resolved [Function](function.md) by its
+registered name. Unlike `execute()`, `call()` forwards arguments: the
+`Context` fills in the parameters whose type it manages, and the keywords
+supply the rest:
+
+```python
+project.context.call("load-data", path="data.csv")  # db injected
+```
+
+The name is the registered one (`"load-data"`, or `"load_data"`), not a
+class name. Raises `KeyError` if no resolved function matches, and
+`TypeError` if a required argument is neither managed nor supplied.
 
 **Logs** — read back a component's recent log lines (see
 [Logger](logger.md)):

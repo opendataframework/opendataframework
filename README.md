@@ -9,8 +9,8 @@ Lightweight dependency-injection framework for data applications.
 
 This package provides structural abstractions —
 `Entity`, `Repository`, `Component`, `Service`, `Task`, `Pipeline`,
-`Layer`, `Namespace`, `Context`, `Project`, `Config`, `Logger`, `View`
-— with zero third-party dependencies. No UI, no CLI, no MCP server.
+`Function`, `Layer`, `Namespace`, `Context`, `Project`, `Config`, `Logger`,
+`View` — with zero third-party dependencies. No UI, no CLI, no MCP server.
 
 > Need the CLI, UI, or MCP server? That's the
 > [`odf`](https://opendataframework.github.io/odf/) package, which
@@ -205,6 +205,20 @@ ordered workflow.
 @Pipeline
 class DailyAnalytics:
     def execute(self): ...
+```
+
+## Function
+
+A plain function made framework-aware — for adopting existing code without
+a class refactor first. Returned unchanged; called through the `Context`,
+its managed dependencies are injected and the rest are arguments.
+
+```python
+@Function
+def load_data(path: str, db: Postgres) -> int: ...
+
+
+project.context.call("load-data", path="data.csv")  # db injected
 ```
 
 ## Layer

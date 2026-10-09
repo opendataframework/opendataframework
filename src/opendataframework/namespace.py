@@ -1,7 +1,7 @@
 """The ``Namespace`` base class underlying every framework decorator.
 
 ``Entity``, ``Component``, ``Service``, ``Task``, ``Pipeline``,
-``Repository``, and ``Layer`` all subclass ``Namespace`` to get the same
+``Function``, ``Repository``, and ``Layer`` all subclass ``Namespace`` to get the same
 name → class registration and dual bare/factory decorator dispatch, each
 maintaining its own independent name-to-class mapping.
 """
@@ -103,14 +103,7 @@ class Namespace:
                 namespace.
         """
         if isinstance(_, type):
-            key = kebab(_.__name__)
-            if key in cls._namespace:
-                existing = cls._namespace[key]
-                raise ValueError(
-                    f"Duplicate registration for {key!r} in {cls.__name__}: "
-                    f"{existing.__name__} and {_.__name__}"
-                )
-            cls._namespace[key] = _
+            cls._register(kebab(_.__name__), _)
             return _
         if _ is not None and not isinstance(_, str):
             cls._require_class(_)
@@ -152,15 +145,23 @@ class Namespace:
             ValueError: If the name is already registered in this namespace.
         """
         self._require_class(wrapped)
-        key = self._name or kebab(wrapped.__name__)
-        if key in self.__class__._namespace:
-            existing = self.__class__._namespace[key]
+        self._register(self._name or kebab(wrapped.__name__), wrapped)
+        return wrapped
+
+    @classmethod
+    def _register(cls, key: str, wrapped) -> None:
+        """Store ``wrapped`` under ``key``, refusing to overwrite an existing entry.
+
+        Raises:
+            ValueError: If ``key`` is already registered in this namespace.
+        """
+        if key in cls._namespace:
+            existing = cls._namespace[key]
             raise ValueError(
-                f"Duplicate registration for {key!r} in {self.__class__.__name__}: "
+                f"Duplicate registration for {key!r} in {cls.__name__}: "
                 f"{existing.__name__} and {wrapped.__name__}"
             )
-        self.__class__._namespace[key] = wrapped
-        return wrapped
+        cls._namespace[key] = wrapped
 
     @classmethod
     def _require_class(cls, wrapped: object) -> None:

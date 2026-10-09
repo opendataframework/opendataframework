@@ -3,8 +3,9 @@ import time
 
 import pytest
 
-from opendataframework.context import Context
+from opendataframework.context import Context, Resolver
 from opendataframework.entity import Entity
+from opendataframework.function import Function
 from opendataframework.logger import Logger
 from opendataframework.namespace import Namespace
 from opendataframework.pipeline import Pipeline
@@ -926,3 +927,231 @@ def test_logger_without_log_dir_is_safe_noop():
 
     with Context(namespaces={NS}) as ctx:
         ctx.instances[A].logger.info("no-op")  # must not raise
+
+
+# --- functions ----------------------------------------------------------------
+
+
+def test_function_dependency_is_injected_on_call():
+    NS = make_ns()
+
+    @NS
+    class Db: ...
+
+    @Function
+    def load_data(path: str, db: Db):
+        return (path, db)
+
+    with Context(namespaces={NS, Function}) as ctx:
+        assert ctx.call("load-data", path="data.csv") == ("data.csv", ctx.instances[Db])
+
+
+def test_call_accepts_snake_case_name():
+    @Function
+    def load_data(path: str):
+        return path
+
+    with Context(namespaces={Function}) as ctx:
+        assert ctx.call("load_data", path="data.csv") == "data.csv"
+
+
+def test_call_explicit_argument_wins_over_injected():
+    NS = make_ns()
+
+    @NS
+    class Db: ...
+
+    @Function
+    def load_data(db: Db):
+        return db
+
+    fake = Db()
+
+    with Context(namespaces={NS, Function}) as ctx:
+        assert ctx.call("load-data", db=fake) is fake
+
+
+def test_call_passes_unmanaged_class_through_as_argument():
+    class Model: ...
+
+    @Function
+    def score(model: Model, threshold: float):
+        return (model, threshold)
+
+    model = Model()
+
+    with Context(namespaces={Function}) as ctx:
+        assert ctx.call("score", model=model, threshold=0.5) == (model, 0.5)
+
+
+def test_call_missing_unmanaged_argument_raises_clear_error():
+    class Model: ...
+
+    @Function
+    def score(model: Model, threshold: float = 0.5):
+        return threshold
+
+    with Context(namespaces={Function}) as ctx:
+        with pytest.raises(TypeError, match=r"score\(\) is missing 'model' \(Model\)"):
+            ctx.call("score")
+
+
+def test_call_supports_parameter_called_name():
+    @Function
+    def greet(name: str):
+        return f"hello {name}"
+
+    with Context(namespaces={Function}) as ctx:
+        assert ctx.call("greet", name="odf") == "hello odf"
+
+
+def test_call_unknown_name_raises_key_error():
+    with Context(namespaces={Function}) as ctx:
+        with pytest.raises(KeyError):
+            ctx.call("does-not-exist")
+
+
+def test_call_before_open_raises_key_error():
+    @Function
+    def load_data(): ...
+
+    with pytest.raises(KeyError):
+        Context(namespaces={Function}).call("load-data")
+
+
+def test_functions_excluded_when_function_namespace_not_configured():
+    NS = make_ns()
+
+    @Function
+    def load_data(): ...
+
+    with Context(namespaces={NS}) as ctx:
+        assert ctx.functions == {}
+        with pytest.raises(KeyError):
+            ctx.call("load-data")
+
+
+def test_function_in_default_namespaces():
+    from opendataframework.context import _DEFAULT_NAMESPACES
+
+    assert Function in _DEFAULT_NAMESPACES
+
+
+def test_function_is_not_in_instances():
+    @Function
+    def load_data(): ...
+
+    with Context(namespaces={Function}) as ctx:
+        assert load_data not in ctx.instances
+        assert load_data in ctx.functions
+
+
+def test_get_function_returns_bound_callable():
+    NS = make_ns()
+
+    @NS
+    class Db: ...
+
+    @Function
+    def load_data(db: Db, path: str, limit: int = 10):
+        return (db, path, limit)
+
+    with Context(namespaces={NS, Function}) as ctx:
+        bound = ctx.get(load_data)
+
+        assert bound is ctx.functions[load_data]
+        assert bound("data.csv", 5) == (ctx.instances[Db], "data.csv", 5)
+
+
+def test_get_unresolved_function_raises_key_error():
+    def plain(): ...
+
+    with Context(namespaces={Function}) as ctx:
+        with pytest.raises(KeyError):
+            ctx.get(plain)
+
+
+def test_direct_call_of_registered_function_is_not_injected():
+    NS = make_ns()
+
+    @NS
+    class Db: ...
+
+    @Function
+    def load_data(db: Db):
+        return db
+
+    with Context(namespaces={NS, Function}):
+        with pytest.raises(TypeError, match="missing 1 required positional argument: 'db'"):
+            load_data()
+
+
+def test_function_logger_is_bound_to_function_name(tmp_path):
+    @Function
+    def load_data(logger: Logger):
+        logger.info("loading")
+
+    with Context(namespaces={Function}, log_dir=tmp_path) as ctx:
+        ctx.call("load-data")
+        messages = [e["message"] for e in ctx.tail_logs("load_data")]
+
+    assert "loading" in messages
+
+
+def test_function_call_is_logged(tmp_path):
+    @Function
+    def load_data():
+        return 42
+
+    with Context(namespaces={Function}, log_dir=tmp_path) as ctx:
+        assert ctx.call("load-data") == 42
+        messages = [e["message"] for e in ctx.tail_logs("load_data")]
+
+    assert "load_data resolved" in messages
+    assert "call started" in messages
+    assert any("call completed" in m for m in messages)
+
+
+def test_function_call_exception_is_logged_and_reraised(tmp_path):
+    @Function
+    def load_data():
+        raise ValueError("nope")
+
+    with Context(namespaces={Function}, log_dir=tmp_path) as ctx:
+        with pytest.raises(ValueError):
+            ctx.call("load-data")
+        messages = [e["message"] for e in ctx.tail_logs("load_data")]
+
+    assert any("call raised" in m and "nope" in m for m in messages)
+
+
+def test_parameters_returns_only_caller_supplied_ones():
+    NS = make_ns()
+
+    @NS
+    class Db: ...
+
+    @Function
+    def load_data(db: Db, path: str, limit: int = 10, *, logger: Logger): ...
+
+    with Context(namespaces={NS, Function}) as ctx:
+        parameters = ctx.parameters(load_data)
+
+    assert list(parameters) == ["path", "limit"]
+    assert parameters["limit"].default == 10
+
+
+def test_parameters_unresolved_function_raises_key_error():
+    def plain(): ...
+
+    with Context(namespaces={Function}) as ctx:
+        with pytest.raises(KeyError):
+            ctx.parameters(plain)
+
+
+def test_dependencies_reads_a_functions_own_signature():
+    class Db: ...
+
+    def load_data(self: Db, path: str, limit=10): ...
+
+    assert Resolver.dependencies(load_data) == {"self": Db, "path": str}

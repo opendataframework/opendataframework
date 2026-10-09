@@ -142,6 +142,7 @@ worked examples.
 | [Service](service.md) | Long-running Component (worker, backing service) |
 | [Task](task.md) | Finite work unit; called explicitly |
 | [Pipeline](pipeline.md) | Ordered composition of Tasks/Pipelines |
+| [Function](function.md) | Plain function made framework-aware; called by name with arguments |
 | [Layer](layer.md) | Decorator that assigns a Component to a subsystem |
 
 Supporting the above are [Context](context.md), [Config](config.md),

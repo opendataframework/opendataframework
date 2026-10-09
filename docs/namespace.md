@@ -5,6 +5,7 @@ produces a named scope — a decorator that registers user-defined classes under
 `name → class` mapping and exposes that mapping for inspection.
 
 [Component](component.md), [Service](service.md), [Task](task.md), and [Pipeline](pipeline.md) are all `Namespace` subclasses.
+[Function](function.md) is one too — the only one that registers functions rather than classes.
 Each maintains its own independent mapping; registering a class with `@Component`
 does not affect `Service`, and vice versa.
 
@@ -113,7 +114,8 @@ The dual-use decorator protocol is implemented through `__new__` and `__call__`:
     commonly a function — raises `TypeError` at decoration time, in both the
     bare and the factory form. It previously registered nothing and silently
     rebound the function's name to a namespace instance, so the mistake only
-    surfaced later, far from its cause.
+    surfaced later, far from its cause. To register a function, use
+    [`@Function`](function.md) — the one namespace built for them.
 
 ---
 

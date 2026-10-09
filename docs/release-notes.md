@@ -4,6 +4,16 @@
 
 ### Added
 
+- **Function**: added `@Function`, a marker that makes a plain function known to the
+  framework the way `@Component` does a class — so an existing function-based codebase can
+  be adopted without a class refactor first. The function is returned unchanged, and direct
+  calls behave exactly as before. Through the `Context`, parameters annotated with a managed
+  type are injected and the rest are call arguments: `context.call("load-data", path=...)`
+  calls by registered name, `context.get(load_data)` returns the function with its
+  dependencies bound, `context.functions` lists what was resolved, and
+  `context.parameters(func)` returns the parameters a caller must supply. Functions only
+  consume dependencies — they have no lifecycle, can't be injected, and aren't in
+  `context.instances`. See [Function](function.md).
 - **View**: added `ContentMetadata`/`ContentMetadataProtocol` so a `Repository` whose view
   points at content (`ImageView`/`VideoView`/`AudioView`/`DocumentView`) can declare, per
   record, that content's `filename` and `content_type` via an optional

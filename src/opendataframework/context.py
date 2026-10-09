@@ -1,7 +1,8 @@
 """``Context`` — dependency resolution, instance creation, and lifecycle.
 
 Composes ``Resolver`` (pure DI: gather registered classes → topological
-sort → instantiate with injected dependencies), ``Lifecycle`` (protocol
+sort → instantiate with injected dependencies, then bind registered
+functions to the result), ``Lifecycle`` (protocol
 dispatch: setup/run/stop for services, on_start/on_stop for components),
 and ``StreamManager`` (background threads for ``StreamableProtocol``
 repositories). ``Context`` is the only public entry point of the three —
@@ -12,13 +13,14 @@ import functools
 import inspect
 import threading
 import time
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from pathlib import Path
 from queue import Empty, Full, Queue
-from typing import TypeVar, cast
+from typing import TypeVar, cast, overload
 
 from opendataframework.component import Component, OnStartProtocol, OnStopProtocol
 from opendataframework.config import Config
+from opendataframework.function import Function, bind
 from opendataframework.logger import Logger, LogManager
 from opendataframework.namespace import Namespace
 from opendataframework.pipeline import Pipeline
@@ -34,27 +36,32 @@ from opendataframework.task import Task
 _STREAM_ENDED = object()
 
 T = TypeVar("T")
+R = TypeVar("R")
 
 _DEFAULT_NAMESPACES: frozenset[type[Namespace]] = frozenset(
-    {Component, Repository, Service, Task, Pipeline}
+    {Component, Repository, Service, Task, Pipeline, Function}
 )
 
 
-def _logged_execute(execute, name: str, log_manager: LogManager):
-    """Wrap a bound ``execute`` method to log its start, duration, and errors."""
+def _logged_execute(execute, name: str, log_manager: LogManager, label: str = "execute()"):
+    """Wrap a bound ``execute`` method to log its start, duration, and errors.
+
+    ``label`` names the operation in the log lines, so the same wrapper also
+    serves a ``Function`` called through the ``Context``.
+    """
 
     @functools.wraps(execute)
     def wrapped(*args, **kwargs):
         """Call the wrapped ``execute``, logging its start, duration, and errors."""
-        log_manager.write(name, "INFO", "execute() started")
+        log_manager.write(name, "INFO", f"{label} started")
         start = time.monotonic()
         try:
             result = execute(*args, **kwargs)
         except Exception as exc:
-            log_manager.write(name, "ERROR", f"execute() raised {exc!r}")
+            log_manager.write(name, "ERROR", f"{label} raised {exc!r}")
             raise
         elapsed_ms = (time.monotonic() - start) * 1000
-        log_manager.write(name, "INFO", f"execute() completed in {elapsed_ms:.1f}ms")
+        log_manager.write(name, "INFO", f"{label} completed in {elapsed_ms:.1f}ms")
         return result
 
     return wrapped
@@ -102,6 +109,8 @@ class Resolver:
         self._namespaces = set(namespaces)
         self._instances: dict[type, object] = dict(extra_instances or {})
         self._order: list[type] = []
+        self._functions: dict[Callable[..., object], Callable[..., object]] = {}
+        self._injected: dict[Callable[..., object], dict[str, object]] = {}
         self._log_manager = log_manager if log_manager is not None else LogManager()
 
     @property
@@ -123,11 +132,31 @@ class Resolver:
         """
         return list(self._order)
 
+    @property
+    def functions(self) -> dict[Callable[..., object], Callable[..., object]]:
+        """Registered function → bound callable mapping, populated after ``resolve()``.
+
+        Returns:
+            A shallow copy. Each value calls its key with the managed
+            dependencies already filled in.
+        """
+        return dict(self._functions)
+
+    def injected(self, func: Callable[..., object]) -> dict[str, object]:
+        """Return the parameter name → value pairs injected into ``func``.
+
+        Raises:
+            KeyError: If ``func`` was not resolved.
+        """
+        return dict(self._injected[func])
+
     def resolve(self) -> None:
         """Gather registered classes, sort by dependency order, and instantiate.
 
         Runs the full resolution pipeline: collect classes from namespaces →
-        topological sort → instantiate with injected dependencies.
+        topological sort → instantiate with injected dependencies. Registered
+        functions are bound last — they only consume dependencies, so they
+        take no part in the ordering.
 
         Raises:
             ValueError: If a circular dependency is detected among registered classes.
@@ -148,24 +177,37 @@ class Resolver:
         self._order = self._sort(classes)
         for cls in self._order:
             self._instances[cls] = self._instantiate(cls)
+        for func in self._gather_functions():
+            self._injected[func] = self._inject(func)
+            self._functions[func] = bind(func, self._injected[func])
 
     def _gather(self) -> set[type]:
         """Collect all classes registered across the configured namespaces.
 
         Returns:
-            Flat set of every class found in ``self._namespaces``.
+            Flat set of every class found in ``self._namespaces``. Registered
+            functions are left out — see ``_gather_functions``.
         """
         classes: set[type] = set()
         for ns in self._namespaces:
             for _, cls in ns.items():
-                classes.add(cls)
+                if isinstance(cls, type):
+                    classes.add(cls)
         return classes
 
+    def _gather_functions(self) -> list[Callable[..., object]]:
+        """Collect all functions registered across the configured namespaces, by name."""
+        functions = {
+            func for ns in self._namespaces for _, func in ns.items() if not isinstance(func, type)
+        }
+        return sorted(functions, key=lambda f: f.__name__)
+
     @staticmethod
-    def dependencies(cls: type) -> dict[str, type]:
+    def dependencies(cls: type | Callable[..., object]) -> dict[str, type]:
         """Return typed constructor parameters for ``cls``.
 
-        Inspects ``cls.__init__`` and returns only parameters that carry a
+        Inspects ``cls.__init__`` — or, for a registered function, the
+        function's own signature — and returns only parameters that carry a
         type annotation which is itself a type (i.e. not a string forward
         reference or a generic alias).
 
@@ -173,20 +215,21 @@ class Resolver:
         derive the same dependency edges without duplicating this logic.
 
         Args:
-            cls: The class to inspect.
+            cls: The class, or registered function, to inspect.
 
         Returns:
             Mapping of parameter name to annotated type. Empty if the
             signature cannot be inspected or no typed parameters exist.
         """
+        is_class = isinstance(cls, type)
         try:
-            sig = inspect.signature(cls.__init__)
+            sig = inspect.signature(cls.__init__ if is_class else cls)
         except ValueError, TypeError:
             return {}
         return {
             name: param.annotation
             for name, param in sig.parameters.items()
-            if name != "self"
+            if not (is_class and name == "self")
             and param.annotation is not inspect.Parameter.empty
             and isinstance(param.annotation, type)
         }
@@ -258,6 +301,24 @@ class Resolver:
         instance = cls(**kwargs)
         self._log_manager.write(cls.__name__, "INFO", f"{cls.__name__} resolved")
         return instance
+
+    def _inject(self, func: Callable[..., object]) -> dict[str, object]:
+        """Return the values to inject into ``func``, by parameter name.
+
+        Follows the same rule as ``_instantiate``: a parameter annotated
+        exactly as ``Logger`` gets a ``Logger`` bound to the function's own
+        name, and any other is supplied only if its type is already present
+        in ``self._instances``. Every remaining parameter is left for the
+        caller.
+        """
+        injected: dict[str, object] = {}
+        for name, dep in self.dependencies(func).items():
+            if dep is Logger:
+                injected[name] = self._log_manager.logger_for(func.__name__)
+            elif dep in self._instances:
+                injected[name] = self._instances[dep]
+        self._log_manager.write(func.__name__, "INFO", f"{func.__name__} resolved")
+        return injected
 
 
 class Lifecycle:
@@ -647,6 +708,7 @@ class Context:
         )
         self._lifecycle: Lifecycle | None = None
         self._stream_manager = StreamManager(self._log_manager)
+        self._functions: dict[Callable[..., object], Callable[..., object]] = {}
 
     @property
     def instances(self) -> dict[type, object]:
@@ -658,15 +720,37 @@ class Context:
         """
         return self._resolver.instances
 
-    def get(self, cls: type[T]) -> T:
+    @property
+    def functions(self) -> dict[Callable[..., object], Callable[..., object]]:
+        """Registered ``Function`` → bound callable mapping, populated by ``open()``.
+
+        Kept apart from ``instances``, which holds classes only. Each value
+        calls its key with the managed dependencies already filled in — the
+        same callable ``get(func)`` returns.
+
+        Returns:
+            A shallow copy. Mutating the returned dict does not affect the
+            context's state.
+        """
+        return dict(self._functions)
+
+    @overload
+    def get(self, cls: type[T]) -> T: ...
+    @overload
+    def get(self, cls: Callable[..., R]) -> Callable[..., R]: ...
+    def get(self, cls):
         """Return the resolved instance of ``cls``, typed as ``cls``.
 
         Unlike ``instances[cls]``, the return type is inferred from the
         argument at the call site — ``context.get(Books)`` types as
         ``Books``, no annotation or cast required.
 
+        Given a registered ``Function`` instead of a class, returns that
+        function with its managed dependencies already filled in — call it
+        with the remaining arguments only.
+
         Args:
-            cls: The registered class to resolve.
+            cls: The registered class, or function, to resolve.
 
         Raises:
             KeyError: If ``cls`` was not resolved (not registered, or
@@ -676,14 +760,19 @@ class Context:
             >>> books = context.get(Books)
             >>> books.all()
             [Book(id=1, title='Dune', author='Frank Herbert')]
+            >>> context.get(load_data)("data.csv")  # db injected
+            42
         """
-        return cast(T, self._resolver.instances[cls])
+        if isinstance(cls, type):
+            return cast(T, self._resolver.instances[cls])
+        return self._functions[cls]
 
     def open(self) -> None:
         """Resolve all registered classes and drive their startup lifecycle.
 
         Runs ``Resolver.resolve()``, wraps every ``Task``/``Pipeline``
-        instance's ``execute()`` for automatic logging, then constructs a
+        instance's ``execute()`` and every bound ``Function`` for automatic
+        logging, then constructs a
         ``Lifecycle`` from the result and calls ``Lifecycle.on_start()``.
 
         Raises:
@@ -691,6 +780,10 @@ class Context:
         """
         self._resolver.resolve()
         self._instrument_execute()
+        self._functions = {
+            func: _logged_execute(bound, func.__name__, self._log_manager, label="call")
+            for func, bound in self._resolver.functions.items()
+        }
         self._lifecycle = Lifecycle(
             self._resolver.instances, self._resolver.order, self._log_manager
         )
@@ -838,6 +931,60 @@ class Context:
         if cls not in executable:
             raise TypeError(f"{name} is not a Task or Pipeline")
         return instance.execute()
+
+    def call(self, name: str, /, **kwargs: object) -> object:
+        """Call a resolved ``Function`` by registered name, injecting its dependencies.
+
+        The counterpart of ``execute()`` for functions, which — unlike a
+        ``Task`` — take arguments. Parameters whose type the ``Context``
+        manages are filled in; ``kwargs`` supplies the rest. An argument
+        passed explicitly wins over the injected value.
+
+        Args:
+            name: The function's registered name, in any casing
+                (``"load-data"`` or ``"load_data"``). Positional-only, so a
+                function parameter that is itself called ``name`` can still
+                be passed.
+            **kwargs: The function's remaining arguments.
+
+        Returns:
+            Whatever the function returns.
+
+        Raises:
+            KeyError: If no resolved function matches ``name``.
+            TypeError: If a required argument is neither managed by the
+                ``Context`` nor supplied.
+
+        Example:
+            >>> context.call("load-data", path="data.csv")  # db injected
+            42
+        """
+        func = Function.get(name)
+        if func is None or func not in self._functions:
+            raise KeyError(name)
+        return self._functions[func](**kwargs)
+
+    def parameters(self, func: Callable[..., object]) -> dict[str, inspect.Parameter]:
+        """Return the parameters of a resolved ``Function`` that the caller must supply.
+
+        That is, its signature minus the parameters the ``Context`` injects —
+        what a caller building a form or a tool schema needs to ask for.
+
+        Args:
+            func: The registered function.
+
+        Returns:
+            Parameter name → ``inspect.Parameter``, in signature order.
+
+        Raises:
+            KeyError: If ``func`` was not resolved.
+        """
+        injected = self._resolver.injected(func)
+        return {
+            name: parameter
+            for name, parameter in inspect.signature(func).parameters.items()
+            if name not in injected
+        }
 
     def _resolved(self, name: str) -> tuple[type, object]:
         """Look up a resolved ``(cls, instance)`` pair by exact class name.
