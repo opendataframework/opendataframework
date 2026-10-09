@@ -162,7 +162,17 @@ class Repository(Namespace):
 
         Returns:
             A new ``Repository`` instance to be used as a decorator.
+
+        Raises:
+            TypeError: If ``entity`` is not a class — e.g. ``@Repository``
+                applied directly to a function, with the entity left out.
         """
+        if not isinstance(entity, type):
+            name = getattr(entity, "__name__", repr(entity))
+            raise TypeError(
+                f"{cls.__name__} expects an entity class, "
+                f"got {type(entity).__name__} {name!r}"
+            )
         return object.__new__(cls)
 
     def __init__(self, entity: type, *, name: str | None = None) -> None:

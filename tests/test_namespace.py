@@ -133,3 +133,32 @@ def test_duplicate_registration_names_both_classes():
 
     assert "First" in str(excinfo.value)
     assert "Second" in str(excinfo.value)
+
+
+def test_bare_decorator_on_function_raises():
+    class NS(Namespace): ...
+
+    with pytest.raises(TypeError, match="NS can only decorate a class, got function 'load_data'"):
+
+        @NS
+        def load_data(): ...
+
+    assert dict(NS.items()) == {}
+
+
+def test_factory_decorator_on_function_raises():
+    class NS(Namespace): ...
+
+    with pytest.raises(TypeError, match="NS can only decorate a class, got function 'load_data'"):
+
+        @NS(name="loader")
+        def load_data(): ...
+
+    assert dict(NS.items()) == {}
+
+
+def test_non_string_non_class_argument_raises():
+    class NS(Namespace): ...
+
+    with pytest.raises(TypeError, match="NS can only decorate a class, got int"):
+        NS(123)

@@ -108,3 +108,14 @@ def test_layer_and_component_namespaces_are_independent():
 
     assert Component.get("processor") is Processor
     assert Infra.get("processor") is Processor
+
+
+def test_layer_rejects_function():
+    import pytest
+
+    with pytest.raises(TypeError, match="Layer can only decorate a class, got function 'infra'"):
+
+        @Layer
+        def infra(): ...
+
+    assert Layer.get("infra") is None

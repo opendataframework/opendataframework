@@ -1,3 +1,5 @@
+import pytest
+
 from opendataframework.namespace import Namespace
 from opendataframework.repository import (
     ReadableProtocol,
@@ -96,3 +98,24 @@ def test_streamable_protocol_rejects_repository_without_stream():
     assert isinstance(instance, ReadableProtocol)
     assert not isinstance(instance, StreamableProtocol)
     assert not isinstance(instance, WritableProtocol)
+
+
+def test_decorator_on_function_raises():
+    with pytest.raises(
+        TypeError, match="Repository can only decorate a class, got function 'users'"
+    ):
+
+        @Repository(User)
+        def users(): ...
+
+    assert Repository.get("users") is None
+    assert all(isinstance(cls, type) for cls in Repository._entity_map)
+
+
+def test_function_as_entity_raises():
+    with pytest.raises(
+        TypeError, match="Repository expects an entity class, got function 'users'"
+    ):
+
+        @Repository
+        def users(): ...

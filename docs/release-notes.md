@@ -22,6 +22,12 @@
   so snake_case/kebab-case/PascalCase are interchangeable on both sides. Two keys in the
   same table that normalise to the same name (e.g. `exclude_years` and `exclude-years`)
   now raise `ValueError` instead of one silently shadowing the other. See [Config](config.md).
+- **Namespace**: applying a decorator (`@Component`, `@Task`, `@Service`, ...) to a function
+  instead of a class registered nothing and raised nothing — the bare form silently rebound
+  the function's name to a namespace instance, and the factory form registered the function
+  as if it were a class. Both now raise `TypeError` at decoration time, naming the namespace
+  and the offending object. `@Repository` applied directly to a function (entity left out)
+  raises the same way. See [Namespace](namespace.md).
 
 ## 0.2.0
 

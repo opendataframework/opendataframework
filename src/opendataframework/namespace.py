@@ -45,6 +45,9 @@ class Namespace:
     The decorated class is always returned unchanged — no base class is added
     and no methods are injected.
 
+    Only classes can be decorated — applying either style to anything else
+    (a function, say) raises ``TypeError`` at decoration time.
+
     Attributes:
         _namespace: Per-subclass mapping of registered name → class. Assigned
             automatically when each subclass is defined; never shared between
@@ -92,6 +95,12 @@ class Namespace:
 
             # reveal_type(Analytics(name="x")) -> Analytics
             # reveal_type(Classifier) -> type[Classifier], from __call__ below
+
+        Raises:
+            TypeError: If ``_`` is neither a class, a string, nor ``None`` —
+                e.g. the bare decorator applied to a function.
+            ValueError: If the class's name is already registered in this
+                namespace.
         """
         if isinstance(_, type):
             key = kebab(_.__name__)
@@ -103,6 +112,8 @@ class Namespace:
                 )
             cls._namespace[key] = _
             return _
+        if _ is not None and not isinstance(_, str):
+            cls._require_class(_)
         return super().__new__(cls)
 
     def __init__(self, _: type | str | None = None, *, name: str | None = None) -> None:
@@ -135,7 +146,12 @@ class Namespace:
 
         Returns:
             The original class, unmodified.
+
+        Raises:
+            TypeError: If ``wrapped`` is not a class.
+            ValueError: If the name is already registered in this namespace.
         """
+        self._require_class(wrapped)
         key = self._name or kebab(wrapped.__name__)
         if key in self.__class__._namespace:
             existing = self.__class__._namespace[key]
@@ -145,6 +161,20 @@ class Namespace:
             )
         self.__class__._namespace[key] = wrapped
         return wrapped
+
+    @classmethod
+    def _require_class(cls, wrapped: object) -> None:
+        """Raise ``TypeError`` unless ``wrapped`` is a class.
+
+        Without this, decorating a function would register nothing and
+        silently rebind the function's name to a namespace instance.
+        """
+        if not isinstance(wrapped, type):
+            name = getattr(wrapped, "__name__", repr(wrapped))
+            raise TypeError(
+                f"{cls.__name__} can only decorate a class, "
+                f"got {type(wrapped).__name__} {name!r}"
+            )
 
     @classmethod
     def get(cls, name: str) -> type | None:

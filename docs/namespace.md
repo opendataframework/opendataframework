@@ -108,6 +108,13 @@ The dual-use decorator protocol is implemented through `__new__` and `__call__`:
     behavior is no longer supported; rename one of the classes, or give one
     an explicit `name=`.
 
+!!! warning "Only classes can be decorated"
+    Applying a `Namespace` subclass to anything other than a class — most
+    commonly a function — raises `TypeError` at decoration time, in both the
+    bare and the factory form. It previously registered nothing and silently
+    rebound the function's name to a namespace instance, so the mistake only
+    surfaced later, far from its cause.
+
 ---
 
 ## What Namespace is Not
