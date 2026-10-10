@@ -217,6 +217,63 @@ class Editor:
 
 ---
 
+## Tools
+
+"Tool" means two different things around an agent, and they are declared in different
+places.
+
+### What the agent's own model may call
+
+These are the agent's dependencies. Whatever it takes through its constructor — a
+component's methods, a registered function — is what it can hand to the model that
+drives `invoke()`. Nothing else is in reach, and the dependency graph shows it.
+
+```python
+@Agent
+class Librarian:
+    def __init__(self, find: Annotated[Callable[..., list[str]], find_titles], model: Model):
+        self.model = model
+        self.tools = {"find-titles": find}
+
+    def invoke(self, question: str) -> str: ...
+```
+
+How those callables are described to the model is up to whatever runs the loop; an
+injected function keeps its name and docstring, and its signature lists only the
+arguments a caller supplies.
+
+### What an outside model may call
+
+An agent is offered to a model outside the project — an MCP client, say — the same way
+any class offers operations: by implementing `mcp_tools()`, described under
+[Component → MCP Tools](component.md#mcp-tools). To make the agent itself callable, it
+returns its own `invoke`:
+
+```python
+@Agent
+class Librarian:
+    """Answers questions about the book catalogue."""
+
+    def invoke(self, question: str) -> str: ...
+
+    def mcp_tools(self) -> list[McpTool]:
+        return [
+            McpTool(
+                name="invoke",
+                description="Ask the librarian a question about the catalogue.",
+                handler=self.invoke,
+            )
+        ]
+```
+
+The caller sees the parameters of `invoke()` and fills them in, so they should be types
+a schema can express — a `str`, a number, a dataclass — not an arbitrary object.
+
+The two are independent. An agent with tools of its own needn't be offered to anyone,
+and one offered outside needn't have any.
+
+---
+
 ## Wrapping an agentic library
 
 `invoke()` is where a library's own agent runs. The class holds it, hands it the

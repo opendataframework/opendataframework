@@ -291,9 +291,48 @@ class McpToolsProtocol(Protocol):
 ```
 
 Each returned `McpTool` carries a `name`, `description`, `handler` (a
-bound method), and `structured_output` flag. A component with no
-`mcp_tools()` method simply exposes no custom tools — this is entirely
-optional.
+callable — usually a bound method), and `structured_output` flag. A
+component with no `mcp_tools()` method simply exposes no custom tools —
+this is entirely optional.
+
+Because detection is structural, any class the `Context` creates can
+provide tools this way — a [Repository](repository.md), a
+[Service](service.md), a [Task](task.md), an [Agent](agent.md) — not
+only a `@Component`.
+
+### A function as a tool
+
+A handler needn't be a method. A registered [Function](function.md) the
+class takes through its constructor arrives with its own dependencies
+filled in and a signature that leaves them out, so it can be returned as
+a handler directly:
+
+```python
+@Function
+def find_titles(catalogue: Catalogue, author: str) -> list[str]:
+    """Find the titles the catalogue holds by an author."""
+    return catalogue.titles_by(author)
+
+
+@Component
+class Library:
+    def __init__(self, find: Annotated[Callable[..., list[str]], find_titles]):
+        self.find = find
+
+    def mcp_tools(self) -> list[McpTool]:
+        return [
+            McpTool(
+                name="find-titles",
+                description="Find the titles the catalogue holds by an author.",
+                handler=self.find,
+            )
+        ]
+```
+
+The tool asks for `author` only. A function is never exposed on its own:
+a class has to ask for it and return it, which keeps exposing existing
+code — some of it destructive — a deliberate step. See
+[Injecting a Function](function.md#injecting-a-function).
 
 !!! tip "Seeing it in practice"
     This package only defines the `McpTool`/`McpToolsProtocol` shape —
