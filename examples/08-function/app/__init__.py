@@ -1,6 +1,7 @@
-from app import components, functions
+from app import components, functions, tasks
 
 __all__ = [
     "components",
     "functions",
+    "tasks",
 ]

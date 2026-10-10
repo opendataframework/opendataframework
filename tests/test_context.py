@@ -1,5 +1,7 @@
 import threading
 import time
+from collections.abc import Callable
+from typing import Annotated
 
 import pytest
 
@@ -50,6 +52,29 @@ def test_injects_dependency():
 
     with Context(namespaces={NS}) as ctx:
         assert ctx.instances[B].a is ctx.instances[A]
+
+
+def test_same_dependency_under_two_parameters_raises():
+    NS = make_ns()
+
+    @NS
+    class Db: ...
+
+    @NS
+    class Sync:
+        def __init__(self, source: Db, target: Db) -> None: ...
+
+    with pytest.raises(ValueError, match="Sync asks for Db more than once.*'source', 'target'"):
+        Context(namespaces={NS}).open()
+
+
+def test_same_unmanaged_type_under_two_parameters_is_allowed():
+    @Function
+    def join(left: str, right: str):
+        return left + right
+
+    with Context(namespaces={Function}) as ctx:
+        assert ctx.call("join", left="a", right="b") == "ab"
 
 
 def test_resolves_transitive_dependencies():
@@ -1156,6 +1181,150 @@ def test_dependencies_reads_a_functions_own_signature():
     def load_data(self: Db, path: str, limit=10): ...
 
     assert Resolver.dependencies(load_data) == {"self": Db, "path": str}
+
+
+# --- injecting functions ------------------------------------------------------
+
+
+def test_function_is_injected_into_a_class_under_any_parameter_name():
+    NS = make_ns()
+
+    @NS
+    class Db: ...
+
+    @Function
+    def load_data(db: Db, path: str):
+        return (db, path)
+
+    @NS
+    class Report:
+        def __init__(self, load: Annotated[Callable[..., tuple], load_data]) -> None:
+            self.load = load
+
+    with Context(namespaces={NS, Function}) as ctx:
+        report = ctx.instances[Report]
+        assert report.load is ctx.get(load_data)
+        assert report.load("data.csv") == (ctx.instances[Db], "data.csv")
+
+
+def test_function_is_injected_into_another_function():
+    @Function
+    def parse(text: str):
+        return text.upper()
+
+    @Function
+    def load_data(path: str, parser: Annotated[Callable[[str], str], parse]):
+        return parser(path)
+
+    with Context(namespaces={Function}) as ctx:
+        assert ctx.call("load-data", path="data.csv") == "DATA.CSV"
+        assert list(ctx.parameters(load_data)) == ["path"]
+
+
+def test_function_is_injected_through_an_alias():
+    NS = make_ns()
+
+    @Function
+    def load_data():
+        return 42
+
+    Plain = Annotated[Callable[[], int], load_data]
+    type Lazy = Annotated[Callable[[], int], load_data]
+
+    @NS
+    class A:
+        def __init__(self, load: Plain) -> None:
+            self.load = load
+
+    @NS
+    class B:
+        def __init__(self, load: Lazy) -> None:
+            self.load = load
+
+    with Context(namespaces={NS, Function}) as ctx:
+        assert ctx.instances[A].load() == 42
+        assert ctx.instances[B].load() == 42
+
+
+def test_call_through_an_injected_function_is_logged(tmp_path):
+    NS = make_ns()
+
+    @Function
+    def load_data():
+        return 42
+
+    @NS
+    class Report:
+        def __init__(self, load: Annotated[Callable[[], int], load_data]) -> None:
+            self.load = load
+
+    with Context(namespaces={NS, Function}, log_dir=tmp_path) as ctx:
+        ctx.instances[Report].load()
+        messages = [e["message"] for e in ctx.tail_logs("load_data")]
+
+    assert "call started" in messages
+    assert any("call completed" in m for m in messages)
+
+
+def test_circular_dependency_through_a_function_raises():
+    NS = make_ns()
+
+    @Function
+    def load_data(report: Report): ...
+
+    @NS
+    class Report:
+        def __init__(self, load: Annotated[Callable[[], None], load_data]) -> None: ...
+
+    with pytest.raises(ValueError, match="Circular dependency"):
+        Context(namespaces={NS, Function}).open()
+
+
+def test_annotated_without_a_registered_function_is_not_injected():
+    NS = make_ns()
+
+    def plain(): ...
+
+    @NS
+    class A:
+        def __init__(
+            self,
+            unregistered: Annotated[Callable[[], None], plain] = None,
+            described: Annotated[int, "a number"] = 0,
+        ) -> None:
+            self.unregistered = unregistered
+            self.described = described
+
+    with Context(namespaces={NS, Function}) as ctx:
+        assert ctx.instances[A].unregistered is None
+        assert ctx.instances[A].described == 0
+
+
+def test_order_holds_classes_only():
+    NS = make_ns()
+
+    @Function
+    def load_data(): ...
+
+    @NS
+    class Report:
+        def __init__(self, load: Annotated[Callable[[], None], load_data]) -> None: ...
+
+    resolver = Resolver({NS, Function})
+    resolver.resolve()
+
+    assert resolver.order == [Report]
+
+
+def test_dependencies_returns_the_function_named_in_annotated():
+    def load_data(): ...
+
+    class Report:
+        def __init__(
+            self, load: Annotated[Callable[[], None], load_data], note: Annotated[int, "x"]
+        ): ...
+
+    assert Resolver.dependencies(Report) == {"load": load_data}
 
 
 # --- agents -------------------------------------------------------------------

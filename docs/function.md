@@ -24,8 +24,8 @@ Use `@Function` when:
   MCP server built on top of the framework
 
 Prefer a class — [Component](component.md), [Task](task.md), [Service](service.md) —
-as soon as the logic needs state, startup or shutdown hooks, or to be injected into
-something else. `@Function` is the on-ramp; classes remain the recommended shape for
+as soon as the logic needs state or startup and shutdown hooks. `@Function` is the
+on-ramp; classes remain the recommended shape for
 code written for the framework from the start.
 
 ---
@@ -96,7 +96,8 @@ own name, as it would for a class.
 !!! note "String annotations are not injected"
     As with constructors, only an annotation that is an actual type counts. Under
     `from __future__ import annotations` every annotation is a string, so nothing is
-    injected and every parameter stays a call argument.
+    injected and every parameter stays a call argument. The same holds for a class
+    that asks for a function (see [Injecting a Function](#injecting-a-function)).
 
 ---
 
@@ -150,6 +151,84 @@ Both forms follow the same rules:
 
 Both become usable once `project.start()` returns, and raise `KeyError` for a function
 the `Context` hasn't resolved.
+
+---
+
+## Injecting a Function
+
+Project code rarely calls a function by name. A class that needs one declares it in
+its constructor, like any other dependency, and calls it in its own logic. Since a
+function is not a type, the annotation names it through `Annotated`:
+
+```python
+from collections.abc import Callable
+from typing import Annotated
+
+
+@Function
+def low_stock(inventory: Inventory, threshold: int = 5) -> list[str]: ...
+
+
+@Task
+class Reorder:
+    def __init__(self, find_shortages: Annotated[Callable[..., list[str]], low_stock]):
+        self.find_shortages = find_shortages
+
+    def execute(self) -> list[str]:
+        return self.find_shortages(threshold=3)  # inventory is already filled in
+```
+
+The annotation has two halves:
+
+* `Callable[..., list[str]]` is what the class receives, as a type checker sees it
+* `low_stock` is which registered function to inject — the part the `Context` reads
+
+What arrives is the same callable `project.context.get(low_stock)` returns: the
+function with its own managed dependencies bound, every call logged. `Reorder` never
+mentions `Inventory`. The parameter name is free, as it is for a class dependency, and
+any class the `Context` creates can ask this way — a [Component](component.md), a
+[Task](task.md) or [Pipeline](pipeline.md), a [Service](service.md), an
+[Agent](agent.md) — as can another function.
+
+The function joins the dependency graph: it is bound after the types it takes and
+before the classes that ask for it, and a cycle through it is reported like any other
+(see [Context](context.md#circular-dependencies)).
+
+### Typing the callable
+
+The first half describes the function *minus* the parameters the `Context` injects,
+and is written by hand — Python has no way to derive it. Two spellings are useful:
+
+```python
+Annotated[Callable[..., list[str]], low_stock]  # any arguments, checked return type
+Annotated[Callable[[int], list[str]], low_stock]  # checked arguments too
+```
+
+`Callable[[int], ...]` cannot express a default or a keyword, so a type checker would
+reject `find_shortages()` and `find_shortages(threshold=3)` even though both work.
+Use `...` when callers rely on either.
+
+To keep constructors short, define the annotation once next to the function:
+
+```python
+LowStock = Annotated[Callable[..., list[str]], low_stock]
+
+
+@Task
+class Reorder:
+    def __init__(self, find_shortages: LowStock): ...
+```
+
+A `type LowStock = ...` alias works the same way.
+
+### Testing
+
+The constructor takes any callable, so a test needs no framework:
+
+```python
+def test_reorder():
+    assert Reorder(lambda threshold: ["bolts"]).execute() == ["bolts"]
+```
 
 ---
 
@@ -207,16 +286,14 @@ re-implementing the injection rule.
 
 ## What Function is Not
 
-* **Not injectable.** A function consumes dependencies; nothing can depend on it. If
-  other code needs it handed in, make it a [Component](component.md).
-
 * **Not stateful, and without a lifecycle.** There is no instance, and no
   `on_start()`/`on_stop()`. State belongs in a component the function takes as a
   parameter.
 
 * **Not a Task.** A [Task](task.md) has an `execute()` contract and takes no arguments.
-  A function has no contract and does take arguments. It cannot be a step of a
-  [Pipeline](pipeline.md).
+  A function has no contract and does take arguments. The `Context` cannot run one on
+  its own — it doesn't know the arguments — so a function is not itself a step of a
+  [Pipeline](pipeline.md); a task that injects it is.
 
 * **Not tagged with a Layer.** [Layer](layer.md) decorators apply to classes only.
 
@@ -230,6 +307,7 @@ re-implementing the injection rule.
 | I need to...                                        | Use                       |
 | --------------------------------------------------- | ------------------------- |
 | Make an existing function known to the framework    | `Function`                |
+| Call a registered function from a class             | Inject it with `Annotated` |
 | Provide a reusable, injectable capability           | [Component](component.md) |
 | Execute a bounded unit of work once, no arguments   | [Task](task.md)           |
 | Coordinate multiple tasks into a workflow           | [Pipeline](pipeline.md)   |

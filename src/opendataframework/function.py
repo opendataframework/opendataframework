@@ -52,9 +52,15 @@ class Function(Namespace):
         project.context.call("load-data", path="data.csv")   # db injected
         project.context.get(load_data)("data.csv")           # db injected
 
-    A function only consumes dependencies — nothing can depend on it, and it
-    has no lifecycle hooks. Reach for a class (``@Component``, ``@Task``, ...)
-    once it needs state, startup/shutdown, or to be injected elsewhere.
+    A class asks for a function by naming it in ``Annotated`` — it receives
+    the function with its managed dependencies already filled in::
+
+        @Task
+        class Refresh:
+            def __init__(self, load: Annotated[Callable[..., int], load_data]): ...
+
+    A function has no state and no lifecycle hooks. Reach for a class
+    (``@Component``, ``@Task``, ...) once it needs either.
 
     Looking up registered functions::
 

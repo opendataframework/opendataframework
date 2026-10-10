@@ -54,7 +54,7 @@ Project                  ← composition root; owns everything
 | `Task` | Finite work unit; called explicitly | `execute()` |
 | `Pipeline` | Ordered composition of Tasks/Pipelines | `execute()` |
 | `Agent` | Goal-driven work unit whose steps are decided at run time; no model client or loop ships here | `invoke(...)` with free-form arguments; called via `context.call(name, **kwargs)` |
-| `Function` | Plain function made framework-aware (adoption on-ramp); consumes dependencies, can't be injected | none; called via `context.call(name, **kwargs)` |
+| `Function` | Plain function made framework-aware (adoption on-ramp); injected into a class via `Annotated[Callable[...], func]` | none; called by the class holding it, or via `context.call(name, **kwargs)` |
 | `Layer` | Decorator that assigns a Component to a subsystem (`@Api`, `@Storage`, …) | — |
 
 (No `@Api`/`@Service`-backed HTTP server ships in this package — that's

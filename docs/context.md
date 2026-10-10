@@ -124,6 +124,18 @@ Users       ← depends on Postgres
 UsersApi    ← depends on Users
 ```
 
+A registered [Function](function.md) is part of the same graph. It depends on the
+managed types in its signature, and a class depends on it by naming it in
+`Annotated[..., func]` — see [Injecting a Function](function.md#injecting-a-function).
+It is bound in dependency order alongside the classes, but has no lifecycle and is not
+in `context.instances`.
+
+!!! note "One of each"
+    The `Context` holds a single instance of every class, so asking for the same one
+    twice — `def __init__(self, source: Db, target: Db)` — would hand over the same
+    object under both names. That raises `ValueError` at `project.start()`, naming the
+    class, the dependency and the parameters. If two are needed, register two classes.
+
 ---
 
 ## Startup Order
@@ -204,7 +216,8 @@ on `B` and `B` depends on `A`, the `Context` cannot determine a valid initialisa
 order.
 
 !!! tip "Raises ValueError"
-    Detecting a cycle raises `ValueError`, naming the classes involved:
+    Detecting a cycle raises `ValueError`, naming the classes — and any
+    functions — involved:
     `Circular dependency detected among: A, B`. This surfaces at
     `project.start()`, not at class-definition time — decorators only
     register classes, they don't check the graph.

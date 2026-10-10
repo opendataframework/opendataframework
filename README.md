@@ -239,6 +239,19 @@ def load_data(path: str, db: Postgres) -> int: ...
 project.context.call("load-data", path="data.csv")  # db injected
 ```
 
+A class asks for a function through its constructor, and gets it with its
+dependencies already filled in:
+
+```python
+@Task
+class Refresh:
+    def __init__(self, load: Annotated[Callable[..., int], load_data]):
+        self.load = load
+
+    def execute(self):
+        return self.load("data.csv")
+```
+
 ## Layer
 
 An organisational grouping — which subsystem a component belongs to

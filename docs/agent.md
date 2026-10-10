@@ -163,6 +163,21 @@ class WeeklyDigest:
         return self.librarian.invoke("Summarise this week's additions.")
 ```
 
+### Functions as dependencies
+
+What an agent may act on needn't be a class. A registered [Function](function.md) is
+declared in the constructor too, and arrives with its own dependencies filled in:
+
+```python
+@Agent
+class Librarian:
+    def __init__(self, find: Annotated[Callable[..., list[str]], find_titles], model: Model):
+        self.find = find
+        self.model = model
+```
+
+See [Injecting a Function](function.md#injecting-a-function).
+
 ### Long-running agents
 
 An agent is finite: one goal in, one result out. For an agent that works continuously —

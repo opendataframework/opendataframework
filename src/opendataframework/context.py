@@ -1,8 +1,8 @@
 """``Context`` — dependency resolution, instance creation, and lifecycle.
 
-Composes ``Resolver`` (pure DI: gather registered classes → topological
-sort → instantiate with injected dependencies, then bind registered
-functions to the result), ``Lifecycle`` (protocol
+Composes ``Resolver`` (pure DI: gather registered classes and functions →
+topological sort → instantiate classes and bind functions with injected
+dependencies), ``Lifecycle`` (protocol
 dispatch: setup/run/stop for services, on_start/on_stop for components),
 and ``StreamManager`` (background threads for ``StreamableProtocol``
 repositories). ``Context`` is the only public entry point of the three —
@@ -13,10 +13,10 @@ import functools
 import inspect
 import threading
 import time
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Hashable, Iterable, Iterator
 from pathlib import Path
 from queue import Empty, Full, Queue
-from typing import TypeVar, cast, overload
+from typing import Annotated, TypeAliasType, TypeVar, cast, get_origin, overload
 
 from opendataframework.agent import Agent
 from opendataframework.component import Component, OnStartProtocol, OnStopProtocol
@@ -69,12 +69,40 @@ def _logged_execute(execute, name: str, log_manager: LogManager, label: str = "e
     return wrapped
 
 
+def _dependency(annotation: object) -> type | Callable[..., object] | None:
+    """Return the class or function a parameter annotation asks for, if any.
+
+    A plain class asks for that class. ``Annotated[..., func]`` asks for the
+    function named in its metadata — the first item that is a hashable,
+    named callable and not a class. A ``type X = ...`` alias is read through.
+    Anything else (a string forward reference, a generic alias) asks for
+    nothing.
+    """
+    while isinstance(annotation, TypeAliasType):
+        annotation = annotation.__value__
+    if annotation is inspect.Parameter.empty:
+        return None
+    if isinstance(annotation, type):
+        return annotation
+    if get_origin(annotation) is Annotated:
+        for item in annotation.__metadata__:
+            if (
+                not isinstance(item, type)
+                and callable(item)
+                and isinstance(item, Hashable)
+                and hasattr(item, "__name__")
+            ):
+                return item
+    return None
+
+
 class Resolver:
     """Builds the dependency graph and creates instances in dependency order.
 
-    Collects registered classes from the given namespaces, derives the
-    dependency graph from constructor signatures, sorts classes topologically,
-    and instantiates each one with its dependencies injected. Has no knowledge
+    Collects registered classes and functions from the given namespaces,
+    derives the dependency graph from their signatures, sorts them
+    topologically, and instantiates each class — or binds each function —
+    with its dependencies injected. Has no knowledge
     of lifecycle or framework protocols — the one exception is ``Logger``
     (see ``opendataframework.logger``), which is resolved contextually: a ``logger: Logger``
     constructor parameter receives an instance bound to the *consuming*
@@ -140,7 +168,8 @@ class Resolver:
 
         Returns:
             A shallow copy. Each value calls its key with the managed
-            dependencies already filled in.
+            dependencies already filled in, and logs the call — it is the
+            same callable injected wherever the function is asked for.
         """
         return dict(self._functions)
 
@@ -153,15 +182,18 @@ class Resolver:
         return dict(self._injected[func])
 
     def resolve(self) -> None:
-        """Gather registered classes, sort by dependency order, and instantiate.
+        """Gather registered classes and functions, sort by dependency order, and create.
 
-        Runs the full resolution pipeline: collect classes from namespaces →
-        topological sort → instantiate with injected dependencies. Registered
-        functions are bound last — they only consume dependencies, so they
-        take no part in the ordering.
+        Runs the full resolution pipeline: collect from namespaces →
+        topological sort → instantiate each class, and bind each function,
+        with injected dependencies. Functions are sorted together with
+        classes, since a class may ask for one (see ``dependencies``), but
+        only classes appear in ``order``.
 
         Raises:
-            ValueError: If a circular dependency is detected among registered classes.
+            ValueError: If a circular dependency is detected among registered
+                classes and functions, or one of them asks for the same
+                dependency under more than one parameter.
 
         Example:
             >>> class NS(Namespace): ...
@@ -175,13 +207,19 @@ class Resolver:
             >>> resolver.order
             [A, B]
         """
-        classes = self._gather()
-        self._order = self._sort(classes)
-        for cls in self._order:
-            self._instances[cls] = self._instantiate(cls)
-        for func in self._gather_functions():
-            self._injected[func] = self._inject(func)
-            self._functions[func] = bind(func, self._injected[func])
+        ordered = self._sort(self._gather() | self._gather_functions())
+        self._order = [node for node in ordered if isinstance(node, type)]
+        for node in ordered:
+            if isinstance(node, type):
+                self._instances[node] = self._instantiate(node)
+            else:
+                self._injected[node] = self._inject(node)
+                self._functions[node] = _logged_execute(
+                    bind(node, self._injected[node]),
+                    node.__name__,
+                    self._log_manager,
+                    label="call",
+                )
 
     def _gather(self) -> set[type]:
         """Collect all classes registered across the configured namespaces.
@@ -197,21 +235,25 @@ class Resolver:
                     classes.add(cls)
         return classes
 
-    def _gather_functions(self) -> list[Callable[..., object]]:
-        """Collect all functions registered across the configured namespaces, by name."""
-        functions = {
+    def _gather_functions(self) -> set[Callable[..., object]]:
+        """Collect all functions registered across the configured namespaces."""
+        return {
             func for ns in self._namespaces for _, func in ns.items() if not isinstance(func, type)
         }
-        return sorted(functions, key=lambda f: f.__name__)
 
     @staticmethod
-    def dependencies(cls: type | Callable[..., object]) -> dict[str, type]:
+    def dependencies(cls: type | Callable[..., object]) -> dict[str, type | Callable[..., object]]:
         """Return typed constructor parameters for ``cls``.
 
         Inspects ``cls.__init__`` — or, for a registered function, the
         function's own signature — and returns only parameters that carry a
         type annotation which is itself a type (i.e. not a string forward
-        reference or a generic alias).
+        reference or a generic alias), or one that names a function::
+
+            def __init__(self, load: Annotated[Callable[..., int], load_data]): ...
+
+        The first argument to ``Annotated`` is what a type checker sees; the
+        function after it is the dependency.
 
         Public so other framework code (e.g. topology introspection) can
         derive the same dependency edges without duplicating this logic.
@@ -220,44 +262,51 @@ class Resolver:
             cls: The class, or registered function, to inspect.
 
         Returns:
-            Mapping of parameter name to annotated type. Empty if the
-            signature cannot be inspected or no typed parameters exist.
+            Mapping of parameter name to annotated type, or named function.
+            Empty if the signature cannot be inspected or no typed
+            parameters exist.
         """
         is_class = isinstance(cls, type)
         try:
             sig = inspect.signature(cls.__init__ if is_class else cls)
         except ValueError, TypeError:
             return {}
-        return {
-            name: param.annotation
-            for name, param in sig.parameters.items()
-            if not (is_class and name == "self")
-            and param.annotation is not inspect.Parameter.empty
-            and isinstance(param.annotation, type)
-        }
+        found = {}
+        for name, param in sig.parameters.items():
+            if is_class and name == "self":
+                continue
+            dep = _dependency(param.annotation)
+            if dep is not None:
+                found[name] = dep
+        return found
 
-    def _sort(self, classes: set[type]) -> list[type]:
+    def _sort(self, classes: set) -> list:
         """Return ``classes`` in topological order (leaves first).
 
         Uses Kahn's algorithm. Only dependencies that are themselves present
         in ``classes`` are considered — external types are ignored.
 
         Args:
-            classes: The full set of classes to order.
+            classes: The full set of classes, and registered functions, to
+                order.
 
         Returns:
-            Classes sorted so every dependency appears before its dependents.
+            Classes and functions sorted so every dependency appears before
+            its dependents.
 
         Raises:
-            ValueError: If a circular dependency is detected.
+            ValueError: If a circular dependency is detected, or one class
+                or function asks for the same dependency more than once.
         """
         all_deps = {cls: self.dependencies(cls) for cls in classes}
         registered_deps = {
             cls: {name: dep for name, dep in deps.items() if dep in classes}
             for cls, deps in all_deps.items()
         }
+        for cls, deps in registered_deps.items():
+            self._require_distinct(cls, deps)
         in_degree = {cls: len(deps) for cls, deps in registered_deps.items()}
-        dependents: dict[type, set[type]] = {cls: set() for cls in classes}
+        dependents: dict[object, set] = {cls: set() for cls in classes}
         for cls, deps in registered_deps.items():
             for dep in deps.values():
                 dependents[dep].add(cls)
@@ -265,7 +314,7 @@ class Resolver:
             (cls for cls in classes if in_degree[cls] == 0),
             key=lambda c: c.__name__,
         )
-        result: list[type] = []
+        result: list = []
         while queue:
             cls = queue.pop(0)
             result.append(cls)
@@ -278,15 +327,30 @@ class Resolver:
             raise ValueError(f"Circular dependency detected among: {remaining}")
         return result
 
+    @staticmethod
+    def _require_distinct(cls: type | Callable[..., object], deps: dict) -> None:
+        """Raise ``ValueError`` if ``cls`` asks for one dependency under several parameters.
+
+        There is a single instance per class (and a single bound callable per
+        function), so the parameters would all receive the same object —
+        almost always a sign that two separate ones were expected.
+        """
+        by_dep: dict[object, list[str]] = {}
+        for name, dep in deps.items():
+            by_dep.setdefault(dep, []).append(name)
+        for dep, names in by_dep.items():
+            if len(names) > 1:
+                listed = ", ".join(repr(name) for name in names)
+                raise ValueError(
+                    f"{cls.__name__} asks for {dep.__name__} more than once "
+                    f"(parameters {listed}) — the Context holds a single "
+                    f"{dep.__name__}, so each would receive the same object"
+                )
+
     def _instantiate(self, cls: type) -> object:
         """Instantiate ``cls`` with its dependencies injected from ``self._instances``.
 
-        A ``dep`` annotated exactly as ``Logger`` is special-cased: instead of
-        a shared instance, ``cls`` receives a ``Logger`` bound to its own
-        name (see ``opendataframework.logger.LogManager.logger_for``). All other
-        dependencies are only passed if already present in ``self._instances``
-        — unregistered types in the constructor signature are silently
-        ignored.
+        See ``_supply`` for which constructor parameters are passed.
 
         Args:
             cls: The class to instantiate.
@@ -294,33 +358,39 @@ class Resolver:
         Returns:
             A new instance of ``cls`` with resolved dependencies injected.
         """
-        kwargs = {}
-        for name, dep in self.dependencies(cls).items():
-            if dep is Logger:
-                kwargs[name] = self._log_manager.logger_for(cls.__name__)
-            elif dep in self._instances:
-                kwargs[name] = self._instances[dep]
-        instance = cls(**kwargs)
+        instance = cls(**self._supply(cls))
         self._log_manager.write(cls.__name__, "INFO", f"{cls.__name__} resolved")
         return instance
 
     def _inject(self, func: Callable[..., object]) -> dict[str, object]:
         """Return the values to inject into ``func``, by parameter name.
 
-        Follows the same rule as ``_instantiate``: a parameter annotated
-        exactly as ``Logger`` gets a ``Logger`` bound to the function's own
-        name, and any other is supplied only if its type is already present
-        in ``self._instances``. Every remaining parameter is left for the
-        caller.
+        Follows the same rule as ``_instantiate`` — see ``_supply``. Every
+        remaining parameter is left for the caller.
         """
-        injected: dict[str, object] = {}
-        for name, dep in self.dependencies(func).items():
-            if dep is Logger:
-                injected[name] = self._log_manager.logger_for(func.__name__)
-            elif dep in self._instances:
-                injected[name] = self._instances[dep]
+        injected = self._supply(func)
         self._log_manager.write(func.__name__, "INFO", f"{func.__name__} resolved")
         return injected
+
+    def _supply(self, target: type | Callable[..., object]) -> dict[str, object]:
+        """Return the dependencies ``target`` asks for, by parameter name.
+
+        A ``dep`` annotated exactly as ``Logger`` is special-cased: instead of
+        a shared instance, ``target`` receives a ``Logger`` bound to its own
+        name (see ``opendataframework.logger.LogManager.logger_for``). A class is
+        supplied only if already present in ``self._instances``, and a
+        function only if already bound — unregistered ones in the signature
+        are silently ignored.
+        """
+        supplied: dict[str, object] = {}
+        for name, dep in self.dependencies(target).items():
+            if dep is Logger:
+                supplied[name] = self._log_manager.logger_for(target.__name__)
+            elif dep in self._instances:
+                supplied[name] = self._instances[dep]
+            elif dep in self._functions:
+                supplied[name] = self._functions[dep]
+        return supplied
 
 
 class Lifecycle:
@@ -773,9 +843,10 @@ class Context:
     def open(self) -> None:
         """Resolve all registered classes and drive their startup lifecycle.
 
-        Runs ``Resolver.resolve()``, wraps every ``Task``/``Pipeline``
-        instance's ``execute()``, every ``Agent`` instance's ``invoke()`` and
-        every bound ``Function`` for automatic logging, then constructs a
+        Runs ``Resolver.resolve()`` (which also binds every ``Function``,
+        logged), wraps every ``Task``/``Pipeline`` instance's ``execute()``
+        and every ``Agent`` instance's ``invoke()`` for automatic logging,
+        then constructs a
         ``Lifecycle`` from the result and calls ``Lifecycle.on_start()``.
 
         Raises:
@@ -783,10 +854,7 @@ class Context:
         """
         self._resolver.resolve()
         self._instrument()
-        self._functions = {
-            func: _logged_execute(bound, func.__name__, self._log_manager, label="call")
-            for func, bound in self._resolver.functions.items()
-        }
+        self._functions = self._resolver.functions
         self._lifecycle = Lifecycle(
             self._resolver.instances, self._resolver.order, self._log_manager
         )

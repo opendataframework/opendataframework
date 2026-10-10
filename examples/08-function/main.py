@@ -3,7 +3,8 @@
 restock, low_stock and format_report are ordinary functions with one
 decorator added. Called directly they behave exactly as before; called
 through the Context, the Inventory @Component they take is injected and
-only the remaining arguments are passed.
+only the remaining arguments are passed. Reorder, a @Task, has low_stock
+injected through its constructor and calls it like any other dependency.
 Run from this directory: `python main.py`.
 """
 
@@ -26,6 +27,9 @@ print(f"call('restock', apple, 10)       -> {total}")
 low = project.context.get(low_stock)(threshold=15)
 print(f"get(low_stock)(threshold=15)     -> {low}")
 print(f"get(format_report)(...)          -> {project.context.get(format_report)(low)}")
+
+# Injected — Reorder declared low_stock in its constructor, under its own name.
+print(f"execute('Reorder')               -> {project.context.execute('Reorder')}")
 
 # Directly — unchanged: nothing is injected, every argument is passed.
 total = restock(Inventory(), "cherry", 1)

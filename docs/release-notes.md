@@ -21,9 +21,12 @@
   type are injected and the rest are call arguments: `context.call("load-data", path=...)`
   calls by registered name, `context.get(load_data)` returns the function with its
   dependencies bound, `context.functions` lists what was resolved, and
-  `context.parameters(func)` returns the parameters a caller must supply. Functions only
-  consume dependencies — they have no lifecycle, can't be injected, and aren't in
-  `context.instances`. See [Function](function.md).
+  `context.parameters(func)` returns the parameters a caller must supply. A class — or
+  another function — asks for one by naming it in its signature,
+  `Annotated[Callable[..., int], load_data]`, and receives it with its dependencies bound
+  and its calls logged; the function then takes part in dependency ordering and cycle
+  detection. Functions have no lifecycle and aren't in `context.instances`. See
+  [Function](function.md).
 - **View**: added `ContentMetadata`/`ContentMetadataProtocol` so a `Repository` whose view
   points at content (`ImageView`/`VideoView`/`AudioView`/`DocumentView`) can declare, per
   record, that content's `filename` and `content_type` via an optional
@@ -45,6 +48,11 @@
 
 ### Fixed
 
+- **Context**: a class that declared the same dependency under two constructor parameters
+  (`def __init__(self, source: Db, target: Db)`) failed at `project.start()` with a
+  misleading `Circular dependency detected among: Sync`. It still fails — the `Context`
+  holds a single `Db`, so both parameters would receive the same object — but now with a
+  `ValueError` that says so and names the class, the dependency and the parameters.
 - **Config**: key normalisation only applied to the name being looked up, not to the keys
   in the data, so a key written as `exclude_years` (or `ExcludeYears`) in TOML couldn't be
   found by any access path. `config.exclude_years` and `config["exclude_years"]` raised,
