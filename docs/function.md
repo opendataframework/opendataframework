@@ -138,6 +138,17 @@ load("data.csv", limit=10)
 fill the remaining parameters in order, so an injected parameter that happens to come
 first doesn't shift them.
 
+The bound function describes itself the same way: its signature leaves the injected
+parameters out, while its name and docstring are the original's.
+
+```python
+inspect.signature(load)  # (path: str, limit: int = 100) -> int
+```
+
+So it can be handed as is to anything that builds a schema from a callable — an
+[`McpTool`](component.md#mcp-tools) handler, or a tool for an agentic library — and
+only the parameters a caller can supply are asked for.
+
 Both forms follow the same rules:
 
 * **An explicit argument wins.** Passing `db=fake_db` to `call()` or to the bound

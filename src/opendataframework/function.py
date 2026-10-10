@@ -163,6 +163,10 @@ def bind(func: Callable[..., object], injected: dict[str, object]) -> Callable[.
     argument the caller passes explicitly by keyword wins over the injected
     value.
 
+    Its signature says the same: ``inspect.signature()`` of the returned
+    callable leaves the injected parameters out, so whatever builds a form or
+    a tool schema from it asks only for what a caller can supply.
+
     Args:
         func: The function to bind.
         injected: Parameter name → value for each parameter to supply.
@@ -179,6 +183,8 @@ def bind(func: Callable[..., object], injected: dict[str, object]) -> Callable[.
         ...     return (db, path, limit)
         >>> bind(load, {"db": "postgres"})("data.csv")
         ('postgres', 'data.csv', 10)
+        >>> str(inspect.signature(bind(load, {"db": "postgres"})))
+        '(path, limit=10)'
     """
     try:
         signature = inspect.signature(func)
@@ -193,6 +199,11 @@ def bind(func: Callable[..., object], injected: dict[str, object]) -> Callable[.
         _require_arguments(func, signature, positional, keywords)
         return func(*positional, **keywords)
 
+    # Without this, ``inspect.signature`` follows ``__wrapped__`` to ``func``
+    # and reports the injected parameters as ones the caller must pass.
+    bound.__signature__ = signature.replace(
+        parameters=[parameter for parameter in parameters if parameter.name not in injected]
+    )
     return bound
 
 

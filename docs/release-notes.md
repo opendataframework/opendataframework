@@ -24,7 +24,8 @@
   `context.parameters(func)` returns the parameters a caller must supply. A class — or
   another function — asks for one by naming it in its signature,
   `Annotated[Callable[..., int], load_data]`, and receives it with its dependencies bound
-  and its calls logged; the function then takes part in dependency ordering and cycle
+  and its calls logged — and with a signature that leaves the injected parameters out, so
+  it can be handed to a library that builds a tool schema from a callable; the function then takes part in dependency ordering and cycle
   detection. Functions have no lifecycle and aren't in `context.instances`. See
   [Function](function.md).
 - **View**: added `ContentMetadata`/`ContentMetadataProtocol` so a `Repository` whose view

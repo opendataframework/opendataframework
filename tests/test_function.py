@@ -1,4 +1,5 @@
 import functools
+import inspect
 
 import pytest
 
@@ -109,6 +110,15 @@ def test_bind_fills_injected_parameter():
         return (path, db)
 
     assert bind(load, {"db": "postgres"})("data.csv") == ("data.csv", "postgres")
+
+
+def test_bind_signature_leaves_out_injected_parameters():
+    def load(db, path: str, limit: int = 10) -> int: ...
+
+    bound = bind(load, {"db": "postgres"})
+
+    assert str(inspect.signature(bound)) == "(path: str, limit: int = 10) -> int"
+    assert str(inspect.signature(load)) == "(db, path: str, limit: int = 10) -> int"
 
 
 def test_bind_does_not_modify_the_function():

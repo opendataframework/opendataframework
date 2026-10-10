@@ -1,3 +1,4 @@
+import inspect
 import threading
 import time
 from collections.abc import Callable
@@ -1205,6 +1206,22 @@ def test_function_is_injected_into_a_class_under_any_parameter_name():
         report = ctx.instances[Report]
         assert report.load is ctx.get(load_data)
         assert report.load("data.csv") == (ctx.instances[Db], "data.csv")
+
+
+def test_bound_function_signature_matches_parameters():
+    NS = make_ns()
+
+    @NS
+    class Db: ...
+
+    @Function
+    def load_data(db: Db, path: str, limit: int = 10) -> int:
+        """Load rows."""
+
+    with Context(namespaces={NS, Function}) as ctx:
+        bound = ctx.get(load_data)
+        assert list(inspect.signature(bound).parameters) == list(ctx.parameters(load_data))
+        assert bound.__doc__ == "Load rows."
 
 
 def test_function_is_injected_into_another_function():
