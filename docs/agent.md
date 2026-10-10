@@ -219,14 +219,16 @@ class Editor:
 
 ## Tools
 
-"Tool" means two different things around an agent, and they are declared in different
-places.
+An agent usually works by asking a language model, inside `invoke()`, what to do next.
+That makes "tool" mean two different things around an agent, declared in different
+places: the tools the agent **uses** while it works, and the tools it **offers** to a
+model somewhere else that wants to call it.
 
-### What the agent's own model may call
+### Tools the agent uses
 
 These are the agent's dependencies. Whatever it takes through its constructor — a
-component's methods, a registered function — is what it can hand to the model that
-drives `invoke()`. Nothing else is in reach, and the dependency graph shows it.
+component's methods, a registered function — is what it can hand to the model it runs
+inside `invoke()`. Nothing else is in reach, and the dependency graph shows it.
 
 ```python
 @Agent
@@ -242,12 +244,19 @@ How those callables are described to the model is up to whatever runs the loop; 
 injected function keeps its name and docstring, and its signature lists only the
 arguments a caller supplies.
 
-### What an outside model may call
+This half needs nothing beyond this package.
 
-An agent is offered to a model outside the project — an MCP client, say — the same way
-any class offers operations: by implementing `mcp_tools()`, described under
-[Component → MCP Tools](component.md#mcp-tools). To make the agent itself callable, it
-returns its own `invoke`:
+### Tools the agent offers
+
+A model outside the agent — a chat assistant, an MCP client — can call it only if
+something serves the project's tools to that model. This package doesn't: it has no MCP
+server, and here an agent is invoked by project code alone, through a class that
+injects it or through `project.context.call()`.
+
+What the package does define is how a class declares the tools it offers: by
+implementing `mcp_tools()`, described under
+[Component → MCP Tools](component.md#mcp-tools). To offer the agent itself, it returns
+its own `invoke`:
 
 ```python
 @Agent
@@ -266,11 +275,17 @@ class Librarian:
         ]
 ```
 
-The caller sees the parameters of `invoke()` and fills them in, so they should be types
-a schema can express — a `str`, a number, a dataclass — not an arbitrary object.
+The calling model sees the parameters of `invoke()` and fills them in, so they should be
+types a schema can express — a `str`, a number, a dataclass — not an arbitrary object.
 
-The two are independent. An agent with tools of its own needn't be offered to anyone,
-and one offered outside needn't have any.
+!!! tip "Seeing it in practice"
+    The sibling [`odf`](https://opendataframework.github.io/odf/) package's `McpServer`
+    is the consumer of `mcp_tools()`. With it running, the model on the other side calls
+    `librarian.invoke`, and the librarian in turn uses the tools from its constructor to
+    work out the answer.
+
+The two are independent. An agent that uses tools needn't offer any, and one that
+offers itself needn't use any.
 
 ---
 
