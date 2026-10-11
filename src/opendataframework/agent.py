@@ -9,7 +9,7 @@ and log.
 
 from typing import Protocol, runtime_checkable
 
-from opendataframework.namespace import Namespace
+from opendataframework.namespace import ExecutionType
 
 
 @runtime_checkable
@@ -28,7 +28,7 @@ class AgentProtocol(Protocol):
         ...
 
 
-class Agent(Namespace):
+class Agent(ExecutionType):
     """Decorator that registers an agentic class with the Context.
 
     ``@Agent`` marks a class as a managed agent — a finite, explicitly

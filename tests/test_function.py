@@ -191,3 +191,29 @@ def test_bind_returns_uninspectable_callable_as_is():
     opaque = Opaque()
 
     assert bind(opaque, {}) is opaque
+
+
+def test_bind_missing_string_annotated_argument_names_the_cause():
+    def load(path, db):
+        return (path, db)
+
+    # What `from __future__ import annotations` leaves behind: a string.
+    load.__annotations__ = {"db": "Postgres"}
+
+    with pytest.raises(TypeError) as excinfo:
+        bind(load, {})("data.csv")
+
+    message = str(excinfo.value)
+    assert "load() is missing 'db' (Postgres)" in message
+    assert "String annotation on 'db'" in message
+    assert "from __future__ import annotations" in message
+
+
+def test_bind_missing_argument_without_string_annotation_has_no_hint():
+    def load(path: str, limit: int):
+        return (path, limit)
+
+    with pytest.raises(TypeError) as excinfo:
+        bind(load, {})("data.csv")
+
+    assert "String annotation" not in str(excinfo.value)

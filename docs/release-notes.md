@@ -35,8 +35,31 @@
   `ReplayProtocol`. The values needn't be entity fields — a repository may derive them or
   return constants. Existing views are unchanged. Using this to label, type and offer
   content for download happens on the `odf` side. See [View](view.md).
+- **Layer**: a function registered with `@Function` can now be tagged with a layer
+  (`@Storage @Function def load_data(...)`), like a class. See [Layer](layer.md).
+- **Context**: a required parameter that is not injected because its annotation is a
+  string (every annotation under `from __future__ import annotations`) now fails with a
+  `TypeError` that names the string annotation as the cause, for a constructor and for a
+  function called through the `Context`. String annotations are still not injected.
 
 ### Changed
+
+- **Namespace** (breaking): each decorator now states what it may be applied to, and
+  raises `TypeError` at decoration time otherwise. Two cases were accepted before:
+  a class under two execution types (`@Component @Task class X`) — a class takes one —
+  and a layer on a class no execution type has registered (`@Storage class X`, or
+  `@Component @Storage class X` with the layer underneath). To migrate, keep a single
+  execution type on the class and put the layer above it. `@Component` and the other
+  execution types on a function still raise, and now point to `@Function`. A plain
+  `Namespace` subclass accepts a function as well as a class. See
+  [Namespace](namespace.md#what-each-decorator-accepts).
+- **Context** (breaking): async is not supported, and now says so. An `async def`
+  function registered with `@Function`, or an `async def` `execute()`, `invoke()`,
+  `setup()`/`run()`/`stop()`, `on_start()`/`on_stop()` or repository stream method, makes
+  `project.start()` raise `TypeError` naming it. These were previously called without
+  being awaited — a hook that silently never ran, or a call logged as complete before it
+  started. To migrate, make it synchronous, or keep it out of the `Context` and call it
+  yourself. See [Context](context.md#what-context-is-not).
 
 - **Repository** (breaking): `@Repository(...)` now requires its argument to be a class
   registered with `@Entity`, and raises `TypeError` at decoration time otherwise. The docs

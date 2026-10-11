@@ -5,12 +5,10 @@ subclasses — it groups components into named subsystems (``Api``,
 ``Storage``, ``Analytics``, ...) with no runtime behavior of its own.
 """
 
-from typing import Self, overload
-
-from opendataframework.namespace import Namespace
+from opendataframework.namespace import ClassNamespace, Namespace, describe
 
 
-class Layer(Namespace):
+class Layer(ClassNamespace):
     """Namespace whose values are themselves ``Namespace`` subclasses.
 
     ``Layer`` organises components into named architectural subsystems.
@@ -34,8 +32,19 @@ class Layer(Namespace):
 
         MachineLearning.get("classifier")  # → Classifier
 
-    Because a layer is a ``Namespace`` subclass, ``@MachineLearning`` works
-    exactly like ``@Component`` — no special decorator protocol is required.
+    Because a layer is a ``Namespace`` subclass, ``@MachineLearning`` is
+    applied like ``@Component`` — no special decorator protocol is required.
+
+    A layer tags what is already registered: a class under an execution type
+    (``@Component``, ``@Service``, ...) or a function under ``@Function``. So
+    the layer goes on top, and a bare class or function raises ``TypeError``::
+
+        @MachineLearning
+        @Function
+        def score(model: Model) -> float: ...
+
+        @MachineLearning
+        class Classifier: ...        # TypeError — no execution type under it
 
     Inspecting registered layers::
 
@@ -63,41 +72,57 @@ class Layer(Namespace):
         TypeError: If the decorated class does not inherit from ``Namespace``.
     """
 
-    @overload
-    def __new__(cls, _: type[Namespace]) -> type[Namespace]: ...
-    @overload
-    def __new__(cls, _: str | None = None, *, name: str | None = None) -> Self: ...
-    def __new__(cls, _: type | str | None = None, *, name: str | None = None):
-        """Dispatch like ``Namespace.__new__``, plus a ``Namespace``-subclass check.
+    @classmethod
+    def _require(cls, wrapped: object) -> None:
+        """Raise ``TypeError`` unless ``wrapped`` is a ``Namespace`` subclass.
 
-        Bare decorator — argument is the class itself. Validates that it
-        inherits from ``Namespace`` (a layer's values must themselves be
-        namespaces), then delegates to ``Namespace.__new__`` to register and
-        return it unchanged::
-
-            @Layer
-            class MachineLearning(Namespace): ...
-
-        Factory decorator — argument is a name or nothing; delegates straight
-        to ``Namespace.__new__``::
-
-            @Layer("ml")
-            class MachineLearning(Namespace): ...
-
-        Args:
-            _: The decorated class (bare form) or an explicit name / ``None``
-                (factory form).
-            name: Optional name to register under (factory form only).
-
-        Raises:
-            TypeError: If ``_`` is a class that does not inherit from
-                ``Namespace``.
+        A layer's values must themselves be namespaces.
         """
-        if isinstance(_, type):
-            if not issubclass(_, Namespace):
-                raise TypeError(f"{_.__name__} must inherit from Namespace to be used as a Layer")
-            return super().__new__(cls, _)
-        return super().__new__(cls, _, name=name)
+        super()._require(wrapped)
+        if not issubclass(wrapped, Namespace):
+            raise TypeError(f"{wrapped.__name__} must inherit from Namespace to be used as a Layer")
+
+    @classmethod
+    def _register(cls, key: str, wrapped) -> None:
+        """Store the layer class and give it the rule for what it may tag.
+
+        A layer's body is empty, so the rule cannot be written on the layer
+        itself — it is set here, when the class becomes a layer.
+        """
+        super()._register(key, wrapped)
+        wrapped._require = classmethod(_require_registered)
+
+
+def _namespaces() -> list[type[Namespace]]:
+    """Return every ``Namespace`` subclass defined so far, at any depth."""
+    found: list[type[Namespace]] = []
+    stack = list(Namespace.__subclasses__())
+    while stack:
+        namespace = stack.pop()
+        if namespace not in found:
+            found.append(namespace)
+            stack.extend(namespace.__subclasses__())
+    return found
+
+
+def _require_registered(cls: type[Namespace], wrapped: object) -> None:
+    """Raise ``TypeError`` unless ``wrapped`` is already registered outside the layers.
+
+    The ``_require`` of every layer: a layer is an organisational tag, so it
+    accepts only what some other namespace — an execution type, ``Function``
+    — has registered. That makes the layer decorator the outer one.
+    """
+    layers = set(Layer._namespace.values())
+    for namespace in _namespaces():
+        if namespace is Layer or namespace in layers:
+            continue
+        if any(wrapped is member for member in namespace._namespace.values()):
+            return
+    raise TypeError(
+        f"{cls.__name__} is a layer and can only tag a registered class or function, "
+        f"got {describe(wrapped)} — put an execution type under it (@Component, "
+        f"@Service, ...; @Function for a function), with @{cls.__name__} on top"
+    )
 
 
 @Layer

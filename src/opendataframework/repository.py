@@ -12,7 +12,7 @@ from collections.abc import Iterator
 from typing import Any, Protocol, TypeVar, runtime_checkable
 
 from opendataframework.entity import Entity
-from opendataframework.namespace import C, Namespace
+from opendataframework.namespace import C, ExecutionType
 
 E = TypeVar("E")
 
@@ -101,7 +101,7 @@ class CloseStreamProtocol(Protocol):
         ...
 
 
-class Repository(Namespace):
+class Repository(ExecutionType):
     """Decorator that registers a class as a data-access repository.
 
     ``@Repository(Entity)`` links a repository class to the entity it manages

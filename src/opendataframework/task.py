@@ -6,7 +6,7 @@ as opposed to a ``Service``'s open-ended background execution.
 
 from typing import Protocol, runtime_checkable
 
-from opendataframework.namespace import Namespace
+from opendataframework.namespace import ExecutionType
 
 
 @runtime_checkable
@@ -22,7 +22,7 @@ class TaskProtocol(Protocol):
         ...
 
 
-class Task(Namespace):
+class Task(ExecutionType):
     """Decorator that registers a finite executable class with the Context.
 
     ``@Task`` marks a class as a managed task — a bounded unit of work that

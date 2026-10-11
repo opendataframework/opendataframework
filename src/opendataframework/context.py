@@ -21,7 +21,7 @@ from typing import Annotated, TypeAliasType, TypeVar, cast, get_origin, overload
 from opendataframework.agent import Agent
 from opendataframework.component import Component, OnStartProtocol, OnStopProtocol
 from opendataframework.config import Config
-from opendataframework.function import Function, bind
+from opendataframework.function import Function, bind, string_hint
 from opendataframework.logger import Logger, LogManager
 from opendataframework.namespace import Namespace
 from opendataframework.pipeline import Pipeline
@@ -42,6 +42,15 @@ R = TypeVar("R")
 _DEFAULT_NAMESPACES: frozenset[type[Namespace]] = frozenset(
     {Component, Repository, Service, Task, Pipeline, Agent, Function}
 )
+
+_LIFECYCLE_HOOKS = ("on_start", "on_stop")
+_SERVICE_METHODS = ("setup", "run", "stop")
+_STREAM_METHODS = ("stream", "open_stream", "close_stream")
+
+
+def _is_async(func: object) -> bool:
+    """Return whether ``func`` is an ``async def`` function or async generator."""
+    return inspect.iscoroutinefunction(func) or inspect.isasyncgenfunction(func)
 
 
 def _logged_execute(execute, name: str, log_manager: LogManager, label: str = "execute()"):
@@ -207,7 +216,7 @@ class Resolver:
             >>> resolver.order
             [A, B]
         """
-        ordered = self._sort(self._gather() | self._gather_functions())
+        ordered = self._sort(self.gather() | self.gather_functions())
         self._order = [node for node in ordered if isinstance(node, type)]
         for node in ordered:
             if isinstance(node, type):
@@ -221,12 +230,12 @@ class Resolver:
                     label="call",
                 )
 
-    def _gather(self) -> set[type]:
+    def gather(self) -> set[type]:
         """Collect all classes registered across the configured namespaces.
 
         Returns:
             Flat set of every class found in ``self._namespaces``. Registered
-            functions are left out — see ``_gather_functions``.
+            functions are left out — see ``gather_functions``.
         """
         classes: set[type] = set()
         for ns in self._namespaces:
@@ -235,7 +244,7 @@ class Resolver:
                     classes.add(cls)
         return classes
 
-    def _gather_functions(self) -> set[Callable[..., object]]:
+    def gather_functions(self) -> set[Callable[..., object]]:
         """Collect all functions registered across the configured namespaces."""
         return {
             func for ns in self._namespaces for _, func in ns.items() if not isinstance(func, type)
@@ -358,9 +367,37 @@ class Resolver:
         Returns:
             A new instance of ``cls`` with resolved dependencies injected.
         """
-        instance = cls(**self._supply(cls))
+        supplied = self._supply(cls)
+        self._require_readable(cls, supplied)
+        instance = cls(**supplied)
         self._log_manager.write(cls.__name__, "INFO", f"{cls.__name__} resolved")
         return instance
+
+    @staticmethod
+    def _require_readable(cls: type, supplied: dict[str, object]) -> None:
+        """Raise ``TypeError`` if a required constructor parameter has a string annotation.
+
+        Such a parameter is never injected (see ``_dependency``), so ``cls``
+        could not be created anyway — this replaces Python's bare "missing 1
+        required positional argument" with the reason.
+        """
+        try:
+            parameters = list(inspect.signature(cls.__init__).parameters.values())[1:]
+        except ValueError, TypeError:
+            return
+        unread = [
+            parameter
+            for parameter in parameters
+            if isinstance(parameter.annotation, str)
+            and parameter.default is inspect.Parameter.empty
+            and parameter.name not in supplied
+        ]
+        if unread:
+            listed = ", ".join(repr(parameter.name) for parameter in unread)
+            raise TypeError(
+                f"{cls.__name__}.__init__() is missing {listed} — "
+                f"not injected by the Context{string_hint(unread)}"
+            )
 
     def _inject(self, func: Callable[..., object]) -> dict[str, object]:
         """Return the values to inject into ``func``, by parameter name.
@@ -851,7 +888,10 @@ class Context:
 
         Raises:
             ValueError: If a circular dependency is detected.
+            TypeError: If a registered function, or a method the ``Context``
+                calls, is async — see ``_require_sync``.
         """
+        self._require_sync()
         self._resolver.resolve()
         self._instrument()
         self._functions = self._resolver.functions
@@ -1107,6 +1147,48 @@ class Context:
             Empty if file logging is disabled or nothing was logged.
         """
         return self._log_manager.tail(component, lines)
+
+    def _require_sync(self) -> None:
+        """Raise ``TypeError`` if anything the ``Context`` would call is async.
+
+        The ``Context`` calls and never awaits, so an ``async def`` would
+        hand back a coroutine nobody runs — an ``on_start()`` that silently
+        does nothing, an ``execute()`` logged as complete before it began.
+        Checked before anything is created. Only what the ``Context`` itself
+        calls is looked at — a registered function, and per class the
+        lifecycle, execution and stream methods that apply to it — so an
+        unrelated ``async def`` on a component is left alone.
+
+        Raises:
+            TypeError: Naming the first async function or method found.
+        """
+        executable = set(dict(Task.items()).values()) | set(dict(Pipeline.items()).values())
+        agents = set(dict(Agent.items()).values())
+        repositories = set(dict(Repository.items()).values())
+        found: list[str] = [
+            f"{func.__name__}()" for func in self._resolver.gather_functions() if _is_async(func)
+        ]
+        for cls in self._resolver.gather():
+            methods = list(_LIFECYCLE_HOOKS)
+            if all(callable(getattr(cls, method, None)) for method in _SERVICE_METHODS):
+                methods.extend(_SERVICE_METHODS)
+            if cls in executable:
+                methods.append("execute")
+            if cls in agents:
+                methods.append("invoke")
+            if cls in repositories:
+                methods.extend(_STREAM_METHODS)
+            found.extend(
+                f"{cls.__name__}.{method}()"
+                for method in methods
+                if _is_async(getattr(cls, method, None))
+            )
+        if found:
+            raise TypeError(
+                f"{min(found)} is async — the Context does not await, so async is not "
+                "supported yet. Make it synchronous, or keep it out of the Context and "
+                "call it yourself"
+            )
 
     def _instrument(self) -> None:
         """Wrap every resolved ``Task``/``Pipeline``'s ``execute()`` and ``Agent``'s ``invoke()``.

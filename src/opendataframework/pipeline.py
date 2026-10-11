@@ -6,7 +6,7 @@ unlike a ``Task``, it performs no work itself, only delegation.
 
 from typing import Protocol, runtime_checkable
 
-from opendataframework.namespace import Namespace
+from opendataframework.namespace import ExecutionType
 
 
 @runtime_checkable
@@ -22,7 +22,7 @@ class PipelineProtocol(Protocol):
         ...
 
 
-class Pipeline(Namespace):
+class Pipeline(ExecutionType):
     """Decorator that registers an orchestration class with the Context.
 
     ``@Pipeline`` marks a class as a managed pipeline — an ordered composition

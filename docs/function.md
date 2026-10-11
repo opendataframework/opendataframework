@@ -55,7 +55,18 @@ def load_data(path: str) -> list[dict]: ...
     Applying `@Function` to a class raises `TypeError` at decoration time, as does
     a callable with no name of its own (a `functools.partial`, an instance with
     `__call__`). A function already wrapped by another decorator, such as
-    `functools.cache`, is fine.
+    `functools.cache`, is fine. The reverse holds too: `@Component`, `@Task` and the
+    other execution types raise on a function and point here.
+
+### Combined with a Layer
+
+A function is tagged with a [Layer](layer.md) the way a class is — layer outermost:
+
+```python
+@Storage
+@Function
+def load_data(path: str, db: Postgres) -> int: ...
+```
 
 ---
 
@@ -98,6 +109,9 @@ own name, as it would for a class.
     `from __future__ import annotations` every annotation is a string, so nothing is
     injected and every parameter stays a call argument. The same holds for a class
     that asks for a function (see [Injecting a Function](#injecting-a-function)).
+    Calling such a function through the `Context` without the argument raises a
+    `TypeError` that names the string annotation as the cause; remove the import (or
+    the quotes) to have it injected.
 
 ---
 
@@ -306,10 +320,9 @@ re-implementing the injection rule.
   its own — it doesn't know the arguments — so a function is not itself a step of a
   [Pipeline](pipeline.md); a task that injects it is.
 
-* **Not tagged with a Layer.** [Layer](layer.md) decorators apply to classes only.
-
-* **Not awaited.** An `async def` function can be registered, but `call()` returns its
-  coroutine as-is; awaiting it is up to the caller.
+* **Not async.** The `Context` calls and never awaits, so a registered `async def`
+  function makes `project.start()` raise `TypeError`. Keep an async function out of
+  `@Function` and call it yourself, or make it synchronous.
 
 ---
 

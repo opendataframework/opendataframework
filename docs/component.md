@@ -66,7 +66,9 @@ class CustomerChurnRiskClassifier:
 ### Combined with a Layer
 
 `@Component` is often stacked with a layer decorator to indicate which subsystem the
-component belongs to. Layer comes first (outermost), component type second:
+component belongs to. Layer comes first (outermost), component type second — a class
+takes one execution type, so `@Component` is not combined with `@Service`, `@Task` and
+the like (see [Namespace](namespace.md#what-each-decorator-accepts)):
 
 ```python
 @Analytics

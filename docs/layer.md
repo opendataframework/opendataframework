@@ -16,14 +16,22 @@ independent concepts.
 
 `Layer` plays two roles in the framework:
 
-**As a user-facing decorator** — applied to a class to declare which subsystem it
-belongs to. This is what most application code interacts with.
+**As a user-facing decorator** — applied to a class or function to declare which
+subsystem it belongs to. This is what most application code interacts with.
 
 ```python
 @Analytics
 @Task
 class MetricsFetcher: ...
+
+
+@Analytics
+@Function
+def score(model: Model, threshold: float) -> float: ...
 ```
+
+A layer tags something that is already registered, so it always goes on top — see
+[What a Layer accepts](#what-a-layer-accepts).
 
 **As a framework concept** — a `Namespace` subclass in its own right, providing
 structured access to the components it contains via `<Layer>.items()`/`<Layer>.get(name)`.
@@ -187,6 +195,36 @@ project.context.get(TrainPipeline)
 MachineLearning.get("classifier")  # → Classifier
 dict(MachineLearning.items())  # → {"classifier": Classifier, ...}
 ```
+
+---
+
+## What a Layer accepts
+
+A layer is an organisational tag, not a registration of its own: it accepts a class that
+an execution type (`@Component`, `@Service`, `@Task`, ...) has registered, or a function
+registered with [`@Function`](function.md). Anything else raises `TypeError` at
+decoration time:
+
+```python
+@Storage
+class Warehouse: ...  # TypeError — no execution type under it
+
+
+@Storage
+def load_data(): ...  # TypeError — no @Function under it
+
+
+@Component
+@Storage
+class Warehouse: ...  # TypeError — the layer runs first and finds nothing registered
+```
+
+The fix is the same each time: put the execution type (or `@Function`) directly on the
+class or function, and the layer above it.
+
+A class and a function tagged with the same layer share its names, so `LoadData` and
+`load_data` collide there as `load-data`; give one an explicit name
+(`@Storage(name=...)`).
 
 ---
 

@@ -5,10 +5,10 @@ components, tasks, pipelines, and repositories. It carries no behavior,
 no lifecycle, and is not managed by the ``Context``.
 """
 
-from opendataframework.namespace import Namespace
+from opendataframework.namespace import ClassNamespace
 
 
-class Entity(Namespace):
+class Entity(ClassNamespace):
     """Decorator that registers a class as a named data structure.
 
     ``@Entity`` marks a class as a structured unit of data — the common

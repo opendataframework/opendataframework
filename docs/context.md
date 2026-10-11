@@ -390,6 +390,18 @@ project.context.tail_logs("Postgres", lines=300)
   constructor injection, not in code that pulls it from the `Context`
   directly.
 
+* **Not async.** The `Context` calls and never awaits. An `async def` in anything it
+  would call — a [Function](function.md), `execute()`, `invoke()`, `setup()`/`run()`/
+  `stop()`, `on_start()`/`on_stop()`, a repository's stream methods — makes
+  `project.start()` raise `TypeError` naming it, before anything is created. Other
+  `async def` methods on a component are yours to call and are left alone.
+
+* **Not a reader of string annotations.** Dependencies are injected by type, and an
+  annotation that is a string is not one — every annotation is, under
+  `from __future__ import annotations`. A required constructor parameter left unfilled
+  for that reason raises a `TypeError` that says so; remove the import, or the quotes
+  around the annotation.
+
 * **Not responsible for threading.** The framework handles `Service.run()`, and a
   streamable `Repository`'s `stream()`, in background threads automatically. Neither
   the service/repository author nor the context caller needs to manage this directly.

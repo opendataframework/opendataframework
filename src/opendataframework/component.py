@@ -10,7 +10,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
-from opendataframework.namespace import Namespace
+from opendataframework.namespace import ExecutionType
 
 
 @runtime_checkable
@@ -133,7 +133,7 @@ class McpToolsProtocol(Protocol):
         ...
 
 
-class Component(Namespace):
+class Component(ExecutionType):
     """Decorator that registers a class with the Context for dependency injection.
 
     ``@Component`` marks a class as a managed component — the ``Context``

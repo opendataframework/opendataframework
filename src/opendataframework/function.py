@@ -9,13 +9,10 @@ to call it by name with its managed dependencies filled in.
 
 import functools
 import inspect
-from collections.abc import Callable, ItemsView
-from typing import Self, TypeVar, overload
+from collections.abc import Callable, ItemsView, Iterable
 
-from opendataframework.namespace import Namespace
+from opendataframework.namespace import Namespace, describe
 from opendataframework.utils import normalize
-
-F = TypeVar("F", bound=Callable[..., object])
 
 _POSITIONAL = (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
 _VARIADIC = (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
@@ -75,62 +72,11 @@ class Function(Namespace):
 
     _namespace: dict[str, Callable[..., object]]
 
-    @overload
-    def __new__(cls, _: F) -> F: ...
-    @overload
-    def __new__(cls, _: str | None = None, *, name: str | None = None) -> Self: ...
-    def __new__(cls, _: Callable[..., object] | str | None = None, *, name: str | None = None):
-        """Dispatch like ``Namespace.__new__``, but for functions instead of classes.
-
-        Bare decorator — argument is the function itself. Registers it under
-        the kebab-case form of its name and returns it unchanged::
-
-            @Function
-            def load_data(): ...
-
-        Factory decorator — argument is a name or nothing; returns a
-        ``Function`` instance to be applied to the function as a second step::
-
-            @Function(name="loader")
-            def load_data(): ...
-
-        Raises:
-            TypeError: If ``_`` is a class or not a named callable.
-            ValueError: If the function's name is already registered.
-        """
-        if _ is None or isinstance(_, str):
-            return object.__new__(cls)
-        cls._require_function(_)
-        cls._register(normalize(_.__name__), _)
-        return _
-
-    def __call__(self, wrapped: F) -> F:
-        """Handle factory decorator usage.
-
-        Registers ``wrapped`` under the explicit name when provided, or the
-        kebab-case form of ``wrapped.__name__`` otherwise.
-
-        Args:
-            wrapped: The function being decorated.
-
-        Returns:
-            The original function, unmodified.
-
-        Raises:
-            TypeError: If ``wrapped`` is a class or not a named callable.
-            ValueError: If the name is already registered.
-        """
-        self._require_function(wrapped)
-        self._register(self._name or normalize(wrapped.__name__), wrapped)
-        return wrapped
-
     @classmethod
-    def _require_function(cls, wrapped: object) -> None:
+    def _require(cls, wrapped: object) -> None:
         """Raise ``TypeError`` unless ``wrapped`` is a named callable that is not a class."""
         if isinstance(wrapped, type) or not callable(wrapped) or not hasattr(wrapped, "__name__"):
-            kind = "class" if isinstance(wrapped, type) else type(wrapped).__name__
-            name = getattr(wrapped, "__name__", repr(wrapped))
-            raise TypeError(f"{cls.__name__} can only decorate a function, got {kind} {name!r}")
+            raise TypeError(f"{cls.__name__} can only decorate a function, got {describe(wrapped)}")
 
     @classmethod
     def get(cls, name: str) -> Callable[..., object] | None:
@@ -268,8 +214,27 @@ def _require_arguments(
         described = ", ".join(_describe(parameter) for parameter in missing)
         raise TypeError(
             f"{func.__name__}() is missing {described} — "
-            "not managed by the Context and not supplied by the caller"
+            f"not managed by the Context and not supplied by the caller{string_hint(missing)}"
         )
+
+
+def string_hint(parameters: Iterable[inspect.Parameter]) -> str:
+    """Return a sentence about the string-annotated ``parameters``, or ``""`` if none is.
+
+    The ``Context`` injects by type, and an annotation that is a string —
+    every one under ``from __future__ import annotations`` — is not a type.
+    The parameter is then left to the caller, which shows up as a missing
+    argument; this names the actual cause.
+    """
+    names = [parameter.name for parameter in parameters if isinstance(parameter.annotation, str)]
+    if not names:
+        return ""
+    listed = ", ".join(repr(name) for name in names)
+    return (
+        f". String annotation on {listed}: the Context injects by type and does not read a "
+        "string as one — remove `from __future__ import annotations` from the module, or the "
+        "quotes around the annotation, to have it injected"
+    )
 
 
 def _describe(parameter: inspect.Parameter) -> str:

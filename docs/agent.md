@@ -355,9 +355,9 @@ class AgentProtocol(Protocol):
 * **Not a long-running process.** `invoke()` runs to completion. For continuous work,
   inject the agent into a [Service](service.md).
 
-* **Not awaited or streamed for you.** An `async def invoke()` is registered, but
-  `call()` returns its coroutine rather than awaiting it; an `invoke()` that returns an
-  iterator hands it back as is. The log then records when the coroutine or iterator was
+* **Not async, and not streamed for you.** The `Context` calls and never awaits, so an
+  `async def invoke()` makes `project.start()` raise `TypeError`. An `invoke()` that
+  returns an iterator hands it back as is; the log then records when the iterator was
   created, not how long it took to finish.
 
 * **Not a base class.** `Librarian` does not inherit from `Agent`. The decorator

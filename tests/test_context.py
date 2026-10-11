@@ -14,6 +14,7 @@ from opendataframework.logger import Logger
 from opendataframework.namespace import Namespace
 from opendataframework.pipeline import Pipeline
 from opendataframework.repository import Repository
+from opendataframework.service import Service
 from opendataframework.task import Task
 
 # --- helpers -----------------------------------------------------------------
@@ -765,7 +766,6 @@ def test_task_has_no_lifecycle():
 def test_default_namespaces_include_builtin_types():
     from opendataframework.component import Component
     from opendataframework.pipeline import Pipeline
-    from opendataframework.service import Service
     from opendataframework.task import Task
 
     ctx = Context(namespaces={Component, Service, Task, Pipeline})
@@ -1580,3 +1580,178 @@ def test_parameters_non_agent_class_raises_key_error():
     with Context(namespaces={NS}) as ctx:
         with pytest.raises(KeyError):
             ctx.parameters(Books)
+
+
+# --- string annotations --------------------------------------------------------
+
+
+def test_string_annotated_constructor_parameter_names_the_cause():
+    NS = make_ns()
+
+    @NS
+    class Postgres: ...
+
+    @NS
+    class Users:
+        def __init__(self, postgres):
+            self.postgres = postgres
+
+    # What `from __future__ import annotations` leaves behind: a string.
+    Users.__init__.__annotations__ = {"postgres": "Postgres"}
+
+    with pytest.raises(TypeError) as excinfo:
+        Context(namespaces={NS}).open()
+
+    message = str(excinfo.value)
+    assert "Users.__init__() is missing 'postgres'" in message
+    assert "String annotation on 'postgres'" in message
+    assert "from __future__ import annotations" in message
+
+
+def test_string_annotated_constructor_parameter_with_default_is_left_alone():
+    NS = make_ns()
+
+    @NS
+    class Users:
+        def __init__(self, table="users"):
+            self.table = table
+
+    Users.__init__.__annotations__ = {"table": "str"}
+
+    with Context(namespaces={NS}) as ctx:
+        assert ctx.get(Users).table == "users"
+
+
+def test_string_annotated_function_parameter_names_the_cause():
+    NS = make_ns()
+
+    @NS
+    class Postgres: ...
+
+    @Function
+    def load_data(path, db):
+        return 1
+
+    load_data.__annotations__ = {"path": "str", "db": "Postgres"}
+
+    with Context(namespaces={NS, Function}) as ctx:
+        with pytest.raises(TypeError, match="String annotation on 'db'"):
+            ctx.call("load-data", path="data.csv")
+
+
+# --- async is not supported ----------------------------------------------------
+
+
+def test_async_function_raises_on_open():
+    @Function
+    async def load_data(path: str) -> int:
+        return 1
+
+    with pytest.raises(TypeError, match=r"load_data\(\) is async — the Context does not await"):
+        Context(namespaces={Function}).open()
+
+
+def test_async_generator_function_raises_on_open():
+    @Function
+    async def rows():
+        yield 1
+
+    with pytest.raises(TypeError, match=r"rows\(\) is async"):
+        Context(namespaces={Function}).open()
+
+
+def test_async_execute_raises_on_open():
+    @Task
+    class Refresh:
+        async def execute(self): ...
+
+    with pytest.raises(TypeError, match=r"Refresh\.execute\(\) is async"):
+        Context(namespaces={Task}).open()
+
+
+def test_async_pipeline_execute_raises_on_open():
+    @Pipeline
+    class Nightly:
+        async def execute(self): ...
+
+    with pytest.raises(TypeError, match=r"Nightly\.execute\(\) is async"):
+        Context(namespaces={Pipeline}).open()
+
+
+def test_async_invoke_raises_on_open():
+    @Agent
+    class Archivist:
+        async def invoke(self, question: str) -> str:
+            return question
+
+    with pytest.raises(TypeError, match=r"Archivist\.invoke\(\) is async"):
+        Context(namespaces={Agent}).open()
+
+
+@pytest.mark.parametrize("hook", ["on_start", "on_stop"])
+def test_async_lifecycle_hook_raises_on_open(hook):
+    NS = make_ns()
+
+    async def method(self): ...
+
+    NS(type("Cache", (), {hook: method}))
+
+    with pytest.raises(TypeError, match=rf"Cache\.{hook}\(\) is async"):
+        Context(namespaces={NS}).open()
+
+
+def test_async_service_method_raises_on_open():
+    NS = make_ns()
+
+    @NS
+    class Worker:
+        def setup(self): ...
+        async def run(self): ...
+        def stop(self): ...
+
+    with pytest.raises(TypeError, match=r"Worker\.run\(\) is async"):
+        Context(namespaces={NS}).open()
+
+
+def test_async_stream_raises_on_open():
+    @Entity
+    class Event: ...
+
+    @Repository(Event)
+    class Events:
+        async def stream(self):
+            yield Event()
+
+    with pytest.raises(TypeError, match=r"Events\.stream\(\) is async"):
+        Context(namespaces={Repository}).open()
+
+
+def test_async_check_runs_before_anything_is_created():
+    NS = make_ns()
+    created = []
+
+    @NS
+    class Cache:
+        def __init__(self):
+            created.append(self)
+
+    @Function
+    async def load_data(): ...
+
+    with pytest.raises(TypeError):
+        Context(namespaces={NS, Function}).open()
+
+    assert created == []
+
+
+def test_unrelated_async_method_is_left_alone():
+    NS = make_ns()
+
+    @NS
+    class Client:
+        async def run(self): ...
+        async def execute(self): ...
+        async def fetch(self): ...
+
+    with Context(namespaces={NS}) as ctx:
+        assert isinstance(ctx.get(Client), Client)
