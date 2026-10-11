@@ -6,6 +6,7 @@ injected by the ``Context`` with no execution contract of its own. The
 implement to opt into lifecycle callbacks or inspection tooling.
 """
 
+import inspect
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
@@ -100,18 +101,85 @@ class McpTool:
             class name) to avoid collisions with the fixed built-in
             tools and with other components' tools.
         description: Human-readable description shown to the MCP client.
-        handler: The bound method implementing the tool call.
+            Must not be empty.
+        handler: The bound method implementing the tool call. Whoever
+            calls the tool — typically a model — sees only its signature,
+            so it must be fully typed: every parameter annotated, no
+            ``*args``/``**kwargs``, a return annotation, and no annotation
+            left as a string.
         structured_output: Whether the handler's return value should be
             reported as structured (JSON) output. ``None`` defers to
             the MCP server's own default behavior, mirroring how this
             field is expected to be forwarded verbatim by whatever
             registers the tool.
+
+    Raises:
+        ValueError: If ``description`` is empty.
+        TypeError: If ``handler`` is not callable, has no readable
+            signature, or is not fully typed.
     """
 
     name: str
     description: str
     handler: Callable[..., object]
     structured_output: bool | None = None
+
+    def __post_init__(self) -> None:
+        _require_tool(self)
+
+
+def _require_tool(tool: McpTool) -> None:
+    """Raise unless ``tool`` has a description and a fully typed handler.
+
+    A tool is offered to a caller that sees nothing but its description
+    and the handler's signature, so both are checked where the tool is
+    created rather than left to surface as a poor schema.
+
+    Raises:
+        ValueError: If the description is empty.
+        TypeError: If the handler is not callable, has no readable
+            signature, or is not fully typed — naming every problem found.
+    """
+    if not tool.description.strip():
+        raise ValueError(f"MCP tool {tool.name!r} has an empty description")
+    if not callable(tool.handler):
+        raise TypeError(f"MCP tool {tool.name!r}: handler {tool.handler!r} is not callable")
+    try:
+        signature = inspect.signature(tool.handler)
+    except (TypeError, ValueError) as exc:
+        raise TypeError(
+            f"MCP tool {tool.name!r}: the handler's signature cannot be read ({exc}) — "
+            "wrap it in a function with annotated parameters"
+        ) from exc
+    problems: list[str] = []
+    strings = False
+    for parameter in signature.parameters.values():
+        if parameter.kind is inspect.Parameter.VAR_POSITIONAL:
+            problems.append(f"*{parameter.name} is not allowed")
+        elif parameter.kind is inspect.Parameter.VAR_KEYWORD:
+            problems.append(f"**{parameter.name} is not allowed")
+        elif parameter.annotation is inspect.Parameter.empty:
+            problems.append(f"parameter {parameter.name!r} is not annotated")
+        elif isinstance(parameter.annotation, str):
+            problems.append(f"parameter {parameter.name!r} has a string annotation")
+            strings = True
+    if signature.return_annotation is inspect.Signature.empty:
+        problems.append("the return value is not annotated")
+    elif isinstance(signature.return_annotation, str):
+        problems.append("the return value has a string annotation")
+        strings = True
+    if not problems:
+        return
+    hint = (
+        " — remove `from __future__ import annotations` from the module, or the quotes "
+        "around the annotation"
+        if strings
+        else ""
+    )
+    raise TypeError(
+        f"MCP tool {tool.name!r}: the handler must be fully typed, but "
+        f"{'; '.join(problems)}{hint}"
+    )
 
 
 @runtime_checkable

@@ -277,6 +277,8 @@ class Librarian:
 
 The calling model sees the parameters of `invoke()` and fills them in, so they should be
 types a schema can express — a `str`, a number, a dataclass — not an arbitrary object.
+`McpTool` requires them, and the return value, to be annotated; an `invoke()` that is
+never offered as a tool keeps its free-form signature.
 
 !!! tip "Seeing it in practice"
     The sibling [`odf`](https://opendataframework.github.io/odf/) package's `McpServer`

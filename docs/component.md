@@ -297,6 +297,20 @@ callable — usually a bound method), and `structured_output` flag. A
 component with no `mcp_tools()` method simply exposes no custom tools —
 this is entirely optional.
 
+Whoever calls a tool — typically a model — sees only its description and
+the handler's signature, so an `McpTool` checks both when it is created:
+
+- the `description` is not empty — `ValueError` otherwise;
+- every parameter of the handler is annotated;
+- the handler takes no `*args` or `**kwargs`;
+- the handler has a return annotation (`-> None` counts);
+- no annotation is a string — as every one is under
+  `from __future__ import annotations`.
+
+A handler that falls short raises `TypeError`, naming the tool and
+everything that is missing. A lambda has no annotations, so it can't be a
+handler — use a method or a function.
+
 Because detection is structural, any class the `Context` creates can
 provide tools this way — a [Repository](repository.md), a
 [Service](service.md), a [Task](task.md), an [Agent](agent.md) — not

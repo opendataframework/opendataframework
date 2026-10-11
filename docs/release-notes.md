@@ -61,6 +61,16 @@
   started. To migrate, make it synchronous, or keep it out of the `Context` and call it
   yourself. See [Context](context.md#what-context-is-not).
 
+- **Component** (breaking): an `McpTool` now requires a described, fully typed handler,
+  and raises when it is created otherwise — `ValueError` for an empty `description`,
+  `TypeError` for a handler with an unannotated parameter, `*args`/`**kwargs`, no return
+  annotation, or an annotation left as a string. A caller, typically a model, sees
+  nothing of a tool but its description and signature, and a handler without them was
+  accepted and offered with a schema that said little. To migrate, annotate the handler's
+  parameters and return value (`-> None` counts), replace a lambda with a method or a
+  function, and remove `from __future__ import annotations` from the handler's module.
+  See [Component](component.md#mcp-tools).
+
 - **Repository** (breaking): `@Repository(...)` now requires its argument to be a class
   registered with `@Entity`, and raises `TypeError` at decoration time otherwise. The docs
   always described the argument as the `Entity` class, but any class was accepted — so
