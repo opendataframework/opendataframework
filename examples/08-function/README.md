@@ -41,21 +41,21 @@ python main.py
 Expected output:
 
 ```
-call('low-stock')                -> ['apple']
-call('restock', apple, 10)       -> 12
+call('function.low-stock')       -> ['apple']
+call('function.restock', ...)    -> 12
 get(low_stock)(threshold=15)     -> ['apple', 'banana']
 get(format_report)(...)          -> apple, banana
-execute('Reorder')               -> ['apple', 'banana']
+execute('task.reorder')          -> ['apple', 'banana']
 restock(Inventory(), cherry, 1)  -> 1
 ```
 
 `main.py` shows all four ways to call a registered function:
 
-- `project.context.call("restock", item=..., quantity=...)` — by registered
-  name, with keyword arguments. `inventory` is injected.
+- `project.context.call("function.restock", item=..., quantity=...)` — by
+  key, with keyword arguments. `inventory` is injected.
 - `project.context.get(low_stock)(threshold=15)` — by function, getting it back
   with `inventory` already filled in.
-- `project.context.execute("Reorder")` — injected: the task holds the same
+- `project.context.execute("task.reorder")` — injected: the task holds the same
   bound function `get(low_stock)` returns, and calls it in `execute()`.
 - `restock(Inventory(), "cherry", 1)` — directly, exactly as before the
   decorator was added. Nothing is injected, which is why the tests in

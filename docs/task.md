@@ -175,10 +175,10 @@ class ReportGenerator:
 
 ## Using a Task
 
-A `Task` is resolved and executed through the `Context`, by class name:
+A `Task` is resolved and executed through the `Context`, by its [key](context.md#by-key-single-component-control):
 
 ```python
-data = project.context.execute("MetricsFetcher")
+data = project.context.execute("task.metrics-fetcher")
 ```
 
 Or directly within a `Pipeline` that coordinates multiple tasks:

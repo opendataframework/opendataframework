@@ -7,6 +7,7 @@ from typing import Annotated
 import pytest
 
 from opendataframework.agent import Agent
+from opendataframework.component import Component
 from opendataframework.context import Context, Resolver
 from opendataframework.entity import Entity
 from opendataframework.function import Function
@@ -23,9 +24,9 @@ from opendataframework.task import Task
 def make_ns():
     """Return a fresh isolated Namespace subclass for each test."""
 
-    class NS(Namespace): ...
+    class Scope(Namespace): ...
 
-    return NS
+    return Scope
 
 
 # --- dependency resolution ----------------------------------------------------
@@ -76,7 +77,7 @@ def test_same_unmanaged_type_under_two_parameters_is_allowed():
         return left + right
 
     with Context(namespaces={Function}) as ctx:
-        assert ctx.call("join", left="a", right="b") == "ab"
+        assert ctx.call("function.join", left="a", right="b") == "ab"
 
 
 def test_resolves_transitive_dependencies():
@@ -319,11 +320,11 @@ def test_on_start_and_on_stop_are_logged(tmp_path):
         def on_stop(self) -> None: ...
 
     with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
-        messages = [e["message"] for e in ctx.tail_logs("Thing")]
+        messages = [e["message"] for e in ctx.tail_logs("scope.thing")]
         assert "on_start() called" in messages
         assert "on_start() complete" in messages
 
-    messages = [e["message"] for e in ctx.tail_logs("Thing")]
+    messages = [e["message"] for e in ctx.tail_logs("scope.thing")]
     assert "on_stop() called" in messages
     assert "on_stop() complete" in messages
 
@@ -346,13 +347,13 @@ def test_stop_and_start_a_single_service_by_name():
             calls.append("stop")
 
     with Context(namespaces={NS}) as ctx:
-        assert ctx.is_running("Svc") is True
+        assert ctx.is_running("scope.svc") is True
 
-        ctx.stop("Svc")
-        assert ctx.is_running("Svc") is False
+        ctx.stop("scope.svc")
+        assert ctx.is_running("scope.svc") is False
 
-        ctx.start("Svc")
-        assert ctx.is_running("Svc") is True
+        ctx.start("scope.svc")
+        assert ctx.is_running("scope.svc") is True
 
     assert calls == ["setup", "stop", "setup", "stop"]
 
@@ -371,7 +372,7 @@ def test_start_is_a_noop_when_already_running():
         def stop(self) -> None: ...
 
     with Context(namespaces={NS}) as ctx:
-        ctx.start("Svc")
+        ctx.start("scope.svc")
 
     assert calls == ["setup"]
 
@@ -390,8 +391,8 @@ def test_stop_is_a_noop_when_not_running():
             calls.append("stop")
 
     with Context(namespaces={NS}) as ctx:
-        ctx.stop("Svc")
-        ctx.stop("Svc")
+        ctx.stop("scope.svc")
+        ctx.stop("scope.svc")
 
     assert calls == ["stop"]  # only the context-manager teardown call
 
@@ -399,9 +400,9 @@ def test_stop_is_a_noop_when_not_running():
 def test_start_stop_unknown_name_raises_key_error():
     with Context(namespaces=set()) as ctx:
         with pytest.raises(KeyError):
-            ctx.start("Nonexistent")
+            ctx.start("service.nonexistent")
         with pytest.raises(KeyError):
-            ctx.stop("Nonexistent")
+            ctx.stop("service.nonexistent")
 
 
 def test_start_stop_non_service_raises_type_error():
@@ -412,9 +413,9 @@ def test_start_stop_non_service_raises_type_error():
 
     with Context(namespaces={NS}) as ctx:
         with pytest.raises(TypeError):
-            ctx.start("NotAService")
+            ctx.start("scope.not-a-service")
         with pytest.raises(TypeError):
-            ctx.stop("NotAService")
+            ctx.stop("scope.not-a-service")
 
 
 # --- repository stream control (UI actions) ------------------------------------
@@ -437,13 +438,13 @@ def test_start_stop_stream_toggles_a_streamable_repository():
     make_camera(NS)
 
     with Context(namespaces={NS}) as ctx:
-        assert ctx.is_streaming("Cam") is False
+        assert ctx.is_streaming("scope.cam") is False
 
-        ctx.start_stream("Cam")
-        assert ctx.is_streaming("Cam") is True
+        ctx.start_stream("scope.cam")
+        assert ctx.is_streaming("scope.cam") is True
 
-        ctx.stop_stream("Cam")
-        assert ctx.is_streaming("Cam") is False
+        ctx.stop_stream("scope.cam")
+        assert ctx.is_streaming("scope.cam") is False
 
 
 def test_start_stream_is_a_noop_when_already_streaming():
@@ -451,11 +452,11 @@ def test_start_stream_is_a_noop_when_already_streaming():
     make_camera(NS)
 
     with Context(namespaces={NS}) as ctx:
-        ctx.start_stream("Cam")
+        ctx.start_stream("scope.cam")
         # would hang/raise if it spawned a second thread onto the same generator
-        ctx.start_stream("Cam")
-        assert ctx.is_streaming("Cam") is True
-        ctx.stop_stream("Cam")
+        ctx.start_stream("scope.cam")
+        assert ctx.is_streaming("scope.cam") is True
+        ctx.stop_stream("scope.cam")
 
 
 def test_stop_stream_is_a_noop_when_not_streaming():
@@ -463,17 +464,17 @@ def test_stop_stream_is_a_noop_when_not_streaming():
     make_camera(NS)
 
     with Context(namespaces={NS}) as ctx:
-        ctx.stop_stream("Cam")
-        ctx.stop_stream("Cam")
-        assert ctx.is_streaming("Cam") is False
+        ctx.stop_stream("scope.cam")
+        ctx.stop_stream("scope.cam")
+        assert ctx.is_streaming("scope.cam") is False
 
 
 def test_start_stop_stream_unknown_name_raises_key_error():
     with Context(namespaces=set()) as ctx:
         with pytest.raises(KeyError):
-            ctx.start_stream("Nonexistent")
+            ctx.start_stream("repository.nonexistent")
         with pytest.raises(KeyError):
-            ctx.stop_stream("Nonexistent")
+            ctx.stop_stream("repository.nonexistent")
 
 
 def test_start_stop_stream_non_streamable_raises_type_error():
@@ -484,9 +485,9 @@ def test_start_stop_stream_non_streamable_raises_type_error():
 
     with Context(namespaces={NS}) as ctx:
         with pytest.raises(TypeError):
-            ctx.start_stream("NotStreamable")
+            ctx.start_stream("scope.not-streamable")
         with pytest.raises(TypeError):
-            ctx.stop_stream("NotStreamable")
+            ctx.stop_stream("scope.not-streamable")
 
 
 def test_is_streaming_false_for_non_streamable():
@@ -496,7 +497,7 @@ def test_is_streaming_false_for_non_streamable():
     class NotStreamable: ...
 
     with Context(namespaces={NS}) as ctx:
-        assert ctx.is_streaming("NotStreamable") is False
+        assert ctx.is_streaming("scope.not-streamable") is False
 
 
 def test_iter_stream_yields_frames_from_the_running_stream():
@@ -504,10 +505,10 @@ def test_iter_stream_yields_frames_from_the_running_stream():
     make_camera(NS)
 
     with Context(namespaces={NS}) as ctx:
-        ctx.start_stream("Cam")
-        frames = ctx.iter_stream("Cam")
+        ctx.start_stream("scope.cam")
+        frames = ctx.iter_stream("scope.cam")
         assert isinstance(next(frames), int)
-        ctx.stop_stream("Cam")
+        ctx.stop_stream("scope.cam")
 
 
 def test_iter_stream_fans_out_to_multiple_subscribers():
@@ -515,12 +516,12 @@ def test_iter_stream_fans_out_to_multiple_subscribers():
     make_camera(NS)
 
     with Context(namespaces={NS}) as ctx:
-        ctx.start_stream("Cam")
-        a = ctx.iter_stream("Cam")
-        b = ctx.iter_stream("Cam")
+        ctx.start_stream("scope.cam")
+        a = ctx.iter_stream("scope.cam")
+        b = ctx.iter_stream("scope.cam")
         assert isinstance(next(a), int)
         assert isinstance(next(b), int)
-        ctx.stop_stream("Cam")
+        ctx.stop_stream("scope.cam")
 
 
 def test_iter_stream_ends_when_stream_is_stopped():
@@ -528,10 +529,10 @@ def test_iter_stream_ends_when_stream_is_stopped():
     make_camera(NS)
 
     with Context(namespaces={NS}) as ctx:
-        ctx.start_stream("Cam")
-        frames = ctx.iter_stream("Cam")
+        ctx.start_stream("scope.cam")
+        frames = ctx.iter_stream("scope.cam")
         next(frames)
-        ctx.stop_stream("Cam")
+        ctx.stop_stream("scope.cam")
 
         with pytest.raises(StopIteration):
             next(frames)
@@ -543,7 +544,7 @@ def test_iter_stream_raises_key_error_when_not_streaming():
 
     with Context(namespaces={NS}) as ctx:
         with pytest.raises(KeyError):
-            ctx.iter_stream("Cam")
+            ctx.iter_stream("scope.cam")
 
 
 # --- repository stream resource lifecycle (open_stream / close_stream) --------
@@ -580,9 +581,9 @@ def test_start_stream_calls_open_stream_before_spawning_the_thread():
     Device, calls = make_device(NS)
 
     with Context(namespaces={NS}) as ctx:
-        ctx.start_stream("Device")
+        ctx.start_stream("scope.device")
         assert calls == ["open_stream"]
-        ctx.stop_stream("Device")
+        ctx.stop_stream("scope.device")
 
 
 def test_stop_stream_calls_close_stream_after_the_thread_exits():
@@ -590,8 +591,8 @@ def test_stop_stream_calls_close_stream_after_the_thread_exits():
     Device, calls = make_device(NS)
 
     with Context(namespaces={NS}) as ctx:
-        ctx.start_stream("Device")
-        ctx.stop_stream("Device")
+        ctx.start_stream("scope.device")
+        ctx.stop_stream("scope.device")
         assert calls == ["open_stream", "close_stream"]
 
 
@@ -613,14 +614,14 @@ def test_close_stream_is_called_when_the_source_ends_on_its_own():
             yield 1  # a finite source — no explicit stop_stream() call
 
     with Context(namespaces={NS}) as ctx:
-        ctx.start_stream("Device")
+        ctx.start_stream("scope.device")
         device = ctx.instances[Device]
         for _ in range(50):
             if device.calls == ["open_stream", "close_stream"]:
                 break
             time.sleep(0.01)
         assert device.calls == ["open_stream", "close_stream"]
-        assert ctx.is_streaming("Device") is False
+        assert ctx.is_streaming("scope.device") is False
 
 
 def test_repository_without_open_close_stream_hooks_still_streams():
@@ -628,9 +629,9 @@ def test_repository_without_open_close_stream_hooks_still_streams():
     make_camera(NS)
 
     with Context(namespaces={NS}) as ctx:
-        ctx.start_stream("Cam")
-        assert ctx.is_streaming("Cam") is True
-        ctx.stop_stream("Cam")
+        ctx.start_stream("scope.cam")
+        assert ctx.is_streaming("scope.cam") is True
+        ctx.stop_stream("scope.cam")
 
 
 def test_open_stream_failure_propagates_and_does_not_stick():
@@ -654,13 +655,13 @@ def test_open_stream_failure_propagates_and_does_not_stick():
 
     with Context(namespaces={NS}) as ctx:
         with pytest.raises(RuntimeError):
-            ctx.start_stream("Flaky")
-        assert ctx.is_streaming("Flaky") is False
+            ctx.start_stream("scope.flaky")
+        assert ctx.is_streaming("scope.flaky") is False
 
         # a retry isn't stuck behind the failed attempt's bookkeeping
-        ctx.start_stream("Flaky")
-        assert ctx.is_streaming("Flaky") is True
-        ctx.stop_stream("Flaky")
+        ctx.start_stream("scope.flaky")
+        assert ctx.is_streaming("scope.flaky") is True
+        ctx.stop_stream("scope.flaky")
 
 
 def test_close_stream_exception_is_logged_not_raised(tmp_path):
@@ -678,11 +679,11 @@ def test_close_stream_exception_is_logged_not_raised(tmp_path):
                 yield 1
 
     with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
-        ctx.start_stream("Device")
-        ctx.stop_stream("Device")  # must not raise despite close_stream() failing
-        assert ctx.is_streaming("Device") is False
+        ctx.start_stream("scope.device")
+        ctx.stop_stream("scope.device")  # must not raise despite close_stream() failing
+        assert ctx.is_streaming("scope.device") is False
 
-        messages = [e["message"] for e in ctx.tail_logs("Device")]
+        messages = [e["message"] for e in ctx.tail_logs("scope.device")]
         assert any("close_stream() raised" in m for m in messages)
 
 
@@ -696,7 +697,7 @@ def test_execute_runs_a_task_by_name():
             return 42
 
     with Context(namespaces={NS}) as ctx:
-        assert ctx.execute("T") == 42
+        assert ctx.execute("scope.t") == 42
 
 
 def test_execute_runs_a_pipeline_by_name():
@@ -709,13 +710,13 @@ def test_execute_runs_a_pipeline_by_name():
             return "done"
 
     with Context(namespaces={NS}) as ctx:
-        assert ctx.execute("P") == "done"
+        assert ctx.execute("scope.p") == "done"
 
 
 def test_execute_unknown_name_raises_key_error():
     with Context(namespaces=set()) as ctx:
         with pytest.raises(KeyError):
-            ctx.execute("Nonexistent")
+            ctx.execute("task.nonexistent")
 
 
 def test_execute_non_task_pipeline_raises_type_error():
@@ -727,7 +728,7 @@ def test_execute_non_task_pipeline_raises_type_error():
 
     with Context(namespaces={NS}) as ctx:
         with pytest.raises(TypeError):
-            ctx.execute("NotExecutable")
+            ctx.execute("scope.not-executable")
 
 
 def test_is_running_false_for_non_service():
@@ -739,7 +740,7 @@ def test_is_running_false_for_non_service():
         def execute(self) -> None: ...
 
     with Context(namespaces={NS}) as ctx:
-        assert ctx.is_running("T") is False
+        assert ctx.is_running("scope.t") is False
 
 
 # --- task / pipeline — no lifecycle ------------------------------------------
@@ -782,7 +783,7 @@ def test_tail_logs_empty_without_log_dir():
     class A: ...
 
     with Context(namespaces={NS}) as ctx:
-        assert ctx.tail_logs("A") == []
+        assert ctx.tail_logs("scope.a") == []
 
 
 # --- logging: automatic instrumentation -----------------------------------------
@@ -795,7 +796,7 @@ def test_resolution_is_logged(tmp_path):
     class A: ...
 
     with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
-        entries = ctx.tail_logs("A")
+        entries = ctx.tail_logs("scope.a")
         assert any("resolved" in e["message"] for e in entries)
 
 
@@ -809,11 +810,11 @@ def test_service_lifecycle_is_logged(tmp_path):
         def stop(self) -> None: ...
 
     with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
-        messages = [e["message"] for e in ctx.tail_logs("Svc")]
+        messages = [e["message"] for e in ctx.tail_logs("scope.svc")]
         assert "setup() starting" in messages
         assert "setup() complete" in messages
 
-    messages = [e["message"] for e in ctx.tail_logs("Svc")]
+    messages = [e["message"] for e in ctx.tail_logs("scope.svc")]
     assert "stop() called" in messages
     assert "stop() complete" in messages
 
@@ -831,10 +832,10 @@ def test_service_run_exception_is_logged(tmp_path):
 
     with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
         for _ in range(50):
-            if any("raised" in e["message"] for e in ctx.tail_logs("Svc")):
+            if any("raised" in e["message"] for e in ctx.tail_logs("scope.svc")):
                 break
             threading.Event().wait(0.02)
-        messages = [e["message"] for e in ctx.tail_logs("Svc")]
+        messages = [e["message"] for e in ctx.tail_logs("scope.svc")]
         assert any("run() raised" in m and "boom" in m for m in messages)
 
 
@@ -852,7 +853,7 @@ def test_task_execute_is_logged(tmp_path):
         result = instance.execute()
 
     assert result == 42
-    messages = [e["message"] for e in ctx.tail_logs("T")]
+    messages = [e["message"] for e in ctx.tail_logs("scope.t")]
     assert "execute() started" in messages
     assert any("execute() completed" in m for m in messages)
 
@@ -871,7 +872,7 @@ def test_task_execute_exception_is_logged_and_reraised(tmp_path):
         with pytest.raises(ValueError):
             instance.execute()
 
-    messages = [e["message"] for e in ctx.tail_logs("T")]
+    messages = [e["message"] for e in ctx.tail_logs("scope.t")]
     assert any("execute() raised" in m and "nope" in m for m in messages)
 
 
@@ -886,7 +887,7 @@ def test_pipeline_execute_is_logged(tmp_path):
     with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
         ctx.instances[P].execute()
 
-    messages = [e["message"] for e in ctx.tail_logs("P")]
+    messages = [e["message"] for e in ctx.tail_logs("scope.p")]
     assert "execute() started" in messages
 
 
@@ -903,7 +904,7 @@ def test_component_has_no_execute_instrumentation(tmp_path):
 
     with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
         assert ctx.instances[C].execute() == "not a task"
-        messages = [e["message"] for e in ctx.tail_logs("C")]
+        messages = [e["message"] for e in ctx.tail_logs("scope.c")]
         assert not any("execute()" in m for m in messages)
 
 
@@ -939,9 +940,9 @@ def test_logger_is_bound_to_consuming_class(tmp_path):
         ctx.instances[A].logger.info("from A")
         ctx.instances[B].logger.info("from B")
 
-        assert [e["message"] for e in ctx.tail_logs("A") if e["message"] == "from A"]
-        assert [e["message"] for e in ctx.tail_logs("B") if e["message"] == "from B"]
-        assert not any(e["message"] == "from B" for e in ctx.tail_logs("A"))
+        assert [e["message"] for e in ctx.tail_logs("scope.a") if e["message"] == "from A"]
+        assert [e["message"] for e in ctx.tail_logs("scope.b") if e["message"] == "from B"]
+        assert not any(e["message"] == "from B" for e in ctx.tail_logs("scope.a"))
 
 
 def test_logger_without_log_dir_is_safe_noop():
@@ -970,7 +971,7 @@ def test_function_dependency_is_injected_on_call():
         return (path, db)
 
     with Context(namespaces={NS, Function}) as ctx:
-        assert ctx.call("load-data", path="data.csv") == ("data.csv", ctx.instances[Db])
+        assert ctx.call("function.load-data", path="data.csv") == ("data.csv", ctx.instances[Db])
 
 
 def test_call_accepts_snake_case_name():
@@ -979,7 +980,7 @@ def test_call_accepts_snake_case_name():
         return path
 
     with Context(namespaces={Function}) as ctx:
-        assert ctx.call("load_data", path="data.csv") == "data.csv"
+        assert ctx.call("function.load-data", path="data.csv") == "data.csv"
 
 
 def test_call_explicit_argument_wins_over_injected():
@@ -995,7 +996,7 @@ def test_call_explicit_argument_wins_over_injected():
     fake = Db()
 
     with Context(namespaces={NS, Function}) as ctx:
-        assert ctx.call("load-data", db=fake) is fake
+        assert ctx.call("function.load-data", db=fake) is fake
 
 
 def test_call_passes_unmanaged_class_through_as_argument():
@@ -1008,7 +1009,7 @@ def test_call_passes_unmanaged_class_through_as_argument():
     model = Model()
 
     with Context(namespaces={Function}) as ctx:
-        assert ctx.call("score", model=model, threshold=0.5) == (model, 0.5)
+        assert ctx.call("function.score", model=model, threshold=0.5) == (model, 0.5)
 
 
 def test_call_missing_unmanaged_argument_raises_clear_error():
@@ -1020,7 +1021,7 @@ def test_call_missing_unmanaged_argument_raises_clear_error():
 
     with Context(namespaces={Function}) as ctx:
         with pytest.raises(TypeError, match=r"score\(\) is missing 'model' \(Model\)"):
-            ctx.call("score")
+            ctx.call("function.score")
 
 
 def test_call_supports_parameter_called_name():
@@ -1029,13 +1030,13 @@ def test_call_supports_parameter_called_name():
         return f"hello {name}"
 
     with Context(namespaces={Function}) as ctx:
-        assert ctx.call("greet", name="odf") == "hello odf"
+        assert ctx.call("function.greet", name="odf") == "hello odf"
 
 
 def test_call_unknown_name_raises_key_error():
     with Context(namespaces={Function}) as ctx:
         with pytest.raises(KeyError):
-            ctx.call("does-not-exist")
+            ctx.call("function.does-not-exist")
 
 
 def test_call_before_open_raises_key_error():
@@ -1043,7 +1044,7 @@ def test_call_before_open_raises_key_error():
     def load_data(): ...
 
     with pytest.raises(KeyError):
-        Context(namespaces={Function}).call("load-data")
+        Context(namespaces={Function}).call("function.load-data")
 
 
 def test_functions_excluded_when_function_namespace_not_configured():
@@ -1055,7 +1056,7 @@ def test_functions_excluded_when_function_namespace_not_configured():
     with Context(namespaces={NS}) as ctx:
         assert ctx.functions == {}
         with pytest.raises(KeyError):
-            ctx.call("load-data")
+            ctx.call("function.load-data")
 
 
 def test_function_in_default_namespaces():
@@ -1119,8 +1120,8 @@ def test_function_logger_is_bound_to_function_name(tmp_path):
         logger.info("loading")
 
     with Context(namespaces={Function}, log_dir=tmp_path) as ctx:
-        ctx.call("load-data")
-        messages = [e["message"] for e in ctx.tail_logs("load_data")]
+        ctx.call("function.load-data")
+        messages = [e["message"] for e in ctx.tail_logs("function.load-data")]
 
     assert "loading" in messages
 
@@ -1131,8 +1132,8 @@ def test_function_call_is_logged(tmp_path):
         return 42
 
     with Context(namespaces={Function}, log_dir=tmp_path) as ctx:
-        assert ctx.call("load-data") == 42
-        messages = [e["message"] for e in ctx.tail_logs("load_data")]
+        assert ctx.call("function.load-data") == 42
+        messages = [e["message"] for e in ctx.tail_logs("function.load-data")]
 
     assert "load_data resolved" in messages
     assert "call started" in messages
@@ -1146,8 +1147,8 @@ def test_function_call_exception_is_logged_and_reraised(tmp_path):
 
     with Context(namespaces={Function}, log_dir=tmp_path) as ctx:
         with pytest.raises(ValueError):
-            ctx.call("load-data")
-        messages = [e["message"] for e in ctx.tail_logs("load_data")]
+            ctx.call("function.load-data")
+        messages = [e["message"] for e in ctx.tail_logs("function.load-data")]
 
     assert any("call raised" in m and "nope" in m for m in messages)
 
@@ -1234,7 +1235,7 @@ def test_function_is_injected_into_another_function():
         return parser(path)
 
     with Context(namespaces={Function}) as ctx:
-        assert ctx.call("load-data", path="data.csv") == "DATA.CSV"
+        assert ctx.call("function.load-data", path="data.csv") == "DATA.CSV"
         assert list(ctx.parameters(load_data)) == ["path"]
 
 
@@ -1277,7 +1278,7 @@ def test_call_through_an_injected_function_is_logged(tmp_path):
 
     with Context(namespaces={NS, Function}, log_dir=tmp_path) as ctx:
         ctx.instances[Report].load()
-        messages = [e["message"] for e in ctx.tail_logs("load_data")]
+        messages = [e["message"] for e in ctx.tail_logs("function.load-data")]
 
     assert "call started" in messages
     assert any("call completed" in m for m in messages)
@@ -1357,21 +1358,23 @@ def test_call_invokes_an_agent_by_name_with_arguments():
             return (question, limit)
 
     with Context(namespaces={NS}) as ctx:
-        assert ctx.call("researcher", question="dune?") == ("dune?", 3)
-        assert ctx.call("Researcher", question="dune?", limit=1) == ("dune?", 1)
+        assert ctx.call("scope.researcher", question="dune?") == ("dune?", 3)
+        assert ctx.call("scope.researcher", question="dune?", limit=1) == ("dune?", 1)
 
 
 def test_call_invokes_an_agent_registered_under_an_explicit_name():
     NS = make_ns()
 
-    @NS
-    @Agent(name="assistant")
+    @NS("assistant")
+    @Agent
     class Researcher:
         def invoke(self):
             return "ok"
 
     with Context(namespaces={NS}) as ctx:
-        assert ctx.call("assistant") == "ok"
+        assert ctx.call("scope.assistant") == "ok"
+        with pytest.raises(KeyError):
+            ctx.call("scope.researcher")
 
 
 def test_agent_dependencies_are_injected_through_the_constructor():
@@ -1390,7 +1393,7 @@ def test_agent_dependencies_are_injected_through_the_constructor():
             return self.books
 
     with Context(namespaces={NS}) as ctx:
-        assert ctx.call("researcher") is ctx.instances[Books]
+        assert ctx.call("scope.researcher") is ctx.instances[Books]
         assert ctx.get(Researcher).invoke() is ctx.instances[Books]
 
 
@@ -1404,7 +1407,7 @@ def test_call_agent_missing_argument_raises_type_error():
 
     with Context(namespaces={NS}) as ctx:
         with pytest.raises(TypeError, match="question"):
-            ctx.call("researcher")
+            ctx.call("scope.researcher")
 
 
 def test_call_unresolved_agent_raises_key_error():
@@ -1414,23 +1417,25 @@ def test_call_unresolved_agent_raises_key_error():
 
     with Context(namespaces=set()) as ctx:
         with pytest.raises(KeyError):
-            ctx.call("researcher")
+            ctx.call("agent.researcher")
 
 
-def test_call_name_shared_by_function_and_agent_raises_value_error():
+def test_call_reaches_a_function_and_an_agent_sharing_a_name_by_namespace():
     NS = make_ns()
 
     @Function
-    def researcher(): ...
+    def researcher():
+        return "function"
 
     @NS
     @Agent
     class Researcher:
-        def invoke(self): ...
+        def invoke(self):
+            return "agent"
 
     with Context(namespaces={NS, Function}) as ctx:
-        with pytest.raises(ValueError, match="ambiguous"):
-            ctx.call("researcher")
+        assert ctx.call("function.researcher") == "function"
+        assert ctx.call("scope.researcher") == "agent"
 
 
 def test_agent_can_be_injected_into_a_pipeline():
@@ -1452,7 +1457,7 @@ def test_agent_can_be_injected_into_a_pipeline():
             return self.researcher.invoke("dune?")
 
     with Context(namespaces={NS}) as ctx:
-        assert ctx.execute("Digest") == "DUNE?"
+        assert ctx.execute("scope.digest") == "DUNE?"
 
 
 def test_agent_on_start_and_on_stop_are_called():
@@ -1486,7 +1491,7 @@ def test_execute_rejects_an_agent():
 
     with Context(namespaces={NS}) as ctx:
         with pytest.raises(TypeError):
-            ctx.execute("Researcher")
+            ctx.execute("scope.researcher")
 
 
 def test_agent_invoke_is_logged_through_call(tmp_path):
@@ -1499,9 +1504,9 @@ def test_agent_invoke_is_logged_through_call(tmp_path):
             return 42
 
     with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
-        assert ctx.call("researcher") == 42
+        assert ctx.call("scope.researcher") == 42
 
-    messages = [e["message"] for e in ctx.tail_logs("Researcher")]
+    messages = [e["message"] for e in ctx.tail_logs("scope.researcher")]
     assert "invoke() started" in messages
     assert any("invoke() completed" in m for m in messages)
 
@@ -1518,7 +1523,7 @@ def test_agent_direct_invoke_is_logged(tmp_path):
     with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
         assert ctx.get(Researcher).invoke("dune?") == "dune?"
 
-    messages = [e["message"] for e in ctx.tail_logs("Researcher")]
+    messages = [e["message"] for e in ctx.tail_logs("scope.researcher")]
     assert "invoke() started" in messages
     assert any("invoke() completed" in m for m in messages)
 
@@ -1534,9 +1539,9 @@ def test_agent_invoke_exception_is_logged_and_reraised(tmp_path):
 
     with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
         with pytest.raises(ValueError):
-            ctx.call("researcher")
+            ctx.call("scope.researcher")
 
-    messages = [e["message"] for e in ctx.tail_logs("Researcher")]
+    messages = [e["message"] for e in ctx.tail_logs("scope.researcher")]
     assert any("invoke() raised" in m and "nope" in m for m in messages)
 
 
@@ -1636,7 +1641,7 @@ def test_string_annotated_function_parameter_names_the_cause():
 
     with Context(namespaces={NS, Function}) as ctx:
         with pytest.raises(TypeError, match="String annotation on 'db'"):
-            ctx.call("load-data", path="data.csv")
+            ctx.call("function.load-data", path="data.csv")
 
 
 # --- async is not supported ----------------------------------------------------
@@ -1755,3 +1760,149 @@ def test_unrelated_async_method_is_left_alone():
 
     with Context(namespaces={NS}) as ctx:
         assert isinstance(ctx.get(Client), Client)
+
+
+# --- keys ---------------------------------------------------------------------
+
+
+@pytest.fixture
+def builtin_namespaces():
+    """Empty the built-in registries for one test; conftest restores them after."""
+    namespaces = (Component, Task, Agent, Function)
+    for ns in namespaces:
+        ns._namespace.clear()
+    return set(namespaces)
+
+
+def test_same_name_in_different_namespaces_is_addressed_by_key(builtin_namespaces, tmp_path):
+    def component():
+        @Component
+        class Loader:
+            def __init__(self, logger: Logger):
+                self.logger = logger
+
+            def on_start(self):
+                self.logger.info("from component")
+
+        return Loader
+
+    def task():
+        @Task
+        class Loader:
+            def execute(self):
+                return "task"
+
+        return Loader
+
+    def agent():
+        @Agent
+        class Loader:
+            def invoke(self):
+                return "agent"
+
+        return Loader
+
+    @Function
+    def loader():
+        return "function"
+
+    component_cls, task_cls, agent_cls = component(), task(), agent()
+
+    with Context(namespaces=builtin_namespaces, log_dir=tmp_path) as ctx:
+        assert ctx.execute("task.loader") == "task"
+        assert ctx.call("agent.loader") == "agent"
+        assert ctx.call("function.loader") == "function"
+        assert ctx.key(component_cls) == "component.loader"
+        assert ctx.key(task_cls) == "task.loader"
+        assert ctx.key(agent_cls) == "agent.loader"
+        assert ctx.key(loader) == "function.loader"
+        messages = [e["message"] for e in ctx.tail_logs("component.loader")]
+        assert "from component" in messages
+        assert not any("execute()" in m for m in messages)
+
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "agent.loader.log",
+        "component.loader.log",
+        "function.loader.log",
+        "task.loader.log",
+    ]
+
+
+def test_explicit_name_is_the_key_not_the_class_name(builtin_namespaces):
+    @Task("loader")
+    class LoadJob:
+        def execute(self):
+            return 1
+
+    with Context(namespaces=builtin_namespaces) as ctx:
+        assert ctx.key(LoadJob) == "task.loader"
+        assert ctx.execute("task.loader") == 1
+        with pytest.raises(KeyError):
+            ctx.execute("task.load-job")
+
+
+def test_key_is_accepted_in_any_casing():
+    NS = make_ns()
+
+    @NS
+    @Task
+    class LoadJob:
+        def execute(self):
+            return 1
+
+    with Context(namespaces={NS}) as ctx:
+        assert ctx.execute("Scope.LoadJob") == 1
+        assert ctx.execute("scope.load_job") == 1
+
+
+@pytest.mark.parametrize(
+    "method", ["execute", "call", "start", "stop", "is_running", "start_stream", "tail_logs"]
+)
+def test_bare_name_is_rejected_with_a_hint(method):
+    NS = make_ns()
+
+    @NS
+    class Svc: ...
+
+    with Context(namespaces={NS}) as ctx:
+        with pytest.raises(ValueError, match=r"<namespace>\.<name>"):
+            getattr(ctx, method)("Svc")
+
+
+def test_key_of_an_unresolved_object_raises_key_error():
+    NS = make_ns()
+
+    class Stray: ...
+
+    with Context(namespaces={NS}) as ctx:
+        with pytest.raises(KeyError):
+            ctx.key(Stray)
+
+
+def test_object_in_two_gathered_namespaces_raises():
+    NS = make_ns()
+
+    class Other(Namespace): ...
+
+    @Other
+    @NS
+    class Users: ...
+
+    with pytest.raises(ValueError, match="registered as both 'other.users' and 'scope.users'"):
+        Context(namespaces={NS, Other}).open()
+
+
+def test_two_gathered_namespaces_with_one_name_raise():
+    First, Second = make_ns(), make_ns()
+
+    @First
+    class Users: ...
+
+    @Second
+    class Orders: ...
+
+    @Second("users")
+    class Accounts: ...
+
+    with pytest.raises(ValueError, match="'scope.users' names both"):
+        Context(namespaces={First, Second}).open()

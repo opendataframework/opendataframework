@@ -3,7 +3,7 @@ import pytest
 from opendataframework.agent import Agent
 from opendataframework.component import Component
 from opendataframework.entity import Entity
-from opendataframework.namespace import ClassNamespace, Namespace
+from opendataframework.namespace import ClassNamespace, Namespace, parse, qualified
 from opendataframework.pipeline import Pipeline
 from opendataframework.repository import Repository
 from opendataframework.service import Service
@@ -125,6 +125,35 @@ def test_factory_decorator_duplicate_name_raises():
 
         @NS(name="custom-foo")
         class Bar: ...
+
+
+def test_same_object_under_two_names_in_one_namespace_raises():
+    class NS(Namespace): ...
+
+    with pytest.raises(ValueError, match="already registered in NS as 'b'"):
+
+        @NS("a")
+        @NS("b")
+        class Foo: ...
+
+
+def test_qualified_joins_namespace_and_name():
+    assert qualified(Task, "load-job") == "task.load-job"
+
+
+def test_parse_normalizes_any_casing():
+    assert parse("Task.LoadJob") == "task.load-job"
+    assert parse("function.load_data") == "function.load-data"
+
+
+def test_parse_splits_on_the_first_dot():
+    assert parse("task.v1.export") == "task.v1.export"
+
+
+@pytest.mark.parametrize("key", ["loader", "LoadJob", ".loader", "task."])
+def test_parse_rejects_a_key_without_both_parts(key):
+    with pytest.raises(ValueError, match=r"<namespace>\.<name>"):
+        parse(key)
 
 
 def test_duplicate_registration_names_both_classes():

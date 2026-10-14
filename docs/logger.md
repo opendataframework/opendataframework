@@ -4,7 +4,7 @@
 dependency exactly like any other — `logger: Logger` — but the `Context`
 resolves it differently from everything else: instead of handing out one
 shared instance, every consumer receives its own `Logger`, already bound to
-its own class name, so `self.logger.info(...)` needs no name argument and
+its own `<namespace>.<name>` key, so `self.logger.info(...)` needs no name argument and
 still lands in that component's own log file.
 
 ---
@@ -64,8 +64,11 @@ way.
 
 ## Enabling File Logging
 
-Log files are written under a single directory, one `<component>.log` per
-class, scoped to one `Context`. `Project.from_config`/`from_dict` enable it
+Log files are written under a single directory, one
+`<namespace>.<name>.log` per registered class or function — the same key
+the [Context](context.md#by-key-single-component-control) addresses it by,
+so `@Task class Loader` and `@Agent class Loader` never share a file —
+scoped to one `Context`. `Project.from_config`/`from_dict` enable it
 automatically under `[project] log-dir` (default `"logs"`, relative to the
 current working directory):
 
@@ -81,11 +84,11 @@ entirely: writes become no-ops and reads return nothing.
 
 ## Reading Logs Back
 
-`Context.tail_logs(component, lines=300)` returns the most recent entries for
+`Context.tail_logs(key, lines=300)` returns the most recent entries for
 a component, oldest first:
 
 ```python
-project.context.tail_logs("Postgres", lines=100)
+project.context.tail_logs("service.postgres", lines=100)
 # → [{"ts": "2026-08-08 10:00:00", "level": "INFO", "message": "setup() starting"}, ...]
 ```
 

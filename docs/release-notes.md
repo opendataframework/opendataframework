@@ -8,8 +8,8 @@
   at run time — typically by a language model. An agent is a class with a single `invoke()`
   method whose signature is its author's to choose; everything it may act on is declared
   through its constructor like any other dependency, so it can also be injected into a
-  `Pipeline`, a `Service`, or another agent. `context.call("librarian", question=...)`
-  invokes one by registered name, `context.parameters(Librarian)` returns the parameters of
+  `Pipeline`, a `Service`, or another agent. `context.call("agent.librarian", question=...)`
+  invokes one by key, `context.parameters(Librarian)` returns the parameters of
   its `invoke()`, and every invocation is logged like a `Task`'s `execute()`. `@Agent` on a
   class without `invoke()` raises `TypeError` at decoration time. `AgentProtocol` documents
   the interface. The framework still ships no model client and no agent loop — `invoke()` is
@@ -18,8 +18,8 @@
   framework the way `@Component` does a class — so an existing function-based codebase can
   be adopted without a class refactor first. The function is returned unchanged, and direct
   calls behave exactly as before. Through the `Context`, parameters annotated with a managed
-  type are injected and the rest are call arguments: `context.call("load-data", path=...)`
-  calls by registered name, `context.get(load_data)` returns the function with its
+  type are injected and the rest are call arguments: `context.call("function.load-data", path=...)`
+  calls by key, `context.get(load_data)` returns the function with its
   dependencies bound, `context.functions` lists what was resolved, and
   `context.parameters(func)` returns the parameters a caller must supply. A class — or
   another function — asks for one by naming it in its signature,
@@ -70,6 +70,27 @@
   parameters and return value (`-> None` counts), replace a lambda with a method or a
   function, and remove `from __future__ import annotations` from the handler's module.
   See [Component](component.md#mcp-tools).
+
+- **Context** (breaking): everything addressed by a string is now addressed by a key,
+  `<namespace>.<name>` — `execute("task.load-job")`, `call("agent.librarian", ...)`,
+  `start("service.postgres")`, `start_stream("repository.webcam")`,
+  `tail_logs("component.cache")` and the rest. The name is the registered one (kebab-case
+  class or function name, or the explicit `name=`), and keys are accepted in any casing.
+  A name is only unique within its namespace, and the bare names used before collided
+  across them: with a `@Component class Loader` and a `@Task class Loader`,
+  `execute("Loader")` could find the component and raise `TypeError`, a `@Function` and an
+  `@Agent` sharing a name could not be `call()`ed at all, and every same-named object
+  wrote to one log file. Now each is reachable, and log files are named
+  `<namespace>.<name>.log` (`logs/task.loader.log`). `context.key(obj)` returns the key
+  of a class or function you hold. A string without a namespace raises `ValueError`, and
+  the `ValueError` `call()` raised for a function and an agent sharing a name is gone. To
+  migrate, prefix every name passed to the `Context` with its namespace, and point
+  anything reading log files at the new names. See
+  [Context](context.md#by-key-single-component-control).
+
+- **Namespace** (breaking): registering one object under two names in the same
+  namespace (`@Task("a") @Task("b") class X`) now raises `ValueError`, so every object
+  has exactly one key. See [Namespace](namespace.md#names-are-unique-per-namespace-keys-everywhere).
 
 - **Repository** (breaking): `@Repository(...)` now requires its argument to be a class
   registered with `@Entity`, and raises `TypeError` at decoration time otherwise. The docs

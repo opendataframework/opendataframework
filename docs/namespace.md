@@ -109,6 +109,19 @@ The dual-use decorator protocol is implemented through `__new__` and `__call__`:
     behavior is no longer supported; rename one of the classes, or give one
     an explicit `name=`.
 
+### Names are unique per namespace, keys everywhere
+
+Uniqueness is checked within one `Namespace` subclass only, so the same name
+can be registered in several: a `@Task class Loader`, an `@Agent class Loader`
+and a `@Function def loader` coexist. Each object also has exactly one name in a
+namespace — registering it twice under different names raises `ValueError`.
+
+Together that makes `<namespace>.<name>` unique, and it is what the
+[Context](context.md#by-key-single-component-control) addresses everything by —
+`"task.loader"`, `"agent.loader"`, `"function.loader"` — and what each log file
+is named after. `qualified(Task, "loader")` builds a key and `parse("Task.Loader")`
+normalizes one; both live in `opendataframework.namespace`.
+
 ---
 
 ## What each decorator accepts

@@ -222,7 +222,7 @@ class Librarian:
     def invoke(self, question: str) -> str: ...
 
 
-project.context.call("librarian", question="Anything by Herbert?")
+project.context.call("agent.librarian", question="Anything by Herbert?")
 ```
 
 ## Function
@@ -236,7 +236,7 @@ its managed dependencies are injected and the rest are arguments.
 def load_data(path: str, db: Postgres) -> int: ...
 
 
-project.context.call("load-data", path="data.csv")  # db injected
+project.context.call("function.load-data", path="data.csv")  # db injected
 ```
 
 A class asks for a function through its constructor, and gets it with its

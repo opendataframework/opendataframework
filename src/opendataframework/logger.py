@@ -1,6 +1,7 @@
 """Per-component file logging.
 
-``LogManager`` owns one log file per component name, scoped to a single
+``LogManager`` owns one log file per ``<namespace>.<name>`` key (see
+``opendataframework.namespace.qualified``), scoped to a single
 ``Context`` — no process-global state, so multiple ``Project`` instances in
 the same process never share log files or file handles (see
 ``docs/context.md`` / ``CLAUDE.md``'s "no global mutable state" constraint).
@@ -12,7 +13,7 @@ Two ways log lines get written:
   changes required anywhere.
 * Explicitly, by component code that declares ``logger: Logger`` in its
   constructor. ``Resolver`` special-cases this type: each consumer receives
-  a ``Logger`` already bound to its own class name, so ``self.logger.info(x)``
+  a ``Logger`` already bound to its own key, so ``self.logger.info(x)``
   needs no name argument and still lands in that component's own file.
 """
 
@@ -35,7 +36,7 @@ class LogManager:
     ``Project.from_config``/``from_dict`` opt in to a real ``log_dir``.
 
     Args:
-        log_dir: Directory to write ``<component>.log`` files under, or
+        log_dir: Directory to write ``<namespace>.<name>.log`` files under, or
             ``None`` to disable file logging entirely.
     """
 
@@ -94,7 +95,7 @@ class Logger:
 
     Not registered in any ``Namespace`` — ``Resolver`` special-cases a
     ``logger: Logger`` constructor parameter and supplies an instance already
-    bound to the requesting class's own name, rather than a single shared
+    bound to the requesting class's own key, rather than a single shared
     instance. Declare it like any other dependency::
 
         @Task

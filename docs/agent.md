@@ -127,11 +127,11 @@ can be shared between agents and replaced in tests.
 
 ## Using an Agent
 
-An `Agent` is invoked through the `Context` by its registered name, with keyword
+An `Agent` is invoked through the `Context` by its [key](context.md#by-key-single-component-control), `agent.<name>`, with keyword
 arguments passed on to `invoke()`:
 
 ```python
-answer = project.context.call("librarian", question="Anything by Herbert?")
+answer = project.context.call("agent.librarian", question="Anything by Herbert?")
 ```
 
 Or by class, typed:

@@ -23,7 +23,7 @@ from opendataframework.component import Component, OnStartProtocol, OnStopProtoc
 from opendataframework.config import Config
 from opendataframework.function import Function, bind, string_hint
 from opendataframework.logger import Logger, LogManager
-from opendataframework.namespace import Namespace
+from opendataframework.namespace import Namespace, parse, qualified
 from opendataframework.pipeline import Pipeline
 from opendataframework.repository import (
     CloseStreamProtocol,
@@ -33,6 +33,7 @@ from opendataframework.repository import (
 )
 from opendataframework.service import Service, ServiceProtocol
 from opendataframework.task import Task
+from opendataframework.utils import normalize
 
 _STREAM_ENDED = object()
 
@@ -115,7 +116,7 @@ class Resolver:
     of lifecycle or framework protocols — the one exception is ``Logger``
     (see ``opendataframework.logger``), which is resolved contextually: a ``logger: Logger``
     constructor parameter receives an instance bound to the *consuming*
-    class's own name rather than a single shared instance, and every
+    class's own key rather than a single shared instance, and every
     instantiation is logged to that component's file.
 
     Args:
@@ -150,6 +151,8 @@ class Resolver:
         self._order: list[type] = []
         self._functions: dict[Callable[..., object], Callable[..., object]] = {}
         self._injected: dict[Callable[..., object], dict[str, object]] = {}
+        self._keys: dict[type | Callable[..., object], str] = {}
+        self._by_key: dict[str, type | Callable[..., object]] = {}
         self._log_manager = log_manager if log_manager is not None else LogManager()
 
     @property
@@ -181,6 +184,29 @@ class Resolver:
             same callable injected wherever the function is asked for.
         """
         return dict(self._functions)
+
+    @property
+    def keys(self) -> dict[type | Callable[..., object], str]:
+        """Registered class or function → its ``<namespace>.<name>`` key.
+
+        Populated after ``resolve()``; see ``opendataframework.namespace.qualified``.
+
+        Returns:
+            A shallow copy.
+        """
+        return dict(self._keys)
+
+    def lookup(self, key: str) -> type | Callable[..., object]:
+        """Return the registered class or function addressed by ``key``, in any casing.
+
+        Raises:
+            ValueError: If ``key`` is not ``<namespace>.<name>``.
+            KeyError: If nothing gathered is registered under ``key``.
+        """
+        normalized = parse(key)
+        if normalized not in self._by_key:
+            raise KeyError(key)
+        return self._by_key[normalized]
 
     def injected(self, func: Callable[..., object]) -> dict[str, object]:
         """Return the parameter name → value pairs injected into ``func``.
@@ -216,6 +242,7 @@ class Resolver:
             >>> resolver.order
             [A, B]
         """
+        self._index()
         ordered = self._sort(self.gather() | self.gather_functions())
         self._order = [node for node in ordered if isinstance(node, type)]
         for node in ordered:
@@ -225,10 +252,39 @@ class Resolver:
                 self._injected[node] = self._inject(node)
                 self._functions[node] = _logged_execute(
                     bind(node, self._injected[node]),
-                    node.__name__,
+                    self._keys[node],
                     self._log_manager,
                     label="call",
                 )
+
+    def _index(self) -> None:
+        """Give everything gathered its ``<namespace>.<name>`` key.
+
+        Raises:
+            ValueError: If an object is registered in more than one of the
+                gathered namespaces (e.g. ``namespaces={Api, Component}`` for
+                an ``@Api @Component`` class), or two namespaces share a name,
+                so a key would not name exactly one object.
+        """
+        keys: dict[type | Callable[..., object], str] = {}
+        by_key: dict[str, type | Callable[..., object]] = {}
+        for ns in sorted(self._namespaces, key=lambda ns: ns.__name__):
+            for name, obj in ns.items():
+                key = qualified(ns, normalize(name))
+                if obj in keys:
+                    raise ValueError(
+                        f"{obj.__name__} is registered as both {keys[obj]!r} and {key!r} — "
+                        "gather it from one namespace only, so it has one key"
+                    )
+                if key in by_key:
+                    raise ValueError(
+                        f"{key!r} names both {by_key[key].__name__} and {obj.__name__} — "
+                        "two gathered namespaces share a name"
+                    )
+                keys[obj] = key
+                by_key[key] = obj
+        self._keys = keys
+        self._by_key = by_key
 
     def gather(self) -> set[type]:
         """Collect all classes registered across the configured namespaces.
@@ -370,7 +426,7 @@ class Resolver:
         supplied = self._supply(cls)
         self._require_readable(cls, supplied)
         instance = cls(**supplied)
-        self._log_manager.write(cls.__name__, "INFO", f"{cls.__name__} resolved")
+        self._log_manager.write(self._keys[cls], "INFO", f"{cls.__name__} resolved")
         return instance
 
     @staticmethod
@@ -406,7 +462,7 @@ class Resolver:
         remaining parameter is left for the caller.
         """
         injected = self._supply(func)
-        self._log_manager.write(func.__name__, "INFO", f"{func.__name__} resolved")
+        self._log_manager.write(self._keys[func], "INFO", f"{func.__name__} resolved")
         return injected
 
     def _supply(self, target: type | Callable[..., object]) -> dict[str, object]:
@@ -414,7 +470,7 @@ class Resolver:
 
         A ``dep`` annotated exactly as ``Logger`` is special-cased: instead of
         a shared instance, ``target`` receives a ``Logger`` bound to its own
-        name (see ``opendataframework.logger.LogManager.logger_for``). A class is
+        key (see ``opendataframework.logger.LogManager.logger_for``). A class is
         supplied only if already present in ``self._instances``, and a
         function only if already bound — unregistered ones in the signature
         are silently ignored.
@@ -422,7 +478,7 @@ class Resolver:
         supplied: dict[str, object] = {}
         for name, dep in self.dependencies(target).items():
             if dep is Logger:
-                supplied[name] = self._log_manager.logger_for(target.__name__)
+                supplied[name] = self._log_manager.logger_for(self._keys[target])
             elif dep in self._instances:
                 supplied[name] = self._instances[dep]
             elif dep in self._functions:
@@ -444,11 +500,13 @@ class Lifecycle:
     Args:
         instances: Class-to-instance mapping produced by ``Resolver``.
         order: Classes in dependency order, as returned by ``Resolver.order``.
+        keys: Class → ``<namespace>.<name>`` key, as returned by
+            ``Resolver.keys``. Names each class's log file.
         log_manager: Owns per-component log files. Defaults to a disabled
             ``LogManager`` (writes become no-ops) when omitted.
 
     Example:
-        >>> lifecycle = Lifecycle(instances={...}, order=[...])
+        >>> lifecycle = Lifecycle(instances={...}, order=[...], keys={...})
         >>> lifecycle.on_start()   # services set up and backgrounded
         >>> lifecycle.on_stop()    # services stopped in reverse order
     """
@@ -457,11 +515,13 @@ class Lifecycle:
         self,
         instances: dict[type, object],
         order: list[type],
+        keys: dict[type, str],
         log_manager: LogManager | None = None,
     ) -> None:
         """See class docstring for ``Args``."""
         self._instances = instances
         self._order = order
+        self._keys = keys
         self._log_manager = log_manager if log_manager is not None else LogManager()
         self._threads: list[threading.Thread] = []
         self._running: dict[type, bool] = {}
@@ -491,7 +551,7 @@ class Lifecycle:
 
     def _activate_one(self, cls: type, instance: object) -> None:
         """Call a non-``Service`` instance's ``on_start()`` hook."""
-        name = cls.__name__
+        name = self._keys[cls]
         self._log_manager.write(name, "INFO", "on_start() called")
         instance.on_start()
         self._log_manager.write(name, "INFO", "on_start() complete")
@@ -510,7 +570,7 @@ class Lifecycle:
         if self._running.get(cls):
             return
         instance = self._instances[cls]
-        name = cls.__name__
+        name = self._keys[cls]
         self._log_manager.write(name, "INFO", "setup() starting")
         instance.setup()
         self._log_manager.write(name, "INFO", "setup() complete")
@@ -533,7 +593,7 @@ class Lifecycle:
         if not self._running.get(cls):
             return
         instance = self._instances[cls]
-        name = cls.__name__
+        name = self._keys[cls]
         self._log_manager.write(name, "INFO", "stop() called")
         instance.stop()
         self._log_manager.write(name, "INFO", "stop() complete")
@@ -545,7 +605,7 @@ class Lifecycle:
 
     def _run(self, cls: type, instance: ServiceProtocol) -> None:
         """Run ``instance.run()``, logging its start, return, and any exception."""
-        name = cls.__name__
+        name = self._keys[cls]
         self._log_manager.write(name, "INFO", "run() started")
         try:
             instance.run()
@@ -577,7 +637,7 @@ class Lifecycle:
 
     def _deactivate_one(self, cls: type, instance: object) -> None:
         """Call a non-``Service`` instance's ``on_stop()`` hook."""
-        name = cls.__name__
+        name = self._keys[cls]
         self._log_manager.write(name, "INFO", "on_stop() called")
         instance.on_stop()
         self._log_manager.write(name, "INFO", "on_stop() complete")
@@ -633,8 +693,15 @@ class StreamManager:
     plain dict/Event lookups instead, which are safe without a lock.
     """
 
-    def __init__(self, log_manager: LogManager | None = None) -> None:
-        """See class docstring; ``log_manager`` defaults to a disabled ``LogManager``."""
+    def __init__(
+        self, keys: dict[type, str] | None = None, log_manager: LogManager | None = None
+    ) -> None:
+        """See class docstring; ``log_manager`` defaults to a disabled ``LogManager``.
+
+        ``keys`` maps each class to the ``<namespace>.<name>`` key its log
+        lines go under, as returned by ``Resolver.keys``.
+        """
+        self._keys = keys if keys is not None else {}
         self._log_manager = log_manager if log_manager is not None else LogManager()
         self._threads: dict[type, threading.Thread] = {}
         self._stop_events: dict[type, threading.Event] = {}
@@ -654,7 +721,7 @@ class StreamManager:
             if cls in self._threads or cls in self._starting:
                 return
             self._starting.add(cls)
-        name = cls.__name__
+        name = self._keys[cls]
         try:
             if isinstance(instance, OpenStreamProtocol):
                 self._log_manager.write(name, "INFO", "open_stream() called")
@@ -687,7 +754,7 @@ class StreamManager:
             return
         event.set()
         thread.join(timeout=5)
-        self._log_manager.write(cls.__name__, "INFO", "stream stopped")
+        self._log_manager.write(self._keys[cls], "INFO", "stream stopped")
 
     def stop_all(self) -> None:
         """Stop every currently running stream. Used by ``Context.close()``."""
@@ -720,7 +787,7 @@ class StreamManager:
 
     def _run(self, cls: type, instance: StreamableProtocol, stop_event: threading.Event) -> None:
         """Drive ``instance.stream()``, fanning entities out to subscribers until done."""
-        name = cls.__name__
+        name = self._keys[cls]
         try:
             for entity in instance.stream():
                 if stop_event.is_set():
@@ -766,7 +833,8 @@ class Context:
             Defaults to all of the built-in ones listed above.
         config: Configuration dict, pre-seeded as ``Config`` into the
             container.
-        log_dir: Directory to write per-component ``<name>.log`` files under.
+        log_dir: Directory to write per-component ``<namespace>.<name>.log``
+            files under.
             ``None`` (the default) disables file logging entirely — see
             ``opendataframework.logger.LogManager``. ``Project.from_config``/``from_dict``
             opt in to a real directory.
@@ -774,6 +842,12 @@ class Context:
     Attributes:
         instances: Class-to-instance mapping, populated after ``open()`` returns.
             Backs ``Context.get(cls)``, the typed lookup by class.
+
+    Every method that takes a string — ``execute``, ``call``, ``start``,
+    ``tail_logs`` and the rest — takes a key, ``<namespace>.<name>``
+    (``"task.load-job"``, ``"agent.librarian"``), in any casing. A name is
+    only unique within its namespace, so the namespace is always part of it;
+    ``key(obj)`` returns the key of a class or function you hold.
 
     Example:
         Default usage via context manager::
@@ -817,7 +891,7 @@ class Context:
             log_manager=self._log_manager,
         )
         self._lifecycle: Lifecycle | None = None
-        self._stream_manager = StreamManager(self._log_manager)
+        self._stream_manager = StreamManager(log_manager=self._log_manager)
         self._functions: dict[Callable[..., object], Callable[..., object]] = {}
 
     @property
@@ -877,6 +951,22 @@ class Context:
             return cast(T, self._resolver.instances[cls])
         return self._functions[cls]
 
+    def key(self, obj: type | Callable[..., object]) -> str:
+        """Return the ``<namespace>.<name>`` key a resolved class or function is addressed by.
+
+        The key every string-taking method here accepts, and the name of
+        ``obj``'s log file.
+
+        Raises:
+            KeyError: If ``obj`` was not resolved (not registered, or
+                ``open()`` has not been called yet).
+
+        Example:
+            >>> context.key(DailyAnalytics)
+            'pipeline.daily-analytics'
+        """
+        return self._resolver.keys[obj]
+
     def open(self) -> None:
         """Resolve all registered classes and drive their startup lifecycle.
 
@@ -887,16 +977,20 @@ class Context:
         ``Lifecycle`` from the result and calls ``Lifecycle.on_start()``.
 
         Raises:
-            ValueError: If a circular dependency is detected.
+            ValueError: If a circular dependency is detected, or a gathered
+                object would not have exactly one key (see
+                ``Resolver._index``).
             TypeError: If a registered function, or a method the ``Context``
                 calls, is async — see ``_require_sync``.
         """
         self._require_sync()
         self._resolver.resolve()
-        self._instrument()
+        keys = self._resolver.keys
+        self._instrument(keys)
         self._functions = self._resolver.functions
+        self._stream_manager = StreamManager(keys, self._log_manager)
         self._lifecycle = Lifecycle(
-            self._resolver.instances, self._resolver.order, self._log_manager
+            self._resolver.instances, self._resolver.order, keys, self._log_manager
         )
         self._lifecycle.on_start()
 
@@ -912,89 +1006,93 @@ class Context:
         self._stream_manager.stop_all()
         self._log_manager.close()
 
-    def start(self, name: str) -> None:
-        """Start a single resolved ``Service`` by class name. No-op if already running.
+    def start(self, key: str) -> None:
+        """Start a single resolved ``Service`` by key. No-op if already running.
 
         Args:
-            name: The class name of a resolved instance (e.g. ``"Postgres"``).
+            key: The ``<namespace>.<name>`` key of a resolved instance
+                (e.g. ``"service.postgres"``), in any casing.
 
         Raises:
-            KeyError: If no resolved instance matches ``name``.
+            KeyError: If no resolved instance matches ``key``.
             TypeError: If the matched instance is not a ``Service``.
         """
-        cls, instance = self._resolved(name)
+        cls, instance = self._resolved(key)
         if not isinstance(instance, ServiceProtocol):
-            raise TypeError(f"{name} is not a Service")
+            raise TypeError(f"{key} is not a Service")
         self._lifecycle.start_one(cls)
 
-    def stop(self, name: str) -> None:
-        """Stop a single running ``Service`` by class name. No-op if not running.
+    def stop(self, key: str) -> None:
+        """Stop a single running ``Service`` by key. No-op if not running.
 
         Args:
-            name: The class name of a resolved instance (e.g. ``"Postgres"``).
+            key: The ``<namespace>.<name>`` key of a resolved instance
+                (e.g. ``"service.postgres"``), in any casing.
 
         Raises:
-            KeyError: If no resolved instance matches ``name``.
+            KeyError: If no resolved instance matches ``key``.
             TypeError: If the matched instance is not a ``Service``.
         """
-        cls, instance = self._resolved(name)
+        cls, instance = self._resolved(key)
         if not isinstance(instance, ServiceProtocol):
-            raise TypeError(f"{name} is not a Service")
+            raise TypeError(f"{key} is not a Service")
         self._lifecycle.stop_one(cls)
 
-    def is_running(self, name: str) -> bool:
-        """Return whether the ``Service`` matching ``name`` is currently started.
+    def is_running(self, key: str) -> bool:
+        """Return whether the ``Service`` matching ``key`` is currently started.
 
         Raises:
-            KeyError: If no resolved instance matches ``name``.
+            KeyError: If no resolved instance matches ``key``.
         """
-        cls, instance = self._resolved(name)
+        cls, instance = self._resolved(key)
         return isinstance(instance, ServiceProtocol) and self._lifecycle.is_running(cls)
 
-    def start_stream(self, name: str) -> None:
-        """Start a single resolved ``StreamableProtocol`` repository's stream by class name.
+    def start_stream(self, key: str) -> None:
+        """Start a single resolved ``StreamableProtocol`` repository's stream by key.
 
         Mirrors ``start()`` for services: spawns a background thread that
         drives ``instance.stream()`` so it keeps running independent of any
         one viewer's connection. No-op if already streaming.
 
         Args:
-            name: The class name of a resolved instance (e.g. ``"Webcam"``).
+            key: The ``<namespace>.<name>`` key of a resolved instance
+                (e.g. ``"repository.webcam"``), in any casing.
 
         Raises:
-            KeyError: If no resolved instance matches ``name``.
+            KeyError: If no resolved instance matches ``key``.
             TypeError: If the matched instance is not ``StreamableProtocol``.
         """
-        cls, instance = self._resolved(name)
+        cls, instance = self._resolved(key)
         if not isinstance(instance, StreamableProtocol):
-            raise TypeError(f"{name} is not streamable")
+            raise TypeError(f"{key} is not streamable")
         self._stream_manager.start(cls, instance)
 
-    def stop_stream(self, name: str) -> None:
-        """Stop a single running repository stream by class name. No-op if not streaming.
+    def stop_stream(self, key: str) -> None:
+        """Stop a single running repository stream by key. No-op if not streaming.
 
         Args:
-            name: The class name of a resolved instance (e.g. ``"Webcam"``).
+            key: The ``<namespace>.<name>`` key of a resolved instance
+                (e.g. ``"repository.webcam"``), in any casing.
 
         Raises:
-            KeyError: If no resolved instance matches ``name``.
+            KeyError: If no resolved instance matches ``key``.
             TypeError: If the matched instance is not ``StreamableProtocol``.
         """
-        cls, instance = self._resolved(name)
+        cls, instance = self._resolved(key)
         if not isinstance(instance, StreamableProtocol):
-            raise TypeError(f"{name} is not streamable")
+            raise TypeError(f"{key} is not streamable")
         self._stream_manager.stop(cls)
 
-    def is_streaming(self, name: str) -> bool:
-        """Return whether the repository stream matching ``name`` is currently running.
+    def is_streaming(self, key: str) -> bool:
+        """Return whether the repository stream matching ``key`` is currently running.
 
         Raises:
-            KeyError: If no resolved instance matches ``name``.
+            KeyError: If no resolved instance matches ``key``.
         """
-        cls, instance = self._resolved(name)
+        cls, instance = self._resolved(key)
         return isinstance(instance, StreamableProtocol) and self._stream_manager.is_streaming(cls)
 
-    def iter_stream(self, name: str) -> Iterator[object]:
+    def iter_stream(self, key: str) -> Iterator[object]:
         """Attach as one subscriber to a repository's already-running stream.
 
         Does not start or stop the stream itself — see ``start_stream()``.
@@ -1003,13 +1101,14 @@ class Context:
         disconnect closes this generator).
 
         Args:
-            name: The class name of a resolved instance (e.g. ``"Webcam"``).
+            key: The ``<namespace>.<name>`` key of a resolved instance
+                (e.g. ``"repository.webcam"``), in any casing.
 
         Raises:
-            KeyError: If no resolved instance matches ``name``, or if it
+            KeyError: If no resolved instance matches ``key``, or if it
                 isn't currently streaming.
         """
-        cls, _ = self._resolved(name)
+        cls, _ = self._resolved(key)
         q = self._stream_manager.subscribe(cls)
         return self._drain_stream(cls, q)
 
@@ -1024,27 +1123,28 @@ class Context:
         finally:
             self._stream_manager.unsubscribe(cls, q)
 
-    def execute(self, name: str) -> object:
-        """Execute a single resolved ``Task`` or ``Pipeline`` by class name.
+    def execute(self, key: str) -> object:
+        """Execute a single resolved ``Task`` or ``Pipeline`` by key.
 
         Args:
-            name: The class name of a resolved instance (e.g. ``"DailyAnalytics"``).
+            key: The ``<namespace>.<name>`` key of a resolved instance
+                (e.g. ``"pipeline.daily-analytics"``), in any casing.
 
         Returns:
             Whatever ``execute()`` returns.
 
         Raises:
-            KeyError: If no resolved instance matches ``name``.
+            KeyError: If no resolved instance matches ``key``.
             TypeError: If the matched instance is not a ``Task`` or ``Pipeline``.
         """
-        cls, instance = self._resolved(name)
+        cls, instance = self._resolved(key)
         executable = set(dict(Task.items()).values()) | set(dict(Pipeline.items()).values())
         if cls not in executable:
-            raise TypeError(f"{name} is not a Task or Pipeline")
+            raise TypeError(f"{key} is not a Task or Pipeline")
         return instance.execute()
 
-    def call(self, name: str, /, **kwargs: object) -> object:
-        """Call a resolved ``Function`` or ``Agent`` by registered name, with arguments.
+    def call(self, key: str, /, **kwargs: object) -> object:
+        """Call a resolved ``Function`` or ``Agent`` by key, with arguments.
 
         The counterpart of ``execute()`` for what — unlike a ``Task`` — takes
         arguments.
@@ -1056,9 +1156,10 @@ class Context:
         ``kwargs`` is passed to its ``invoke()`` as is.
 
         Args:
-            name: The registered name, in any casing (``"load-data"``,
-                ``"load_data"``, ``"Librarian"``). Positional-only, so a
-                parameter that is itself called ``name`` can still be passed.
+            key: The ``<namespace>.<name>`` key, in any casing
+                (``"function.load-data"``, ``"function.load_data"``,
+                ``"Agent.Librarian"``). Positional-only, so a parameter that
+                is itself called ``key`` can still be passed.
             **kwargs: The function's remaining arguments, or the agent's
                 ``invoke()`` arguments.
 
@@ -1066,34 +1167,23 @@ class Context:
             Whatever the function, or the agent's ``invoke()``, returns.
 
         Raises:
-            KeyError: If no resolved function or agent matches ``name``.
-            ValueError: If ``name`` matches both a resolved function and a
-                resolved agent.
+            ValueError: If ``key`` is not ``<namespace>.<name>``.
+            KeyError: If no resolved function or agent matches ``key``.
             TypeError: If a required argument is neither managed by the
                 ``Context`` nor supplied.
 
         Example:
-            >>> context.call("load-data", path="data.csv")  # db injected
+            >>> context.call("function.load-data", path="data.csv")  # db injected
             42
-            >>> context.call("librarian", question="Anything by Herbert?")
+            >>> context.call("agent.librarian", question="Anything by Herbert?")
             'Dune, by Frank Herbert'
         """
-        func = Function.get(name)
-        if func not in self._functions:
-            func = None
-        agent = Agent.get(name)
-        if agent not in self._resolver.instances:
-            agent = None
-        if func is not None and agent is not None:
-            raise ValueError(
-                f"{name!r} is ambiguous: it names both the function {func.__name__} "
-                f"and the agent {agent.__name__}"
-            )
-        if func is not None:
-            return self._functions[func](**kwargs)
-        if agent is not None:
-            return self._resolver.instances[agent].invoke(**kwargs)
-        raise KeyError(name)
+        target = self._resolver.lookup(key)
+        if target in self._functions:
+            return self._functions[target](**kwargs)
+        if target in set(dict(Agent.items()).values()) and target in self._resolver.instances:
+            return self._resolver.instances[target].invoke(**kwargs)
+        raise KeyError(key)
 
     def parameters(self, func: type | Callable[..., object]) -> dict[str, inspect.Parameter]:
         """Return the parameters a caller must supply to ``call()`` a function or agent.
@@ -1124,29 +1214,35 @@ class Context:
             if name not in injected
         }
 
-    def _resolved(self, name: str) -> tuple[type, object]:
-        """Look up a resolved ``(cls, instance)`` pair by exact class name.
+    def _resolved(self, key: str) -> tuple[type, object]:
+        """Look up a resolved ``(cls, instance)`` pair by ``<namespace>.<name>`` key.
 
         Raises:
-            KeyError: If no resolved instance matches ``name``.
+            ValueError: If ``key`` is not ``<namespace>.<name>``.
+            KeyError: If no resolved instance matches ``key``.
         """
-        for cls, instance in self._resolver.instances.items():
-            if cls.__name__ == name:
-                return cls, instance
-        raise KeyError(name)
+        cls = self._resolver.lookup(key)
+        instances = self._resolver.instances
+        if cls not in instances:
+            raise KeyError(key)
+        return cls, instances[cls]
 
-    def tail_logs(self, component: str, lines: int = 300) -> list[dict]:
-        """Return the last ``lines`` log entries for a resolved component.
+    def tail_logs(self, key: str, lines: int = 300) -> list[dict]:
+        """Return the last ``lines`` log entries for a resolved class or function.
 
         Args:
-            component: The component's class name (e.g. ``"Postgres"``).
+            key: Its ``<namespace>.<name>`` key (e.g. ``"service.postgres"``),
+                in any casing.
             lines: Maximum number of most-recent entries to return.
 
         Returns:
             A list of ``{"ts", "level", "message"}`` dicts, oldest first.
             Empty if file logging is disabled or nothing was logged.
+
+        Raises:
+            ValueError: If ``key`` is not ``<namespace>.<name>``.
         """
-        return self._log_manager.tail(component, lines)
+        return self._log_manager.tail(parse(key), lines)
 
     def _require_sync(self) -> None:
         """Raise ``TypeError`` if anything the ``Context`` would call is async.
@@ -1190,7 +1286,7 @@ class Context:
                 "call it yourself"
             )
 
-    def _instrument(self) -> None:
+    def _instrument(self, keys: dict[type, str]) -> None:
         """Wrap every resolved ``Task``/``Pipeline``'s ``execute()`` and ``Agent``'s ``invoke()``.
 
         Logs start, completion (with duration), and any exception to that
@@ -1203,12 +1299,10 @@ class Context:
         agents = set(dict(Agent.items()).values())
         for cls, instance in self._resolver.instances.items():
             if cls in executable and hasattr(instance, "execute"):
-                instance.execute = _logged_execute(
-                    instance.execute, cls.__name__, self._log_manager
-                )
+                instance.execute = _logged_execute(instance.execute, keys[cls], self._log_manager)
             if cls in agents:
                 instance.invoke = _logged_execute(
-                    instance.invoke, cls.__name__, self._log_manager, label="invoke()"
+                    instance.invoke, keys[cls], self._log_manager, label="invoke()"
                 )
 
     def __enter__(self) -> Context:

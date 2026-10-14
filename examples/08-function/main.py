@@ -16,12 +16,12 @@ from opendataframework import Project
 project = Project.from_config("config.toml")
 project.start()
 
-# By name — what a caller holding only a name and arguments would do.
-low = project.context.call("low-stock")
-print(f"call('low-stock')                -> {low}")
+# By key — what a caller holding only a <namespace>.<name> key and arguments would do.
+low = project.context.call("function.low-stock")
+print(f"call('function.low-stock')       -> {low}")
 
-total = project.context.call("restock", item="apple", quantity=10)
-print(f"call('restock', apple, 10)       -> {total}")
+total = project.context.call("function.restock", item="apple", quantity=10)
+print(f"call('function.restock', ...)    -> {total}")
 
 # By function — the same thing, typed, for use from Python.
 low = project.context.get(low_stock)(threshold=15)
@@ -29,7 +29,7 @@ print(f"get(low_stock)(threshold=15)     -> {low}")
 print(f"get(format_report)(...)          -> {project.context.get(format_report)(low)}")
 
 # Injected — Reorder declared low_stock in its constructor, under its own name.
-print(f"execute('Reorder')               -> {project.context.execute('Reorder')}")
+print(f"execute('task.reorder')          -> {project.context.execute('task.reorder')}")
 
 # Directly — unchanged: nothing is injected, every argument is passed.
 total = restock(Inventory(), "cherry", 1)

@@ -287,23 +287,46 @@ parameters a caller still has to supply. See
 
 ---
 
-## By Name — Single-Component Control
+## By Key — Single-Component Control
 
-Beyond `get(cls)`, `Context` exposes a by-name control surface — every
-method below looks up a resolved instance by its class name (e.g.
-`"Postgres"`, not the `Postgres` class itself) and raises `KeyError` if no
-resolved instance matches that name. This is the mechanism a UI, CLI, or
-MCP server built on top of the framework uses to control one component at
-a time without importing its class:
+Beyond `get(cls)`, `Context` exposes a control surface addressed by
+**key** — every method below takes `<namespace>.<name>`, where `<name>` is
+the name the object is registered under (its kebab-case class or function
+name, or the explicit `name=`):
+
+| Registered as | Key |
+|---|---|
+| `@Service class Postgres` | `"service.postgres"` |
+| `@Repository(Frame) class Webcam` | `"repository.webcam"` |
+| `@Pipeline class DailyAnalytics` | `"pipeline.daily-analytics"` |
+| `@Task("export") class ExportUsers` | `"task.export"` |
+| `@Function def load_data` | `"function.load-data"` |
+| `@Agent class Librarian` | `"agent.librarian"` |
+
+A name is unique only within its namespace, so the namespace is always part
+of the key: a `@Task class Loader` and an `@Agent class Loader` can live in
+the same project as `"task.loader"` and `"agent.loader"`. Keys are accepted
+in any casing (`"Task.LoadJob"` is `"task.load-job"`). A string without a
+namespace raises `ValueError`, and a key that matches no resolved object
+raises `KeyError`. `project.context.key(obj)` returns the key of a class or
+function you already hold:
+
+```python
+project.context.key(DailyAnalytics)  # → "pipeline.daily-analytics"
+```
+
+This is the mechanism a UI, CLI, or MCP server built on top of the
+framework uses to control one component at a time without importing its
+class:
 
 **Services** — start, stop, or check a single `Service` independent of the
 normal dependency-order startup/shutdown driven by `project.start()`/
 `project.stop()`:
 
 ```python
-project.context.start("Postgres")  # no-op if already running
-project.context.stop("Postgres")  # no-op if not running
-project.context.is_running("Postgres")  # → bool
+project.context.start("service.postgres")  # no-op if already running
+project.context.stop("service.postgres")  # no-op if not running
+project.context.is_running("service.postgres")  # → bool
 ```
 
 Each raises `TypeError` if the matched instance isn't a `Service`.
@@ -312,11 +335,11 @@ Each raises `TypeError` if the matched instance isn't a `Service`.
 repository's background stream (see [Repository](repository.md)):
 
 ```python
-project.context.start_stream("Webcam")  # spawns the background thread
-project.context.stop_stream("Webcam")  # no-op if not streaming
-project.context.is_streaming("Webcam")  # → bool
+project.context.start_stream("repository.webcam")  # spawns the background thread
+project.context.stop_stream("repository.webcam")  # no-op if not streaming
+project.context.is_streaming("repository.webcam")  # → bool
 
-for frame in project.context.iter_stream("Webcam"):
+for frame in project.context.iter_stream("repository.webcam"):
     ...  # one subscriber; detaches when the stream stops or iteration ends
 ```
 
@@ -326,49 +349,45 @@ raise `TypeError` if the matched instance isn't `StreamableProtocol`.
 start one itself, and raises `KeyError` if the stream isn't currently
 running.
 
-**Tasks and Pipelines** — execute a single resolved `Task` or `Pipeline`
-by name:
+**Tasks and Pipelines** — execute a single resolved `Task` or `Pipeline`:
 
 ```python
-project.context.execute("DailyAnalytics")  # → whatever execute() returns
+project.context.execute("pipeline.daily-analytics")  # → whatever execute() returns
 ```
 
 Raises `TypeError` if the matched instance is neither.
 
-**Functions** — call a single resolved [Function](function.md) by its
-registered name. Unlike `execute()`, `call()` forwards arguments: the
+**Functions** — call a single resolved [Function](function.md). Unlike `execute()`, `call()` forwards arguments: the
 `Context` fills in the parameters whose type it manages, and the keywords
 supply the rest:
 
 ```python
-project.context.call("load-data", path="data.csv")  # db injected
+project.context.call("function.load-data", path="data.csv")  # db injected
 ```
 
-The name is the registered one (`"load-data"`, or `"load_data"`), not a
-class name. Raises `KeyError` if no resolved function matches, and
-`TypeError` if a required argument is neither managed nor supplied.
+Raises `TypeError` if a required argument is neither managed nor supplied.
 
-**Agents** — `call()` also invokes a single resolved [Agent](agent.md) by
-its registered name, passing the keywords on to its `invoke()`. An agent's
+**Agents** — `call()` also invokes a single resolved [Agent](agent.md),
+passing the keywords on to its `invoke()`. An agent's
 dependencies were already injected through its constructor, so every
 keyword here is one of `invoke()`'s own arguments:
 
 ```python
-project.context.call("librarian", question="Anything by Herbert?")
+project.context.call("agent.librarian", question="Anything by Herbert?")
 ```
 
-Raises `ValueError` if the name matches both a resolved function and a
-resolved agent.
+A function and an agent may share a name — `"function.librarian"` and
+`"agent.librarian"` are different keys.
 
 `project.context.parameters(target)` returns what a caller must supply to
 `call()` — a function's parameters minus the injected ones, or the
 parameters of an agent's `invoke()`.
 
 **Logs** — read back a component's recent log lines (see
-[Logger](logger.md)):
+[Logger](logger.md)); each key has its own `<namespace>.<name>.log` file:
 
 ```python
-project.context.tail_logs("Postgres", lines=300)
+project.context.tail_logs("service.postgres", lines=300)
 # → [{"ts": ..., "level": ..., "message": ...}, ...], oldest first
 ```
 

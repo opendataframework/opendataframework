@@ -258,10 +258,10 @@ class DailyAnalytics:
         return self.report.execute()
 ```
 
-Running it through the `Context`, by class name:
+Running it through the `Context`, by its [key](context.md#by-key-single-component-control):
 
 ```python
-result = project.context.execute("DailyAnalytics")
+result = project.context.execute("pipeline.daily-analytics")
 ```
 
 ---

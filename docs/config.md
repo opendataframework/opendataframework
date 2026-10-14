@@ -181,8 +181,8 @@ declare in their constructor, and nested sections remain reachable via
 chained `.get()`/attribute access (e.g. `config.get("outer").get("inner")`)
 if a project's config genuinely needs them. Using flat, class-named sections
 consistently makes config files predictable and easy to navigate, and keeps
-a component's config key closely mirroring the class name already used to
-address it elsewhere (e.g. `Context.start("Postgres")`). It is independent
+a component's config key closely mirroring the name already used to
+address it elsewhere (e.g. `Context.start("service.postgres")`). It is independent
 of [Layer](layer.md), which groups components for the UI and has no bearing
 on config structure.
 

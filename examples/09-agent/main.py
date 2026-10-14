@@ -14,8 +14,8 @@ project = Project.from_config("config.toml")
 project.start()
 
 # By name — what a caller holding only a name and arguments would do.
-print("call('librarian', question='What do you have by Austen?')")
-answer = project.context.call("librarian", question="What do you have by Austen?")
+print("call('agent.librarian', question='What do you have by Austen?')")
+answer = project.context.call("agent.librarian", question="What do you have by Austen?")
 print(f"-> {answer}\n")
 
 # By class — the same thing, typed, for use from Python.

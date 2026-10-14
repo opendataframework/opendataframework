@@ -129,16 +129,17 @@ load_data("data.csv", db=fake_db)
 Nothing is injected, wrapped, or logged — every argument is passed by the caller. This
 is why existing callers and tests keep working unchanged.
 
-### By name, through the Context
+### By key, through the Context
 
 ```python
-project.context.call("load-data", path="data.csv")  # db injected
+project.context.call("function.load-data", path="data.csv")  # db injected
 ```
 
-`call()` takes the registered name (in any casing — `"load-data"` or `"load_data"`)
-and the function's remaining arguments as keywords. It is the counterpart of
+`call()` takes the function's [key](context.md#by-key-single-component-control), `function.<name>` (in any casing —
+`"function.load-data"` or `"function.load_data"`), and its remaining arguments as
+keywords. It is the counterpart of
 `execute()` for a [Task](task.md), with the one difference that a function takes
-arguments. This is what a caller holding only a name and a payload uses.
+arguments. This is what a caller holding only a key and a payload uses.
 
 ### By function, through the Context
 
@@ -284,7 +285,7 @@ def restock(inventory: Inventory, item: str, quantity: int) -> int:
 
 ```python
 project.start()
-project.context.call("restock", item="apple", quantity=10)
+project.context.call("function.restock", item="apple", quantity=10)
 ```
 
 Existing calls such as `restock(inventory, "apple", 10)` still work as written.

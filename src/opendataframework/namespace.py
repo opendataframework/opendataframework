@@ -180,7 +180,9 @@ class Namespace:
         """Store ``wrapped`` under ``key``, refusing to overwrite an existing entry.
 
         Raises:
-            ValueError: If ``key`` is already registered in this namespace.
+            ValueError: If ``key`` is already registered in this namespace, or
+                ``wrapped`` already is under another name — an object has one
+                name per namespace, so its ``qualified`` key is unique.
         """
         if key in cls._namespace:
             existing = cls._namespace[key]
@@ -188,6 +190,12 @@ class Namespace:
                 f"Duplicate registration for {key!r} in {cls.__name__}: "
                 f"{existing.__name__} and {wrapped.__name__}"
             )
+        for name, member in cls._namespace.items():
+            if member is wrapped:
+                raise ValueError(
+                    f"{wrapped.__name__} is already registered in {cls.__name__} as "
+                    f"{name!r}, so it cannot also be registered as {key!r}"
+                )
         cls._namespace[key] = wrapped
 
     @classmethod
@@ -244,6 +252,37 @@ class Namespace:
             # {"metrics-fetcher": MetricsFetcher, "metrics": Metrics}
         """
         return cls._namespace.items()
+
+
+def qualified(namespace: type[Namespace], name: str) -> str:
+    """Return the key a registered object is addressed by: ``<namespace>.<name>``.
+
+    A name is unique within its namespace, so the pair is unique across all
+    of them — ``task.loader`` and ``agent.loader`` never collide.
+
+    Example::
+
+        qualified(Task, "load-job")  # → "task.load-job"
+    """
+    return f"{kebab(namespace.__name__)}.{name}"
+
+
+def parse(key: str) -> str:
+    """Normalize a ``<namespace>.<name>`` key, in any casing, to its ``qualified`` form.
+
+    Splits on the first dot, so an explicit name that itself contains a dot
+    still parses: ``"Task.LoadJob"`` → ``"task.load-job"``.
+
+    Raises:
+        ValueError: If ``key`` has no namespace part.
+    """
+    namespace, dot, name = key.partition(".")
+    if not dot or not namespace or not name:
+        raise ValueError(
+            f"{key!r} is not a key — address a registered object as "
+            "<namespace>.<name>, e.g. 'task.load-job' or 'agent.librarian'"
+        )
+    return f"{normalize(namespace)}.{normalize(name)}"
 
 
 def describe(wrapped: object) -> str:

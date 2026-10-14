@@ -37,6 +37,6 @@ python main.py
 This saves two readings, lists them back, prints `data_view()` (a
 `LocationView` over `lat`/`lon`) and `field()` (`recorded_at`), then
 reads back the log entries `Readings` wrote for itself via
-`project.context.tail_logs("Readings")` (see
+`project.context.tail_logs("repository.readings")` (see
 [`docs/context.md`](../../docs/context.md)) — the same lines persisted to
-`logs/readings.log`.
+`logs/repository.readings.log`.

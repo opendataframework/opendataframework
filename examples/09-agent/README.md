@@ -41,7 +41,7 @@ python main.py
 Expected output:
 
 ```
-call('librarian', question='What do you have by Austen?')
+call('agent.librarian', question='What do you have by Austen?')
   list-authors() -> ['Frank Herbert', 'Jane Austen']
   find-titles(Jane Austen) -> ['Emma', 'Persuasion']
 -> Emma, Persuasion
@@ -55,7 +55,7 @@ parameters(Librarian) -> ['question']
 
 `main.py` shows both ways to invoke a registered agent:
 
-- `project.context.call("librarian", question=...)` — by registered name,
+- `project.context.call("agent.librarian", question=...)` — by key,
   with keyword arguments passed on to `invoke()`.
 - `project.context.get(Librarian).invoke(...)` — by class, typed, the way a
   `Pipeline` or `Service` holding an injected `Librarian` would call it.
