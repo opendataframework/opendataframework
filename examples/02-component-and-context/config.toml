@@ -2,5 +2,5 @@
 name = "component-and-context-example"
 app = "app"
 
-[database]
+[component.database]
 dsn = "postgres://localhost/app"

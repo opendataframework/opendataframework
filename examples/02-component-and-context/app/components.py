@@ -6,7 +6,7 @@ class Database:
     """Depends only on the framework-provided Config — nothing else."""
 
     def __init__(self, config: Config) -> None:
-        self.dsn = config.get("database").get("dsn", "sqlite:///app.db")
+        self.dsn = config.component.database.get("dsn", "sqlite:///app.db")
 
     def on_start(self) -> None:
         print(f"Database.on_start  connecting to {self.dsn}")

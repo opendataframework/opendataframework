@@ -19,14 +19,14 @@ instead of one giant file.
 ├── config/
 │   ├── dev/
 │   │   ├── project.toml   # [project] name
-│   │   └── greeter.toml   # [greeter] greeting = "Yo", name = "Dev"
+│   │   └── greeter.toml   # [component.greeter] greeting = "Yo", name = "Dev"
 │   └── prod/
 │       ├── project.toml
-│       └── greeter.toml   # [greeter] greeting = "Hello", name = "Production"
+│       └── greeter.toml   # [component.greeter] greeting = "Hello", name = "Production"
 ├── main.py                # entry point — starts a Project per environment
 └── app/
     ├── __init__.py        # imports components.py so the decorator registers at startup
-    └── components.py      # Greeter — @Component, reads config.get("greeter")
+    └── components.py      # Greeter — @Component, reads config.component.greeter
 ```
 
 ## Run it

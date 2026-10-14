@@ -41,12 +41,16 @@ For programmatic use — testing, tooling, dynamic configuration:
 ```python
 project = Project.from_dict(
     {
-        "users": {
-            "table": "users",
-            "schema": "public",
+        "repository": {
+            "users": {
+                "table": "users",
+                "schema": "public",
+            },
         },
-        "postgres": {
-            "database_url": "postgresql://localhost/mydb",
+        "service": {
+            "postgres": {
+                "database_url": "postgresql://localhost/mydb",
+            },
         },
     }
 )

@@ -308,7 +308,7 @@ class Librarian:
 
     def __init__(self, books: Books, config: Config):
         self.books = books
-        self.agent = ModelAgent(config.librarian.model, instructions="Answer from the catalogue.")
+        self.agent = ModelAgent(config.agent.librarian.model, instructions="Answer from the catalogue.")
         self.agent.tool_plain(self.find)
 
     def find(self, title: str) -> list[str]:

@@ -196,7 +196,7 @@ including the `Task`s it coordinates, in full:
 @Task
 class MetricsFetcher:
     def __init__(self, config: Config, metrics: Metrics):
-        self.config = config
+        self.config = config.task.metrics_fetcher
         self.metrics = metrics
 
     def execute(self):
@@ -210,7 +210,7 @@ class MetricsFetcher:
 @Task
 class ModelTrainer:
     def __init__(self, config: Config, classifier: Classifier, metrics: Metrics):
-        self.config = config
+        self.config = config.task.model_trainer
         self.classifier = classifier
         self.metrics = metrics
 
@@ -223,7 +223,7 @@ class ModelTrainer:
 @Task
 class ReportGenerator:
     def __init__(self, config: Config, metrics: Metrics):
-        self.config = config
+        self.config = config.task.report_generator
         self.metrics = metrics
 
     def execute(self):
@@ -250,7 +250,7 @@ class DailyAnalytics:
         self.fetcher = fetcher
         self.trainer = trainer
         self.report = report
-        self.config = config
+        self.config = config.pipeline.daily_analytics
 
     def execute(self):
         self.fetcher.execute()

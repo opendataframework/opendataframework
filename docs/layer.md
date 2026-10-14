@@ -261,21 +261,22 @@ dict(Analytics.items())  # → {"metrics-fetcher": MetricsFetcher, …}
 ## Layer is Independent of Config
 
 `Layer` has no bearing on config structure. Config sections are keyed by
-component name alone, in kebab-case, regardless of which layer (if any) a
-component belongs to — see [Config structure convention](config.md#config-structure-convention):
+`<namespace>.<name>` — the execution type and the name — regardless of which
+layer (if any) a component belongs to — see
+[Config structure convention](config.md#config-structure-convention):
 
 ```toml
-[users-api]
+[service.users-api]
 host = "0.0.0.0"
 port = 8080
 
-[postgres]
+[service.postgres]
 database_url = "postgresql://localhost/mydb"
 
-[metrics-fetcher]
+[task.metrics-fetcher]
 source_url = "https://api.example.com/metrics"
 
-[classifier]
+[component.classifier]
 model_path = "models/classifier.pkl"
 ```
 

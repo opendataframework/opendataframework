@@ -88,7 +88,7 @@ class MetricsFetcher:
         config: Config,
         metrics: Metrics,
     ):
-        self.config = config
+        self.config = config.task.metrics_fetcher
         self.metrics = metrics
 
     def execute(self):
@@ -114,7 +114,7 @@ class MetricsFetcher:
         config: Config,
         metrics: Metrics,
     ):
-        self.config = config
+        self.config = config.task.metrics_fetcher
         self.metrics = metrics
 
     def execute(self):
@@ -137,7 +137,7 @@ class ModelTrainer:
         classifier: Classifier,
         metrics: Metrics,
     ):
-        self.config = config
+        self.config = config.task.model_trainer
         self.classifier = classifier
         self.metrics = metrics
 
@@ -157,7 +157,7 @@ class ReportGenerator:
         config: Config,
         metrics: Metrics,
     ):
-        self.config = config
+        self.config = config.task.report_generator
         self.metrics = metrics
 
     def execute(self):

@@ -31,10 +31,10 @@ class Config:
         >>> cfg["database-url"]
         'postgres://localhost/db'
 
-        Nested access::
+        Nested access — ``[service.postgres]`` in TOML::
 
-            cfg = Config({"storage": {"postgres": {"port": 5432}}})
-            cfg.storage.postgres.port  # → 5432
+            cfg = Config({"service": {"postgres": {"port": 5432}}})
+            cfg.service.postgres.port  # → 5432
     """
 
     def __init__(self, data: dict) -> None:
@@ -101,7 +101,7 @@ class Config:
         scope into a section and chain further ``.get()``/attribute access
         without guarding against it being missing:
 
-            cfg = config.get("postgres")
+            cfg = config.get("service").get("postgres")
             url = cfg.database_url          # AttributeError if missing
             port = cfg.get("port", 5432)    # safe fallback
 
@@ -154,7 +154,7 @@ def load(path: str) -> dict:
 
     Example:
         >>> config = load("config.toml")
-        >>> config["postgres"]["database-url"]
+        >>> config["service"]["postgres"]["database-url"]
         'postgresql://localhost/mydb'
     """
     p = Path(path)

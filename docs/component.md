@@ -122,9 +122,9 @@ class Classifier:
         config: Config,
         metrics: Metrics,
     ):
-        self.config = config
+        self.config = config.component.classifier
         self.metrics = metrics
-        self.model = self._load_model(config.model_path)
+        self.model = self._load_model(self.config.model_path)
 
     def fit(self, data):
         self.model.fit(data)
@@ -176,7 +176,7 @@ startup are reflected rather than frozen at resolve time.
 @Service
 class Dashboard:
     def __init__(self, config: Config):
-        self.port = config.port
+        self.port = config.service.dashboard.port
 
     def details(self) -> dict[str, str]:
         return {"UI": f"http://localhost:{self.port}"}
@@ -269,7 +269,7 @@ tool surface.
 @Component
 class Weather:
     def __init__(self, config: Config):
-        self.api_key = config.weather_api_key
+        self.api_key = config.component.weather.api_key
 
     def forecast(self, city: str) -> dict: ...
 

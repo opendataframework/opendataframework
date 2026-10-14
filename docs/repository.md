@@ -158,7 +158,7 @@ Two more, both optional, hooks bracket that background thread's lifetime:
 @Repository(Frame)
 class Webcam:
     def __init__(self, config: Config):
-        self.device = config.get("webcam").get("device", 0)
+        self.device = config.repository.webcam.get("device", 0)
         self.capture = None
 
     def open_stream(self):
@@ -203,7 +203,7 @@ class Users:
         self,
         config: Config,
     ):
-        self.config = config
+        self.config = config.repository.users
         self.connection = None
 
     def on_start(self):
@@ -233,7 +233,7 @@ class Users:
         self,
         config: Config,
     ):
-        self.config = config
+        self.config = config.repository.users
         self.connection = None
 
     def on_start(self):
@@ -276,7 +276,7 @@ class SensorFeed:
         self,
         config: Config,
     ):
-        self.config = config
+        self.config = config.repository.sensor_feed
         self.client = None
 
     def on_start(self):
@@ -310,7 +310,7 @@ class Webcam:
         self,
         config: Config,
     ):
-        self.device = config.get("webcam").get("device", 0)
+        self.device = config.repository.webcam.get("device", 0)
         self.capture = None
 
     def open_stream(self):

@@ -123,6 +123,15 @@
   and the offending object. `@Repository` applied directly to a function (entity left out)
   raises the same way. See [Namespace](namespace.md).
 
+### Docs
+
+- Config sections in the docs and examples now follow a class's key: a `@Service class
+  Postgres` reads `[service.postgres]` as `config.service.postgres`, instead of a flat
+  `[postgres]`. The section, the `Context` key and the log file now share one name, and
+  same-named classes in different namespaces no longer share a section. This is a
+  convention, not a `Config` change — any structure still works. See
+  [Config](config.md#config-structure-convention).
+
 ## 0.2.0
 
 ### Added

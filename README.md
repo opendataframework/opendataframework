@@ -65,7 +65,7 @@ class User:
 @Component
 class SQLite:
     def __init__(self, config: Config):
-        self.conn = sqlite3.connect(config.sqlite.path)
+        self.conn = sqlite3.connect(config.component.sqlite.path)
         self.conn.execute("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT)")
 
 
@@ -86,7 +86,7 @@ class Users:
 Config file (`config.toml`):
 
 ```toml
-[sqlite]
+[component.sqlite]
 path = "app.db"
 ```
 
