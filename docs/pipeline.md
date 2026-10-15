@@ -173,16 +173,17 @@ Each sub-pipeline is independently testable and reusable across other pipelines.
     is injected into (a prediction task, an API endpoint) sees the same,
     now-fitted object.
 
-!!! tip "Passing a step's result directly"
-    Steps don't have to communicate only through a shared dependency like
-    `Metrics`. Since a `Pipeline`'s `execute()` is plain Python, a `Task` can
-    declare an optional parameter and receive the previous step's return
-    value directly — e.g. `def execute(self, data=None): ...` called as
-    `self.validator.execute(self.fetcher.execute())`. This only works for
-    steps called from *within* another `Pipeline`'s own `execute()`;
-    `Context.execute(name)` (the CLI/UI/MCP entry point) always calls with
-    zero arguments, so a step meant to be triggered directly by name still
-    needs a no-arg-callable signature.
+!!! tip "Passing a step's result on"
+    A pipeline can use a task's return value however it likes, because its
+    `execute()` is plain Python. It can pass the value to a
+    [Function](function.md) or a component method, as `IngestPipeline` does with
+    `self.validator.validate(data)`. It can't pass the value to another task,
+    because a task's `execute()` takes no arguments (see
+    [Task, Function or Agent?](task.md#task-function-or-agent)). When one task
+    needs another's output, the first task saves it where the second one reads
+    it: `MetricsFetcher` saves to `Metrics`, and `ModelTrainer` loads from it.
+    That also keeps each task runnable on its own by key, without the steps
+    before it.
 
 ---
 
@@ -314,7 +315,8 @@ or aggregating results across steps may be introduced in a future version.
 | ----------------------------------------- | ----------- |
 | Provide a reusable capability             | [Component](component.md) |
 | Run a process indefinitely                | [Service](service.md)   |
-| Execute a bounded unit of work once       | [Task](task.md)      |
+| Execute a bounded unit of work once, no arguments | [Task](task.md) |
+| Call a unit of work with arguments        | [Function](function.md) |
 | Coordinate multiple tasks into a workflow | `Pipeline`  |
 | Work towards a goal handed over at call time | [Agent](agent.md) |
 | Manage persistent data                    | [Repository](repository.md)|
