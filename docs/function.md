@@ -331,10 +331,12 @@ re-implementing the injection rule.
 
 | I need to...                                        | Use                       |
 | --------------------------------------------------- | ------------------------- |
+| Provide a reusable capability                       | [Component](component.md) |
+| Run a process indefinitely                          | [Service](service.md)     |
+| Execute a bounded unit of work once, no arguments   | [Task](task.md)           |
+| Call a unit of work with arguments                  | `Function`                |
 | Make an existing function known to the framework    | `Function`                |
 | Call a registered function from a class             | Inject it with `Annotated` |
-| Provide a reusable, injectable capability           | [Component](component.md) |
-| Execute a bounded unit of work once, no arguments   | [Task](task.md)           |
 | Coordinate multiple tasks into a workflow           | [Pipeline](pipeline.md)   |
 | Work towards a goal handed over at call time        | [Agent](agent.md)         |
-| Run a process indefinitely                          | [Service](service.md)     |
+| Manage persistent data                              | [Repository](repository.md) |

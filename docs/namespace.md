@@ -4,10 +4,12 @@
 produces a named scope — a decorator that registers user-defined classes and functions
 under a `name → object` mapping and exposes that mapping for inspection.
 
-[Component](component.md), [Service](service.md), [Task](task.md), [Pipeline](pipeline.md), and [Agent](agent.md) are all `Namespace` subclasses.
-[Function](function.md) is one too — the one that registers functions rather than classes.
-Each maintains its own independent mapping, and each says what it may be applied to —
-see [What each decorator accepts](#what-each-decorator-accepts).
+[Entity](entity.md), [Component](component.md), [Repository](repository.md),
+[Service](service.md), [Task](task.md), [Pipeline](pipeline.md), [Agent](agent.md) and
+[Layer](layer.md) are all `Namespace` subclasses. [Function](function.md) is one too —
+the one that registers functions rather than classes. Each maintains its own independent
+mapping, and each says what it may be applied to — see
+[What each decorator accepts](#what-each-decorator-accepts).
 
 ---
 
@@ -53,8 +55,8 @@ Every `Namespace` subclass supports two decoration styles out of the box.
 class Classifier: ...
 ```
 
-The class is registered under its own `__name__`. The class itself is returned
-unchanged — no base class is added, no methods are injected.
+The class is registered under the kebab-case form of its name, `classifier`. The class
+itself is returned unchanged — no base class is added, no methods are injected.
 
 ### Factory decorator
 
@@ -99,15 +101,13 @@ The dual-use decorator protocol is implemented through `__new__` and `__call__`:
   applied to the class.
 
 !!! warning "Duplicate names raise"
-    Registering two classes under the same name within one `Namespace`
-    subclass raises `ValueError`, naming both classes — whether the collision
-    comes from two bare decorators (two classes that happen to kebab-case to
-    the same name), two factory decorators with the same explicit `name=`,
-    or one of each. This happens at class-definition time (when the
-    decorator runs), not at `Context`/`Project` start time. It previously
-    silently overwrote the first registration with the second — that
-    behavior is no longer supported; rename one of the classes, or give one
-    an explicit `name=`.
+    Registering two objects under the same name within one `Namespace`
+    subclass raises `ValueError`, naming both — whether the collision comes
+    from two bare decorators (two classes or functions that happen to
+    kebab-case to the same name), two factory decorators with the same
+    explicit `name=`, or one of each. This happens at definition time (when
+    the decorator runs), not at `Context`/`Project` start time. Rename one of
+    them, or give one an explicit `name=`.
 
 ### Names are unique per namespace, keys everywhere
 

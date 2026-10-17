@@ -305,8 +305,7 @@ class ContentMetadataProtocol(Protocol):
 It only matters for a repository whose view points at content —
 `ImageView`, `VideoView`, `AudioView` or `DocumentView`. A repository with
 no `content_metadata()`, or one that leaves an attribute as `None`, simply
-declares nothing: a consumer is left to work the content out for itself,
-exactly as before.
+declares nothing: a consumer is left to work the content out for itself.
 
 !!! warning "A declaration, not a guarantee"
     Nothing in this package inspects the content, so `ContentMetadata` is
@@ -343,5 +342,4 @@ opens inline or downloads — is the consumer's job.
   sign it should be two repositories.
 
 * **Not required.** Most repositories need no `data_view()` at all — the
-  implicit table default, unchanged from before this protocol existed,
-  covers the common case.
+  implicit table default covers the common case.

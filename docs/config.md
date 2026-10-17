@@ -208,7 +208,7 @@ a class has one name everywhere: `[service.postgres]` in config,
 `Context.start("service.postgres")`, `logs/service.postgres.log`. The section
 moves with the namespace — changing `@Component` to `@Service` moves
 `[component.postgres]` to `[service.postgres]`. It is independent
-of [Layer](layer.md), which groups components for the UI and has no bearing
+of [Layer](layer.md), which is an organisational grouping and has no bearing
 on config structure.
 
 !!! tip "Same convention, everywhere"

@@ -117,16 +117,13 @@ class IngestPipeline:
         self,
         fetcher: MetricsFetcher,
         validator: Validator,
-        metrics: Metrics,
     ):
         self.fetcher = fetcher
         self.validator = validator
-        self.metrics = metrics
 
     def execute(self):
-        data = self.fetcher.execute()
+        data = self.fetcher.execute()  # also saved to Metrics by the task itself
         self.validator.validate(data)
-        self.metrics.save(data)
 
 
 @Analytics
@@ -203,6 +200,7 @@ class MetricsFetcher:
     def execute(self):
         data = self._fetch(self.config.source_url)
         self.metrics.save(data)
+        return data
 
     def _fetch(self, url): ...
 
@@ -246,12 +244,10 @@ class DailyAnalytics:
         fetcher: MetricsFetcher,
         trainer: ModelTrainer,
         report: ReportGenerator,
-        config: Config,
     ):
         self.fetcher = fetcher
         self.trainer = trainer
         self.report = report
-        self.config = config.pipeline.daily_analytics
 
     def execute(self):
         self.fetcher.execute()

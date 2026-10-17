@@ -25,8 +25,8 @@
   another function — asks for one by naming it in its signature,
   `Annotated[Callable[..., int], load_data]`, and receives it with its dependencies bound
   and its calls logged — and with a signature that leaves the injected parameters out, so
-  it can be handed to a library that builds a tool schema from a callable; the function then takes part in dependency ordering and cycle
-  detection. Functions have no lifecycle and aren't in `context.instances`. See
+  it can be handed to a library that builds a tool schema from a callable; the function
+  then takes part in dependency ordering and cycle detection. Functions have no lifecycle and aren't in `context.instances`. See
   [Function](function.md).
 - **View**: added `ContentMetadata`/`ContentMetadataProtocol` so a `Repository` whose view
   points at content (`ImageView`/`VideoView`/`AudioView`/`DocumentView`) can declare, per
@@ -60,7 +60,6 @@
   being awaited — a hook that silently never ran, or a call logged as complete before it
   started. To migrate, make it synchronous, or keep it out of the `Context` and call it
   yourself. See [Context](context.md#what-context-is-not).
-
 - **Component** (breaking): an `McpTool` now requires a described, fully typed handler,
   and raises when it is created otherwise — `ValueError` for an empty `description`,
   `TypeError` for a handler with an unannotated parameter, `*args`/`**kwargs`, no return
@@ -70,7 +69,6 @@
   parameters and return value (`-> None` counts), replace a lambda with a method or a
   function, and remove `from __future__ import annotations` from the handler's module.
   See [Component](component.md#mcp-tools).
-
 - **Context** (breaking): everything addressed by a string is now addressed by a key,
   `<namespace>.<name>` — `execute("task.load-job")`, `call("agent.librarian", ...)`,
   `start("service.postgres")`, `start_stream("repository.webcam")`,
@@ -87,11 +85,9 @@
   migrate, prefix every name passed to the `Context` with its namespace, and point
   anything reading log files at the new names. See
   [Context](context.md#by-key-single-component-control).
-
 - **Namespace** (breaking): registering one object under two names in the same
   namespace (`@Task("a") @Task("b") class X`) now raises `ValueError`, so every object
   has exactly one key. See [Namespace](namespace.md#names-are-unique-per-namespace-keys-everywhere).
-
 - **Repository** (breaking): `@Repository(...)` now requires its argument to be a class
   registered with `@Entity`, and raises `TypeError` at decoration time otherwise. The docs
   always described the argument as the `Entity` class, but any class was accepted — so
@@ -131,6 +127,18 @@
   same-named classes in different namespaces no longer share a section. This is a
   convention, not a `Config` change — any structure still works. See
   [Config](config.md#config-structure-convention).
+- A `Task`'s `execute()` takes no arguments, by design, and the docs no longer suggest
+  giving it an optional parameter to receive the previous step's result, as the 0.2.0
+  notes did. Work whose input the caller decides is a [Function](function.md); a value
+  that differs per deployment is config, and one that follows from earlier runs is state
+  kept in a repository. A pipeline passes a task's result on to a function or a component
+  method, not to another task. See
+  [Task, Function or Agent?](task.md#task-function-or-agent).
+- Corrected pages that had fallen behind 0.3.0: [Entity](entity.md) no longer says a
+  duplicate name silently overwrites (it has raised since 0.2.0), [Agent](agent.md) and
+  [Component](component.md) describe how a server such as `odf`'s offers agents and
+  functions as tools without `mcp_tools()`, and [Service](service.md) examples read their
+  own config section.
 
 ## 0.2.0
 

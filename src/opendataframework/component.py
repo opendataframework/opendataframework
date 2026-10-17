@@ -97,9 +97,9 @@ class McpTool:
     Attributes:
         name: The tool's local name — namespaced by whatever builds the
             tool surface (today, the sibling ``odf`` package's
-            ``McpServer`` prefixes it with the component's kebab-case
-            class name) to avoid collisions with the fixed built-in
-            tools and with other components' tools.
+            ``McpServer`` prefixes it with the component's
+            ``<namespace>.<name>`` key) to avoid collisions with the fixed
+            built-in tools and with other components' tools.
         description: Human-readable description shown to the MCP client.
             Must not be empty.
         handler: The bound method implementing the tool call. Whoever

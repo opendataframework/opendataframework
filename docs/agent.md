@@ -253,10 +253,25 @@ something serves the project's tools to that model. This package doesn't: it has
 server, and here an agent is invoked by project code alone, through a class that
 injects it or through `project.context.call()`.
 
-What the package does define is how a class declares the tools it offers: by
-implementing `mcp_tools()`, described under
-[Component → MCP Tools](component.md#mcp-tools). To offer the agent itself, it returns
-its own `invoke`:
+The agent itself needs no declaration to be offered. A server built on the framework
+can find every resolved agent through the `Context` and offer its `invoke()`, described
+by the class docstring, with `project.context.parameters(Librarian)` as the arguments
+to ask for. So the docstring and the parameters of `invoke()` are what the calling model
+sees. The parameters should be types a schema can express, like a `str`, a number or a
+dataclass, not an arbitrary object.
+
+```python
+@Agent
+class Librarian:
+    """Answers questions about the book catalogue."""
+
+    def invoke(self, question: str) -> str: ...
+```
+
+To offer more than `invoke()`, for example a narrower, cheaper method beside it, the
+agent implements `mcp_tools()` like any other class (see
+[Component → MCP Tools](component.md#mcp-tools)). Don't name one of those tools
+`invoke`, because a server that offers the agent's `invoke()` already uses that name:
 
 ```python
 @Agent
@@ -265,29 +280,27 @@ class Librarian:
 
     def invoke(self, question: str) -> str: ...
 
+    def titles(self, author: str) -> list[str]: ...
+
     def mcp_tools(self) -> list[McpTool]:
         return [
             McpTool(
-                name="invoke",
-                description="Ask the librarian a question about the catalogue.",
-                handler=self.invoke,
+                name="titles",
+                description="List the catalogue's titles by an author.",
+                handler=self.titles,
             )
         ]
 ```
 
-The calling model sees the parameters of `invoke()` and fills them in, so they should be
-types a schema can express — a `str`, a number, a dataclass — not an arbitrary object.
-`McpTool` requires them, and the return value, to be annotated; an `invoke()` that is
-never offered as a tool keeps its free-form signature.
-
 !!! tip "Seeing it in practice"
     The sibling [`odf`](https://opendataframework.github.io/odf/) package's `McpServer`
-    is the consumer of `mcp_tools()`. With it running, the model on the other side calls
-    `librarian.invoke`, and the librarian in turn uses the tools from its constructor to
-    work out the answer.
+    offers every resolved agent as `<key>.invoke` and every `mcp_tools()` entry as
+    `<key>.<name>`, so the model on the other side sees `agent.librarian.invoke` and
+    `agent.librarian.titles`. When it calls `invoke`, the librarian uses the tools from
+    its constructor to work out the answer.
 
-The two are independent. An agent that uses tools needn't offer any, and one that
-offers itself needn't use any.
+The two are independent. An agent that uses tools needn't offer any beyond `invoke()`,
+and one that offers several needn't use any.
 
 ---
 
@@ -371,10 +384,10 @@ class AgentProtocol(Protocol):
 
 | I need to...                                        | Use                         |
 | --------------------------------------------------- | --------------------------- |
-| Work towards a goal handed over at call time        | `Agent`                     |
-| Execute a bounded unit of work once, no arguments   | [Task](task.md)             |
-| Coordinate multiple tasks into a workflow           | [Pipeline](pipeline.md)     |
-| Run a process indefinitely                          | [Service](service.md)       |
 | Provide a reusable capability                       | [Component](component.md)   |
-| Make an existing function known to the framework    | [Function](function.md)     |
+| Run a process indefinitely                          | [Service](service.md)       |
+| Execute a bounded unit of work once, no arguments   | [Task](task.md)             |
+| Call a unit of work with arguments                  | [Function](function.md)     |
+| Coordinate multiple tasks into a workflow           | [Pipeline](pipeline.md)     |
+| Work towards a goal handed over at call time        | `Agent`                     |
 | Manage persistent data                              | [Repository](repository.md) |

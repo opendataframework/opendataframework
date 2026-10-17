@@ -19,6 +19,8 @@ Use `@Component` when a class provides a reusable capability that:
 * does not need to run indefinitely (that is a [Service](service.md))
 * does not execute a single bounded unit of work (that is a [Task](task.md))
 * does not coordinate other tasks (that is a [Pipeline](pipeline.md))
+* does not work towards a goal handed over at call time (that is an [Agent](agent.md))
+* does not manage the entities of one data source (that is a [Repository](repository.md))
 
 If none of the above apply, it is a `Component`.
 
@@ -345,18 +347,20 @@ class Library:
         ]
 ```
 
-The tool asks for `author` only. A function is never exposed on its own:
-a class has to ask for it and return it, which keeps exposing existing
-code — some of it destructive — a deliberate step. See
-[Injecting a Function](function.md#injecting-a-function).
+The tool asks for `author` only. Returning it from a class lets the tool
+take its own name and description, and sit beside the class's other tools.
+See [Injecting a Function](function.md#injecting-a-function).
 
 !!! tip "Seeing it in practice"
     This package only defines the `McpTool`/`McpToolsProtocol` shape —
     it has no MCP server of its own. The sibling
     [`odf`](https://opendataframework.github.io/odf/) package's
     `McpServer` is the consumer: it registers each returned `McpTool`
-    under `<kebab(cls.__name__)>.<tool.name>`, alongside its six fixed
-    built-in tools.
+    under `<key>.<tool.name>` (`component.weather.forecast`), next to its
+    six fixed built-in tools. It also offers every resolved
+    [Agent](agent.md) as `<key>.invoke` and every registered
+    [Function](function.md) as `<key>.call` without any `mcp_tools()`, so
+    a tool returned here must not reuse one of those names.
 
 ---
 
@@ -381,7 +385,8 @@ code — some of it destructive — a deliberate step. See
 | ----------------------------------------- | ----------- |
 | Provide a reusable capability             | `Component` |
 | Run a process indefinitely                | [Service](service.md)   |
-| Execute a bounded unit of work once       | [Task](task.md)      |
+| Execute a bounded unit of work once, no arguments | [Task](task.md) |
+| Call a unit of work with arguments        | [Function](function.md) |
 | Coordinate multiple tasks into a workflow | [Pipeline](pipeline.md)  |
 | Work towards a goal handed over at call time | [Agent](agent.md) |
 | Manage persistent data                    | [Repository](repository.md)|

@@ -83,7 +83,7 @@ from app import components, repositories, tasks
 ```
 
 `[project] app` is optional — omit it and import your app package by hand
-before calling `from_config`/`from_dict`, exactly as before this existed. A
+before calling `from_config`/`from_dict`. A
 missing or broken module raises immediately (`ImportError`), consistent
 with the framework's fail-fast posture elsewhere (e.g. `from_config`'s
 `FileNotFoundError` for a missing config path).

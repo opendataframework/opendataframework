@@ -31,7 +31,7 @@ exposes `project.context.get(cls)` to fetch any resolved instance by its class.
 
 | Responsibility        | Description                                                  |
 | --------------------- | ------------------------------------------------------------ |
-| Registration          | Tracks all components declared with framework decorators     |
+| Registration          | Tracks all classes and functions declared with framework decorators |
 | Dependency resolution | Builds the dependency graph from constructor signatures      |
 | Instance creation     | Creates instances in dependency order                        |
 | Lifecycle management  | Drives the lifecycle of every component in the correct order |
@@ -66,7 +66,7 @@ Most end users never interact with it directly.
 
 ```text
 Decorators register components at definition time
-    → @Component, @Service, @Task, @Pipeline, @Agent, @Repository
+    → @Component, @Service, @Task, @Pipeline, @Agent, @Repository, @Function
 
 project.start() triggers context initialisation
     → Context builds the dependency graph from constructor signatures

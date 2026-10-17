@@ -12,8 +12,8 @@ Lightweight dependency-injection framework for data applications.
 Most data projects end up solving the same structural problems repeatedly: how to wire
 dependencies, manage component lifecycles, and keep configuration separate from code.
 This framework provides that plumbing as a small set of reusable abstractions —
-`Entity`, `Repository`, `Component`, `Service`, `Task`, `Pipeline` — so it doesn't need
-to be reinvented by hand in every project.
+`Entity`, `Repository`, `Component`, `Service`, `Task`, `Pipeline`, `Agent`, `Function` —
+so it doesn't need to be reinvented by hand in every project.
 
 !!! tip "Want a ready-made project layout instead?"
     Scaffolding an actual project from a template is the
@@ -144,7 +144,7 @@ worked examples.
 | [Pipeline](pipeline.md) | Ordered composition of Tasks/Pipelines |
 | [Agent](agent.md) | Goal-driven work unit whose steps are decided at run time; invoked with arguments |
 | [Function](function.md) | Plain function made framework-aware; called by name with arguments |
-| [Layer](layer.md) | Decorator that assigns a Component to a subsystem |
+| [Layer](layer.md) | Decorator that assigns a registered class or function to a subsystem |
 
 Supporting the above are [Context](context.md), [Config](config.md),
 [Project](project.md), [Namespace](namespace.md), and [Logger](logger.md) —
