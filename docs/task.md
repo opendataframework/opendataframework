@@ -88,7 +88,7 @@ class MetricsFetcher:
         config: Config,
         metrics: Metrics,
     ):
-        self.config = config
+        self.config = config.task.metrics_fetcher
         self.metrics = metrics
 
     def execute(self):
@@ -114,7 +114,7 @@ class MetricsFetcher:
         config: Config,
         metrics: Metrics,
     ):
-        self.config = config
+        self.config = config.task.metrics_fetcher
         self.metrics = metrics
 
     def execute(self):
@@ -137,7 +137,7 @@ class ModelTrainer:
         classifier: Classifier,
         metrics: Metrics,
     ):
-        self.config = config
+        self.config = config.task.model_trainer
         self.classifier = classifier
         self.metrics = metrics
 
@@ -157,7 +157,7 @@ class ReportGenerator:
         config: Config,
         metrics: Metrics,
     ):
-        self.config = config
+        self.config = config.task.report_generator
         self.metrics = metrics
 
     def execute(self):
@@ -175,10 +175,10 @@ class ReportGenerator:
 
 ## Using a Task
 
-A `Task` is resolved and executed through the `Context`, by class name:
+A `Task` is resolved and executed through the `Context`, by its [key](context.md#by-key-single-component-control):
 
 ```python
-data = project.context.execute("MetricsFetcher")
+data = project.context.execute("task.metrics-fetcher")
 ```
 
 Or directly within a `Pipeline` that coordinates multiple tasks:
@@ -225,7 +225,64 @@ class TaskProtocol(Protocol):
 
 ---
 
+## Task, Function or Agent?
+
+The `Context` can run all three by key. What separates them is who decides the input:
+
+| Who decides the input                                                              | Use                     | Run with                      |
+| ---------------------------------------------------------------------------------- | ----------------------- | ----------------------------- |
+| Nobody at call time: it is fixed when the project is assembled, through the constructor and [Config](config.md) | `Task`                  | `context.execute(key)`        |
+| The caller, on every call                                                          | [Function](function.md) | `context.call(key, **kwargs)` |
+| The caller, who hands over a goal; the steps are decided at run time               | [Agent](agent.md)       | `context.call(key, **kwargs)` |
+
+`execute()` takes no arguments on purpose. Because a task needs nothing from its
+caller, anything can run it (a pipeline, a scheduler, the CLI, a UI) without knowing
+anything about it. A task that took arguments would be a function written as a class,
+and choosing between the two would come down to taste.
+
+### When the work needs per-run input
+
+Sooner or later a task wants a value that changes between runs, such as the day to
+backfill or the tenant to reprocess. Don't change `Config` at run time or set a
+module-level variable to get it there. Both are hidden dependencies, and the second is
+global state. Instead, choose by where the value comes from:
+
+* **The caller picks it each time.** The work is a [Function](function.md). A task can
+  still cover the usual case by injecting the function and passing the value itself:
+
+    ```python
+    @Function
+    def backfill_orders(orders: Orders, day: date) -> int: ...
+
+
+    @Task
+    class DailyOrders:
+        def __init__(self, backfill: Annotated[Callable[[date], int], backfill_orders]):
+            self.backfill = backfill
+
+        def execute(self) -> int:
+            return self.backfill(date.today() - timedelta(days=1))
+    ```
+
+    ```python
+    project.context.execute("task.daily-orders")  # the scheduled run: yesterday
+    project.context.call("function.backfill-orders", day=date(2026, 10, 1))  # a one-off
+    ```
+
+* **It differs per deployment or environment.** It's configuration. Start the project
+  from a different config path (see [Config](config.md)).
+
+* **It follows from what earlier runs did**, such as a watermark, a cursor or the last
+  day processed. It's state. Keep it in a [Repository](repository.md) that the task
+  reads at the start of `execute()` and updates at the end.
+
+---
+
 ## What Task is Not
+
+* **Not called with arguments.** `execute()` takes none, and `Context.execute()` passes
+  none. Work that needs input from its caller is a [Function](function.md); see
+  [Task, Function or Agent?](#task-function-or-agent).
 
 * **Not a long-running process.** A `Task` runs to completion. If the work needs to run
   indefinitely, use a [Service](service.md).
@@ -247,6 +304,8 @@ class TaskProtocol(Protocol):
 | ----------------------------------------- | ----------- |
 | Provide a reusable capability             | [Component](component.md) |
 | Run a process indefinitely                | [Service](service.md)   |
-| Execute a bounded unit of work once       | `Task`      |
+| Execute a bounded unit of work once, no arguments | `Task` |
+| Call a unit of work with arguments        | [Function](function.md) |
 | Coordinate multiple tasks into a workflow | [Pipeline](pipeline.md)  |
+| Work towards a goal handed over at call time | [Agent](agent.md) |
 | Manage persistent data                    | [Repository](repository.md)|

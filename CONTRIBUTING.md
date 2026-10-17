@@ -68,6 +68,8 @@ make `git checkout`/`git push` ambiguous.
 3. Update your branch by rebasing on the release branch, not by merging
    it in. Force-pushing your own topic branch is fine.
 4. Include the matching `docs/` update when you change public behaviour.
+5. Once your PR is merged into the release branch, your topic branch can
+   be deleted.
 
 ### Releasing (maintainers)
 
@@ -81,8 +83,9 @@ make `git checkout`/`git push` ambiguous.
 5. Tag the merge commit on `main` and push the tag:
    `git tag -a X.Y.Z -m "X.Y.Z" && git push origin X.Y.Z`.
    Tags are bare versions with no `v` prefix, matching existing tags.
-6. The tag push triggers the workflows that publish to PyPI and deploy
-   the docs. Check both, then delete the release branch.
+6. The tag push triggers the workflow that deploys the docs. The package
+   is then published to PyPI manually by the code owner — this will be
+   automated by a workflow later.
 
 Fixes discovered after a release go into the next release branch (a patch
 or minor bump); every PyPI version corresponds to exactly one release
@@ -115,6 +118,5 @@ patch (say `0.2.1`) while a newer release is in development:
   commit and leave the branches diverged; rebasing would rewrite SHAs so
   the release branch and `main` hold different commits for the same
   change.
-- **Tag-triggered publishing** means docs and PyPI ship together, from
-  the exact commit that was tagged, rather than docs going live on merge
-  before the package is available.
+- **Tag-triggered docs** ship from the exact commit that was tagged,
+  rather than going live on merge before the release is cut.

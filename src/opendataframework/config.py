@@ -31,10 +31,10 @@ class Config:
         >>> cfg["database-url"]
         'postgres://localhost/db'
 
-        Nested access::
+        Nested access — ``[service.postgres]`` in TOML::
 
-            cfg = Config({"storage": {"postgres": {"port": 5432}}})
-            cfg.storage.postgres.port  # → 5432
+            cfg = Config({"service": {"postgres": {"port": 5432}}})
+            cfg.service.postgres.port  # → 5432
     """
 
     def __init__(self, data: dict) -> None:
@@ -44,8 +44,16 @@ class Config:
         original dict after construction (e.g. one the caller keeps a
         reference to and mutates after passing to ``Project.from_dict()``)
         does not leak through this ``Config``.
+
+        Keys are normalised to kebab-case (recursively, through nested
+        dicts), the same way lookup names are, so a key written as
+        ``exclude_years`` in the file is found by any name form.
+
+        Raises:
+            ValueError: If two keys at the same level normalise to the same
+                name (e.g. both ``exclude_years`` and ``exclude-years``).
         """
-        self._data = deepcopy(data)
+        self._data = _normalize_keys(deepcopy(data))
 
     def __getattr__(self, name: str) -> Config | object:
         """Return value by snake_case attribute name, normalised to kebab-case.
@@ -93,7 +101,7 @@ class Config:
         scope into a section and chain further ``.get()``/attribute access
         without guarding against it being missing:
 
-            cfg = config.get("postgres")
+            cfg = config.get("service").get("postgres")
             url = cfg.database_url          # AttributeError if missing
             port = cfg.get("port", 5432)    # safe fallback
 
@@ -111,6 +119,20 @@ class Config:
         if value is None:
             return default if default is not None else Config({})
         return Config(value) if isinstance(value, dict) else value
+
+
+def _normalize_keys(data: dict) -> dict:
+    """Return ``data`` with every key normalised to kebab-case, recursively."""
+    result: dict = {}
+    for key, value in data.items():
+        name = normalize(key)
+        if name in result:
+            raise ValueError(
+                f"Config keys conflict after normalisation: {key!r} and another "
+                f"key both map to {name!r}"
+            )
+        result[name] = _normalize_keys(value) if isinstance(value, dict) else value
+    return result
 
 
 def load(path: str) -> dict:
@@ -132,7 +154,7 @@ def load(path: str) -> dict:
 
     Example:
         >>> config = load("config.toml")
-        >>> config["postgres"]["database-url"]
+        >>> config["service"]["postgres"]["database-url"]
         'postgresql://localhost/mydb'
     """
     p = Path(path)

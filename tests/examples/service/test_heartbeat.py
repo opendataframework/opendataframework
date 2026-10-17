@@ -15,7 +15,7 @@ from opendataframework.config import Config
 
 @pytest.fixture
 def heartbeat() -> Heartbeat:
-    return Heartbeat(Config({"heartbeat": {"interval": 0.01}}))
+    return Heartbeat(Config({"service": {"heartbeat": {"interval": 0.01}}}))
 
 
 def test_heartbeat_reads_interval_from_config(heartbeat):
@@ -23,7 +23,7 @@ def test_heartbeat_reads_interval_from_config(heartbeat):
 
 
 def test_heartbeat_falls_back_to_default_interval():
-    heartbeat = Heartbeat(Config({}))
+    heartbeat = Heartbeat(Config({"service": {"heartbeat": {}}}))
     assert heartbeat.interval == 1.0
 
 

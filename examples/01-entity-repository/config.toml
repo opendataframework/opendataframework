@@ -1,5 +1,5 @@
 [project]
 name = "entity-repository-example"
 
-[sqlite]
+[component.sqlite]
 path = "app.db"

@@ -242,6 +242,89 @@ repository with no `field()` simply gets no replay affordance.
 
 ---
 
+## Content metadata — naming and typing the content
+
+A view names the field holding the content, but says nothing about the
+content itself. A repository may separately implement `content_metadata()`
+to declare, for one record, what that content is called and which format
+it's in:
+
+| | Question it answers | Asked |
+|---|---|---|
+| `data_view()` | Which representation fits these records, and which field holds the content? | once per repository |
+| `content_metadata(entity)` | For this record, what is that content called, and which format is it in? | once per record |
+
+```python
+from opendataframework import ContentMetadata, ImageView, Repository, Storage
+
+
+@Storage
+@Repository(Photo)
+class Photos:
+    def all(self) -> list[Photo]: ...
+
+    def data_view(self) -> ImageView:
+        return ImageView(field="data")
+
+    def content_metadata(self, photo: Photo) -> ContentMetadata:
+        return ContentMetadata(filename=f"{photo.id}.png", content_type="image/png")
+```
+
+Given `Photo(id, data: bytes)`, nothing about the file name or format is
+stored on the entity — `Photos` knows every image is a PNG and derives the
+name from the key. That's the point of this being a method on the
+repository rather than more field names on the view: the metadata often
+isn't business data, so it shouldn't have to become an entity field just to
+be declared.
+
+When it *is* stored per record — an uploaded document's original name, say
+— the same method just reads it off the entity:
+
+```python
+def content_metadata(self, document: Document) -> ContentMetadata:
+    return ContentMetadata(filename=document.filename, content_type=document.content_type)
+```
+
+`ContentMetadata` has two attributes, both optional — return only what the
+repository actually knows:
+
+| Attribute | Meaning |
+|---|---|
+| `filename: str \| None` | the content's file name, extension included (e.g. `"report.pdf"`) |
+| `content_type: str \| None` | the content's MIME type (e.g. `"image/png"`) |
+
+`content_metadata()` is detected structurally via `ContentMetadataProtocol`
+(`opendataframework.view.ContentMetadataProtocol`, `@runtime_checkable`) —
+no base class or decorator required, mirroring `DataViewProtocol`:
+
+```python
+class ContentMetadataProtocol(Protocol):
+    def content_metadata(self, entity: object) -> ContentMetadata: ...
+```
+
+It only matters for a repository whose view points at content —
+`ImageView`, `VideoView`, `AudioView` or `DocumentView`. A repository with
+no `content_metadata()`, or one that leaves an attribute as `None`, simply
+declares nothing: a consumer is left to work the content out for itself.
+
+!!! warning "A declaration, not a guarantee"
+    Nothing in this package inspects the content, so `ContentMetadata` is
+    only what the repository *says* about it — and the value may itself
+    have come from somewhere untrusted, like the type a browser sent at
+    upload. A consumer should treat it as a hint: check it against the
+    content where it can, rely on it where it can't (nothing in the bytes
+    tells CSV from plain text, and nothing at all carries a file name), and
+    never let it override its own rules for what is safe to render — a
+    declared `text/html` is no reason to serve markup inline. A `filename`
+    needs sanitising before it goes into a header or a path.
+
+These are facts about the content, not instructions for serving it. The two
+attributes line up with HTTP's `Content-Disposition` file name and
+`Content-Type`, but building those headers — and deciding whether content
+opens inline or downloads — is the consumer's job.
+
+---
+
 ## What a `data_view()` is not
 
 * **Not UI code.** `opendataframework` has zero third-party dependencies and
@@ -259,5 +342,4 @@ repository with no `field()` simply gets no replay affordance.
   sign it should be two repositories.
 
 * **Not required.** Most repositories need no `data_view()` at all — the
-  implicit table default, unchanged from before this protocol existed,
-  covers the common case.
+  implicit table default covers the common case.

@@ -39,6 +39,15 @@ makes the relationship between repository and entity explicit and visible.
 class Users: ...
 ```
 
+!!! warning "The entity must be an `@Entity`"
+    The argument has to be a class registered with [`@Entity`](entity.md);
+    anything else raises `TypeError` at decoration time. This also catches
+    the entity being left out — `@Repository` written directly above the
+    repository class would otherwise take that class for its own entity,
+    register nothing, and leave the repository silently missing from the
+    `Context`. To manage a type you don't own, register it explicitly with
+    `Entity(SomeType)`, or wrap it in a small entity class of your own.
+
 ### With a name
 
 ```python
@@ -149,7 +158,7 @@ Two more, both optional, hooks bracket that background thread's lifetime:
 @Repository(Frame)
 class Webcam:
     def __init__(self, config: Config):
-        self.device = config.get("webcam").get("device", 0)
+        self.device = config.repository.webcam.get("device", 0)
         self.capture = None
 
     def open_stream(self):
@@ -194,7 +203,7 @@ class Users:
         self,
         config: Config,
     ):
-        self.config = config
+        self.config = config.repository.users
         self.connection = None
 
     def on_start(self):
@@ -224,7 +233,7 @@ class Users:
         self,
         config: Config,
     ):
-        self.config = config
+        self.config = config.repository.users
         self.connection = None
 
     def on_start(self):
@@ -267,7 +276,7 @@ class SensorFeed:
         self,
         config: Config,
     ):
-        self.config = config
+        self.config = config.repository.sensor_feed
         self.client = None
 
     def on_start(self):
@@ -301,7 +310,7 @@ class Webcam:
         self,
         config: Config,
     ):
-        self.device = config.get("webcam").get("device", 0)
+        self.device = config.repository.webcam.get("device", 0)
         self.capture = None
 
     def open_stream(self):

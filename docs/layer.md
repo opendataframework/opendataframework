@@ -7,8 +7,8 @@ level. It answers one question:
 
 Layers separate concerns at the organisational level — `Api`, `Storage`, `Analytics`,
 `Messaging` — without affecting how components are wired or executed. A component's
-layer and its execution type (`Component`, `Service`, `Task`, `Pipeline`) are
-independent concepts.
+layer and its execution type (`Component`, `Repository`, `Service`, `Task`, `Pipeline`,
+`Agent`) are independent concepts.
 
 ---
 
@@ -16,14 +16,22 @@ independent concepts.
 
 `Layer` plays two roles in the framework:
 
-**As a user-facing decorator** — applied to a class to declare which subsystem it
-belongs to. This is what most application code interacts with.
+**As a user-facing decorator** — applied to a class or function to declare which
+subsystem it belongs to. This is what most application code interacts with.
 
 ```python
 @Analytics
 @Task
 class MetricsFetcher: ...
+
+
+@Analytics
+@Function
+def score(model: Model, threshold: float) -> float: ...
 ```
+
+A layer tags something that is already registered, so it always goes on top — see
+[What a Layer accepts](#what-a-layer-accepts).
 
 **As a framework concept** — a `Namespace` subclass in its own right, providing
 structured access to the components it contains via `<Layer>.items()`/`<Layer>.get(name)`.
@@ -43,7 +51,7 @@ The framework ships with a set of common pre-defined layers:
 | `Monitoring`| Health checks, loggers, tracers           |
 | `Security`  | Auth handlers, token validators           |
 
-Built-in layers are pre-defined `@Layer` instances — there is no special treatment
+Built-in layers are pre-defined `@Layer` classes — there is no special treatment
 for them. They follow the same rules as any custom layer.
 
 ---
@@ -130,15 +138,18 @@ class MetricsFetcher: ...
 The framework applies the same automatic name derivation to both layers and
 execution types. Given a class name, the framework produces:
 
-| Class name       | snake_case (also accepted by `.get()`) | Config key (kebab-case) |
-| ---------------- | --------------------------------------- | ----------------------- |
-| `MachineLearning`| `machine_learning`                      | `machine-learning`      |
-| `UsersApi`       | `users_api`                             | `users-api`              |
-| `MetricsFetcher` | `metrics_fetcher`                       | `metrics-fetcher`       |
-| `Postgres`       | `postgres`                              | `postgres`              |
+| Class name       | snake_case (also accepted by `.get()`) | Registered name (kebab-case) |
+| ---------------- | --------------------------------------- | ---------------------------- |
+| `MachineLearning`| `machine_learning`                      | `machine-learning`           |
+| `UsersApi`       | `users_api`                             | `users-api`                  |
+| `MetricsFetcher` | `metrics_fetcher`                       | `metrics-fetcher`            |
+| `Postgres`       | `postgres`                              | `postgres`                   |
 
 `.get()` normalizes any of these forms to kebab-case before lookup, so
 `Layer.get("machine_learning")` and `Layer.get("machine-learning")` both resolve.
+For an execution type, the registered name is the second half of the class's key,
+`<namespace>.<name>` (`service.users-api`), which also names its config section — see
+[Config structure convention](config.md#config-structure-convention).
 
 An explicit name on the decorator overrides the derived name entirely:
 
@@ -190,6 +201,36 @@ dict(MachineLearning.items())  # → {"classifier": Classifier, ...}
 
 ---
 
+## What a Layer accepts
+
+A layer is an organisational tag, not a registration of its own: it accepts a class that
+an execution type (`@Component`, `@Service`, `@Task`, ...) has registered, or a function
+registered with [`@Function`](function.md). Anything else raises `TypeError` at
+decoration time:
+
+```python
+@Storage
+class Warehouse: ...  # TypeError — no execution type under it
+
+
+@Storage
+def load_data(): ...  # TypeError — no @Function under it
+
+
+@Component
+@Storage
+class Warehouse: ...  # TypeError — the layer runs first and finds nothing registered
+```
+
+The fix is the same each time: put the execution type (or `@Function`) directly on the
+class or function, and the layer above it.
+
+A class and a function tagged with the same layer share its names, so `LoadData` and
+`load_data` collide there as `load-data`; give one an explicit name
+(`@Storage(name=...)`).
+
+---
+
 ## Inspecting Layer Membership
 
 Two lookup directions are available, depending on what you know:
@@ -223,21 +264,22 @@ dict(Analytics.items())  # → {"metrics-fetcher": MetricsFetcher, …}
 ## Layer is Independent of Config
 
 `Layer` has no bearing on config structure. Config sections are keyed by
-component name alone, in kebab-case, regardless of which layer (if any) a
-component belongs to — see [Config structure convention](config.md#config-structure-convention):
+`<namespace>.<name>` — the execution type and the name — regardless of which
+layer (if any) a component belongs to — see
+[Config structure convention](config.md#config-structure-convention):
 
 ```toml
-[users-api]
+[service.users-api]
 host = "0.0.0.0"
 port = 8080
 
-[postgres]
+[service.postgres]
 database_url = "postgresql://localhost/mydb"
 
-[metrics-fetcher]
+[task.metrics-fetcher]
 source_url = "https://api.example.com/metrics"
 
-[classifier]
+[component.classifier]
 model_path = "models/classifier.pkl"
 ```
 
@@ -308,5 +350,5 @@ Storage.get("postgres")  # → Postgres  (layer view)
 * **No protocol on the layer-defining class.** `class MachineLearning(Namespace): ...`
   inherits from `Namespace` so that `@MachineLearning` works as a decorator. The
   class body is always empty — there is nothing to implement. Classes *tagged* with
-  a layer follow the execution type protocol (`Component`, `Service`, `Task`,
-  `Pipeline`); the layer itself adds only organisational membership.
+  a layer follow their execution type's protocol (`Service`, `Task`, `Agent`, ...);
+  the layer itself adds only organisational membership.

@@ -4,7 +4,7 @@
 dependency exactly like any other — `logger: Logger` — but the `Context`
 resolves it differently from everything else: instead of handing out one
 shared instance, every consumer receives its own `Logger`, already bound to
-its own class name, so `self.logger.info(...)` needs no name argument and
+its own `<namespace>.<name>` key, so `self.logger.info(...)` needs no name argument and
 still lands in that component's own log file.
 
 ---
@@ -49,12 +49,14 @@ project built around this.
 Most log lines require no code at all. `Context` writes to each component's log
 file on its behalf:
 
-* **Resolution** — `"<Class> resolved"`, once each component is instantiated.
+* **Resolution** — `"Users resolved"` (the class or function's own name), once
+  each component is instantiated or each [Function](function.md) is bound.
 * **Lifecycle** — `setup()`/`run()`/`stop()` for a `Service`, `on_start()`/
   `on_stop()` for a `Component`/`Repository` — start, completion, and any
   raised exception.
-* **Execution** — `execute()` for a `Task`/`Pipeline` — start, duration, and
-  any raised exception.
+* **Execution** — `execute()` for a `Task`/`Pipeline`, `invoke()` for an
+  `Agent`, every call of a `Function` made through the `Context` — start,
+  duration, and any raised exception.
 
 `logger: Logger` is only needed for messages specific to what a component is
 actually doing — the framework-level lifecycle noise above is covered either
@@ -64,8 +66,11 @@ way.
 
 ## Enabling File Logging
 
-Log files are written under a single directory, one `<component>.log` per
-class, scoped to one `Context`. `Project.from_config`/`from_dict` enable it
+Log files are written under a single directory, one
+`<namespace>.<name>.log` per registered class or function — the same key
+the [Context](context.md#by-key-single-component-control) addresses it by,
+so `@Task class Loader` and `@Agent class Loader` never share a file —
+scoped to one `Context`. `Project.from_config`/`from_dict` enable it
 automatically under `[project] log-dir` (default `"logs"`, relative to the
 current working directory):
 
@@ -81,11 +86,11 @@ entirely: writes become no-ops and reads return nothing.
 
 ## Reading Logs Back
 
-`Context.tail_logs(component, lines=300)` returns the most recent entries for
+`Context.tail_logs(key, lines=300)` returns the most recent entries for
 a component, oldest first:
 
 ```python
-project.context.tail_logs("Postgres", lines=100)
+project.context.tail_logs("service.postgres", lines=100)
 # → [{"ts": "2026-08-08 10:00:00", "level": "INFO", "message": "setup() starting"}, ...]
 ```
 
@@ -99,7 +104,7 @@ project.context.tail_logs("Postgres", lines=100)
 ## Not a Singleton — Special-Cased Resolution
 
 Every other registered class (`Component`, `Service`, `Task`, `Pipeline`,
-`Repository`) is a per-`Context` singleton: `Context` creates exactly one
+`Agent`, `Repository`) is a per-`Context` singleton: `Context` creates exactly one
 instance and stores it under that class in `Context.instances`, which is what
 `project.context.get(cls)` looks up (see [Context](context.md#direct-access)).
 

@@ -9,8 +9,8 @@ Lightweight dependency-injection framework for data applications.
 
 This package provides structural abstractions —
 `Entity`, `Repository`, `Component`, `Service`, `Task`, `Pipeline`,
-`Layer`, `Namespace`, `Context`, `Project`, `Config`, `Logger`, `View`
-— with zero third-party dependencies. No UI, no CLI, no MCP server.
+`Agent`, `Function`, `Layer`, `Namespace`, `Context`, `Project`, `Config`,
+`Logger`, `View` — with zero third-party dependencies. No UI, no CLI, no MCP server.
 
 > Need the CLI, UI, or MCP server? That's the
 > [`odf`](https://opendataframework.github.io/odf/) package, which
@@ -65,7 +65,7 @@ class User:
 @Component
 class SQLite:
     def __init__(self, config: Config):
-        self.conn = sqlite3.connect(config.sqlite.path)
+        self.conn = sqlite3.connect(config.component.sqlite.path)
         self.conn.execute("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT)")
 
 
@@ -86,7 +86,7 @@ class Users:
 Config file (`config.toml`):
 
 ```toml
-[sqlite]
+[component.sqlite]
 path = "app.db"
 ```
 
@@ -143,7 +143,10 @@ class Users:
 
 An optional, single declaration a `Repository` attaches to itself: which
 representation (table, map, image, video, ...) and field(s) best fit its
-data. Metadata only — this package renders nothing itself. See
+data. Metadata only — this package renders nothing itself. A repository
+whose view points at content (an image, a clip, a document) may also
+implement `content_metadata()` to declare each record's file name and
+MIME type. See
 [View](https://opendataframework.github.io/opendataframework/view/).
 
 ```python
@@ -204,6 +207,51 @@ class DailyAnalytics:
     def execute(self): ...
 ```
 
+## Agent
+
+A finite executable whose steps are decided at run time, typically by a
+language model — handed its goal as arguments to `invoke()`. What it may act
+on is declared through its constructor. The framework ships no model client;
+`invoke()` is where a library of your choice goes.
+
+```python
+@Agent
+class Librarian:
+    def __init__(self, books: Books, model: Model): ...
+
+    def invoke(self, question: str) -> str: ...
+
+
+project.context.call("agent.librarian", question="Anything by Herbert?")
+```
+
+## Function
+
+A plain function made framework-aware — for adopting existing code without
+a class refactor first. Returned unchanged; called through the `Context`,
+its managed dependencies are injected and the rest are arguments.
+
+```python
+@Function
+def load_data(path: str, db: Postgres) -> int: ...
+
+
+project.context.call("function.load-data", path="data.csv")  # db injected
+```
+
+A class asks for a function through its constructor, and gets it with its
+dependencies already filled in:
+
+```python
+@Task
+class Refresh:
+    def __init__(self, load: Annotated[Callable[..., int], load_data]):
+        self.load = load
+
+    def execute(self):
+        return self.load("data.csv")
+```
+
 ## Layer
 
 An organisational grouping — which subsystem a component belongs to
@@ -219,8 +267,8 @@ class Postgres: ...
 ## Namespace
 
 The base class underlying every framework decorator — `Entity`,
-`Component`, `Service`, `Task`, `Pipeline`, `Repository`, and `Layer` are
-all `Namespace` subclasses, each with its own independent name → class
+`Component`, `Service`, `Task`, `Pipeline`, `Agent`, `Function`,
+`Repository`, and `Layer` are all `Namespace` subclasses, each with its own independent name → class
 mapping. A framework extension point, not something end users subclass
 directly. See
 [Namespace](https://opendataframework.github.io/opendataframework/namespace/).
@@ -303,6 +351,7 @@ Components provide capabilities.
 Services run for extended periods.
 Tasks execute bounded work.
 Pipelines coordinate tasks (and other pipelines).
+Agents pursue a goal handed to them.
 
 Layers organize components.
 Context manages components and repositories.

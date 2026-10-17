@@ -64,12 +64,11 @@ class UserV2:
     email: str
 ```
 
-!!! tip "Registering under a name that's already taken"
-    Entities are stored in a plain `name → class` dict, keyed by the normalized
-    name. If both `User` and `UserV2` above are defined, `UserV2` — being
-    decorated second — silently overwrites `User` under the `"user"` key, and
-    `Entity.get("user")` returns `UserV2`. There's no error or warning; keep
-    explicit names unique across entities you intend to keep.
+!!! warning "Registering under a name that's already taken"
+    Entity names are unique. If both `User` and `UserV2` above are defined, the
+    second one decorated raises `ValueError` at decoration time, naming both
+    classes, because both claim `"user"`. Give one of them a different explicit
+    `name=`.
 
 ---
 
@@ -158,7 +157,9 @@ class Users:
 ```
 
 The `@Repository(User)` decorator links the repository to its entity explicitly,
-making the relationship visible without requiring inheritance.
+making the relationship visible without requiring inheritance. The link requires
+the `@Entity` marker — passing a class that isn't registered with `@Entity` raises
+`TypeError`.
 
 !!! tip "Looking up registered entities"
     `Entity` is a namespace — `Entity.get("user")` returns the `User` class (or

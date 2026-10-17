@@ -12,8 +12,8 @@ Lightweight dependency-injection framework for data applications.
 Most data projects end up solving the same structural problems repeatedly: how to wire
 dependencies, manage component lifecycles, and keep configuration separate from code.
 This framework provides that plumbing as a small set of reusable abstractions —
-`Entity`, `Repository`, `Component`, `Service`, `Task`, `Pipeline` — so it doesn't need
-to be reinvented by hand in every project.
+`Entity`, `Repository`, `Component`, `Service`, `Task`, `Pipeline`, `Agent`, `Function` —
+so it doesn't need to be reinvented by hand in every project.
 
 !!! tip "Want a ready-made project layout instead?"
     Scaffolding an actual project from a template is the
@@ -67,7 +67,7 @@ from opendataframework import Component, Config
 @Component
 class SQLite:
     def __init__(self, config: Config) -> None:
-        self.conn = sqlite3.connect(config.get("sqlite").get("path"))
+        self.conn = sqlite3.connect(config.component.sqlite.path)
         self.conn.execute("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT)")
 ```
 
@@ -97,7 +97,7 @@ class Users:
 Config file (`config.toml`):
 
 ```toml
-[sqlite]
+[component.sqlite]
 path = "app.db"
 ```
 
@@ -142,7 +142,9 @@ worked examples.
 | [Service](service.md) | Long-running Component (worker, backing service) |
 | [Task](task.md) | Finite work unit; called explicitly |
 | [Pipeline](pipeline.md) | Ordered composition of Tasks/Pipelines |
-| [Layer](layer.md) | Decorator that assigns a Component to a subsystem |
+| [Agent](agent.md) | Goal-driven work unit whose steps are decided at run time; invoked with arguments |
+| [Function](function.md) | Plain function made framework-aware; called by name with arguments |
+| [Layer](layer.md) | Decorator that assigns a registered class or function to a subsystem |
 
 Supporting the above are [Context](context.md), [Config](config.md),
 [Project](project.md), [Namespace](namespace.md), and [Logger](logger.md) —

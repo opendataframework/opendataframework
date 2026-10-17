@@ -19,6 +19,8 @@ Use `@Component` when a class provides a reusable capability that:
 * does not need to run indefinitely (that is a [Service](service.md))
 * does not execute a single bounded unit of work (that is a [Task](task.md))
 * does not coordinate other tasks (that is a [Pipeline](pipeline.md))
+* does not work towards a goal handed over at call time (that is an [Agent](agent.md))
+* does not manage the entities of one data source (that is a [Repository](repository.md))
 
 If none of the above apply, it is a `Component`.
 
@@ -66,7 +68,9 @@ class CustomerChurnRiskClassifier:
 ### Combined with a Layer
 
 `@Component` is often stacked with a layer decorator to indicate which subsystem the
-component belongs to. Layer comes first (outermost), component type second:
+component belongs to. Layer comes first (outermost), component type second — a class
+takes one execution type, so `@Component` is not combined with `@Service`, `@Task` and
+the like (see [Namespace](namespace.md#what-each-decorator-accepts)):
 
 ```python
 @Analytics
@@ -120,9 +124,9 @@ class Classifier:
         config: Config,
         metrics: Metrics,
     ):
-        self.config = config
+        self.config = config.component.classifier
         self.metrics = metrics
-        self.model = self._load_model(config.model_path)
+        self.model = self._load_model(self.config.model_path)
 
     def fit(self, data):
         self.model.fit(data)
@@ -174,7 +178,7 @@ startup are reflected rather than frozen at resolve time.
 @Service
 class Dashboard:
     def __init__(self, config: Config):
-        self.port = config.port
+        self.port = config.service.dashboard.port
 
     def details(self) -> dict[str, str]:
         return {"UI": f"http://localhost:{self.port}"}
@@ -267,7 +271,7 @@ tool surface.
 @Component
 class Weather:
     def __init__(self, config: Config):
-        self.api_key = config.weather_api_key
+        self.api_key = config.component.weather.api_key
 
     def forecast(self, city: str) -> dict: ...
 
@@ -291,17 +295,72 @@ class McpToolsProtocol(Protocol):
 ```
 
 Each returned `McpTool` carries a `name`, `description`, `handler` (a
-bound method), and `structured_output` flag. A component with no
-`mcp_tools()` method simply exposes no custom tools — this is entirely
-optional.
+callable — usually a bound method), and `structured_output` flag. A
+component with no `mcp_tools()` method simply exposes no custom tools —
+this is entirely optional.
+
+Whoever calls a tool — typically a model — sees only its description and
+the handler's signature, so an `McpTool` checks both when it is created:
+
+- the `description` is not empty — `ValueError` otherwise;
+- every parameter of the handler is annotated;
+- the handler takes no `*args` or `**kwargs`;
+- the handler has a return annotation (`-> None` counts);
+- no annotation is a string — as every one is under
+  `from __future__ import annotations`.
+
+A handler that falls short raises `TypeError`, naming the tool and
+everything that is missing. A lambda has no annotations, so it can't be a
+handler — use a method or a function.
+
+Because detection is structural, any class the `Context` creates can
+provide tools this way — a [Repository](repository.md), a
+[Service](service.md), a [Task](task.md), an [Agent](agent.md) — not
+only a `@Component`.
+
+### A function as a tool
+
+A handler needn't be a method. A registered [Function](function.md) the
+class takes through its constructor arrives with its own dependencies
+filled in and a signature that leaves them out, so it can be returned as
+a handler directly:
+
+```python
+@Function
+def find_titles(catalogue: Catalogue, author: str) -> list[str]:
+    """Find the titles the catalogue holds by an author."""
+    return catalogue.titles_by(author)
+
+
+@Component
+class Library:
+    def __init__(self, find: Annotated[Callable[..., list[str]], find_titles]):
+        self.find = find
+
+    def mcp_tools(self) -> list[McpTool]:
+        return [
+            McpTool(
+                name="find-titles",
+                description="Find the titles the catalogue holds by an author.",
+                handler=self.find,
+            )
+        ]
+```
+
+The tool asks for `author` only. Returning it from a class lets the tool
+take its own name and description, and sit beside the class's other tools.
+See [Injecting a Function](function.md#injecting-a-function).
 
 !!! tip "Seeing it in practice"
     This package only defines the `McpTool`/`McpToolsProtocol` shape —
     it has no MCP server of its own. The sibling
     [`odf`](https://opendataframework.github.io/odf/) package's
     `McpServer` is the consumer: it registers each returned `McpTool`
-    under `<kebab(cls.__name__)>.<tool.name>`, alongside its six fixed
-    built-in tools.
+    under `<key>.<tool.name>` (`component.weather.forecast`), next to its
+    six fixed built-in tools. It also offers every resolved
+    [Agent](agent.md) as `<key>.invoke` and every registered
+    [Function](function.md) as `<key>.call` without any `mcp_tools()`, so
+    a tool returned here must not reuse one of those names.
 
 ---
 
@@ -326,6 +385,8 @@ optional.
 | ----------------------------------------- | ----------- |
 | Provide a reusable capability             | `Component` |
 | Run a process indefinitely                | [Service](service.md)   |
-| Execute a bounded unit of work once       | [Task](task.md)      |
+| Execute a bounded unit of work once, no arguments | [Task](task.md) |
+| Call a unit of work with arguments        | [Function](function.md) |
 | Coordinate multiple tasks into a workflow | [Pipeline](pipeline.md)  |
+| Work towards a goal handed over at call time | [Agent](agent.md) |
 | Manage persistent data                    | [Repository](repository.md)|

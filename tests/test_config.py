@@ -15,6 +15,24 @@ def test_snake_to_kebab_attribute_access():
     assert cfg.database_url == "postgres://localhost/db"
 
 
+def test_snake_case_key_in_data_is_found_by_any_name_form():
+    cfg = Config({"exclude_years": [2020], "storage": {"db_url": "x"}})
+    assert cfg.exclude_years == [2020]
+    assert cfg["exclude-years"] == [2020]
+    assert cfg.get("exclude_years", []) == [2020]
+    assert cfg.get("storage").get("db-url") == "x"
+
+
+def test_pascal_case_key_in_data_is_found():
+    cfg = Config({"MetricsFetcher": {"port": 1}})
+    assert cfg.metrics_fetcher.port == 1
+
+
+def test_keys_conflicting_after_normalisation_raise():
+    with pytest.raises(ValueError, match="exclude-years"):
+        Config({"exclude_years": [1], "exclude-years": [2]})
+
+
 def test_missing_attribute_raises():
     cfg = Config({"host": "localhost"})
     with pytest.raises(AttributeError):

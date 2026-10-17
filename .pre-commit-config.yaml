@@ -18,11 +18,13 @@ repos:
     rev: 1.7.0
     hooks:
       - id: interrogate
+        language_version: python3.14
         pass_filenames: false
         args:
           - --fail-under=100
           - --ignore-private
           - --ignore-magic
+          - --ignore-overloaded-functions
           - --verbose
           - src/opendataframework/component.py
           - src/opendataframework/config.py

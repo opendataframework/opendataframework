@@ -1,9 +1,11 @@
 """Open Data Framework (ODF) package."""
 
+from opendataframework.agent import Agent, AgentProtocol
 from opendataframework.component import Component
 from opendataframework.config import Config
 from opendataframework.context import Context, Lifecycle, Resolver
 from opendataframework.entity import Entity
+from opendataframework.function import Function
 from opendataframework.layer import Analytics, Api, Layer, Messaging, Monitoring, Security, Storage
 from opendataframework.logger import Logger
 from opendataframework.namespace import Namespace
@@ -19,6 +21,8 @@ from opendataframework.service import Service, ServiceProtocol
 from opendataframework.task import Task, TaskProtocol
 from opendataframework.view import (
     AudioView,
+    ContentMetadata,
+    ContentMetadataProtocol,
     DataView,
     DataViewProtocol,
     DocumentView,
@@ -33,16 +37,21 @@ from opendataframework.view import (
 )
 
 __all__ = [
+    "Agent",
+    "AgentProtocol",
     "Analytics",
     "Api",
     "AudioView",
     "Component",
     "Config",
+    "ContentMetadata",
+    "ContentMetadataProtocol",
     "Context",
     "DataView",
     "DataViewProtocol",
     "DocumentView",
     "Entity",
+    "Function",
     "ImageView",
     "Layer",
     "Lifecycle",

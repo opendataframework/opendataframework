@@ -31,7 +31,7 @@ exposes `project.context.get(cls)` to fetch any resolved instance by its class.
 
 | Responsibility        | Description                                                  |
 | --------------------- | ------------------------------------------------------------ |
-| Registration          | Tracks all components declared with framework decorators     |
+| Registration          | Tracks all classes and functions declared with framework decorators |
 | Dependency resolution | Builds the dependency graph from constructor signatures      |
 | Instance creation     | Creates instances in dependency order                        |
 | Lifecycle management  | Drives the lifecycle of every component in the correct order |
@@ -66,7 +66,7 @@ Most end users never interact with it directly.
 
 ```text
 Decorators register components at definition time
-    → @Component, @Service, @Task, @Pipeline, @Repository
+    → @Component, @Service, @Task, @Pipeline, @Agent, @Repository, @Function
 
 project.start() triggers context initialisation
     → Context builds the dependency graph from constructor signatures
@@ -123,6 +123,18 @@ Users       ← depends on Postgres
     ↓
 UsersApi    ← depends on Users
 ```
+
+A registered [Function](function.md) is part of the same graph. It depends on the
+managed types in its signature, and a class depends on it by naming it in
+`Annotated[..., func]` — see [Injecting a Function](function.md#injecting-a-function).
+It is bound in dependency order alongside the classes, but has no lifecycle and is not
+in `context.instances`.
+
+!!! note "One of each"
+    The `Context` holds a single instance of every class, so asking for the same one
+    twice — `def __init__(self, source: Db, target: Db)` — would hand over the same
+    object under both names. That raises `ValueError` at `project.start()`, naming the
+    class, the dependency and the parameters. If two are needed, register two classes.
 
 ---
 
@@ -204,7 +216,8 @@ on `B` and `B` depends on `A`, the `Context` cannot determine a valid initialisa
 order.
 
 !!! tip "Raises ValueError"
-    Detecting a cycle raises `ValueError`, naming the classes involved:
+    Detecting a cycle raises `ValueError`, naming the classes — and any
+    functions — involved:
     `Circular dependency detected among: A, B`. This surfaces at
     `project.start()`, not at class-definition time — decorators only
     register classes, they don't check the graph.
@@ -258,25 +271,62 @@ constructor dependency that breaks this: it isn't registered in any
 namespace and has no slot in `instances` at all, so `context.get(Logger)`
 doesn't work — see [Logger](logger.md#not-a-singleton-special-cased-resolution).
 
+`get()` also accepts a registered [Function](function.md), returning it with
+its managed dependencies already filled in:
+
+```python
+load = project.context.get(load_data)
+load("data.csv")  # db injected
+```
+
+Functions are kept out of `instances` — that mapping holds classes only.
+`project.context.functions` is the equivalent for functions (function →
+bound callable), and `project.context.parameters(func)` returns the
+parameters a caller still has to supply. See
+[Function](function.md#inspecting-functions).
+
 ---
 
-## By Name — Single-Component Control
+## By Key — Single-Component Control
 
-Beyond `get(cls)`, `Context` exposes a by-name control surface — every
-method below looks up a resolved instance by its class name (e.g.
-`"Postgres"`, not the `Postgres` class itself) and raises `KeyError` if no
-resolved instance matches that name. This is the mechanism a UI, CLI, or
-MCP server built on top of the framework uses to control one component at
-a time without importing its class:
+Beyond `get(cls)`, `Context` exposes a control surface addressed by
+**key** — every method below takes `<namespace>.<name>`, where `<name>` is
+the name the object is registered under (its kebab-case class or function
+name, or the explicit `name=`):
+
+| Registered as | Key |
+|---|---|
+| `@Service class Postgres` | `"service.postgres"` |
+| `@Repository(Frame) class Webcam` | `"repository.webcam"` |
+| `@Pipeline class DailyAnalytics` | `"pipeline.daily-analytics"` |
+| `@Task("export") class ExportUsers` | `"task.export"` |
+| `@Function def load_data` | `"function.load-data"` |
+| `@Agent class Librarian` | `"agent.librarian"` |
+
+A name is unique only within its namespace, so the namespace is always part
+of the key: a `@Task class Loader` and an `@Agent class Loader` can live in
+the same project as `"task.loader"` and `"agent.loader"`. Keys are accepted
+in any casing (`"Task.LoadJob"` is `"task.load-job"`). A string without a
+namespace raises `ValueError`, and a key that matches no resolved object
+raises `KeyError`. `project.context.key(obj)` returns the key of a class or
+function you already hold:
+
+```python
+project.context.key(DailyAnalytics)  # → "pipeline.daily-analytics"
+```
+
+This is the mechanism a UI, CLI, or MCP server built on top of the
+framework uses to control one component at a time without importing its
+class:
 
 **Services** — start, stop, or check a single `Service` independent of the
 normal dependency-order startup/shutdown driven by `project.start()`/
 `project.stop()`:
 
 ```python
-project.context.start("Postgres")  # no-op if already running
-project.context.stop("Postgres")  # no-op if not running
-project.context.is_running("Postgres")  # → bool
+project.context.start("service.postgres")  # no-op if already running
+project.context.stop("service.postgres")  # no-op if not running
+project.context.is_running("service.postgres")  # → bool
 ```
 
 Each raises `TypeError` if the matched instance isn't a `Service`.
@@ -285,11 +335,11 @@ Each raises `TypeError` if the matched instance isn't a `Service`.
 repository's background stream (see [Repository](repository.md)):
 
 ```python
-project.context.start_stream("Webcam")  # spawns the background thread
-project.context.stop_stream("Webcam")  # no-op if not streaming
-project.context.is_streaming("Webcam")  # → bool
+project.context.start_stream("repository.webcam")  # spawns the background thread
+project.context.stop_stream("repository.webcam")  # no-op if not streaming
+project.context.is_streaming("repository.webcam")  # → bool
 
-for frame in project.context.iter_stream("Webcam"):
+for frame in project.context.iter_stream("repository.webcam"):
     ...  # one subscriber; detaches when the stream stops or iteration ends
 ```
 
@@ -299,20 +349,45 @@ raise `TypeError` if the matched instance isn't `StreamableProtocol`.
 start one itself, and raises `KeyError` if the stream isn't currently
 running.
 
-**Tasks and Pipelines** — execute a single resolved `Task` or `Pipeline`
-by name:
+**Tasks and Pipelines** — execute a single resolved `Task` or `Pipeline`:
 
 ```python
-project.context.execute("DailyAnalytics")  # → whatever execute() returns
+project.context.execute("pipeline.daily-analytics")  # → whatever execute() returns
 ```
 
 Raises `TypeError` if the matched instance is neither.
 
-**Logs** — read back a component's recent log lines (see
-[Logger](logger.md)):
+**Functions** — call a single resolved [Function](function.md). Unlike `execute()`, `call()` forwards arguments: the
+`Context` fills in the parameters whose type it manages, and the keywords
+supply the rest:
 
 ```python
-project.context.tail_logs("Postgres", lines=300)
+project.context.call("function.load-data", path="data.csv")  # db injected
+```
+
+Raises `TypeError` if a required argument is neither managed nor supplied.
+
+**Agents** — `call()` also invokes a single resolved [Agent](agent.md),
+passing the keywords on to its `invoke()`. An agent's
+dependencies were already injected through its constructor, so every
+keyword here is one of `invoke()`'s own arguments:
+
+```python
+project.context.call("agent.librarian", question="Anything by Herbert?")
+```
+
+A function and an agent may share a name — `"function.librarian"` and
+`"agent.librarian"` are different keys.
+
+`project.context.parameters(target)` returns what a caller must supply to
+`call()` — a function's parameters minus the injected ones, or the
+parameters of an agent's `invoke()`.
+
+**Logs** — read back a component's recent log lines (see
+[Logger](logger.md)); each key has its own `<namespace>.<name>.log` file:
+
+```python
+project.context.tail_logs("service.postgres", lines=300)
 # → [{"ts": ..., "level": ..., "message": ...}, ...], oldest first
 ```
 
@@ -333,6 +408,18 @@ project.context.tail_logs("Postgres", lines=300)
   most dependency logic belongs inside a class that receives it via
   constructor injection, not in code that pulls it from the `Context`
   directly.
+
+* **Not async.** The `Context` calls and never awaits. An `async def` in anything it
+  would call — a [Function](function.md), `execute()`, `invoke()`, `setup()`/`run()`/
+  `stop()`, `on_start()`/`on_stop()`, a repository's stream methods — makes
+  `project.start()` raise `TypeError` naming it, before anything is created. Other
+  `async def` methods on a component are yours to call and are left alone.
+
+* **Not a reader of string annotations.** Dependencies are injected by type, and an
+  annotation that is a string is not one — every annotation is, under
+  `from __future__ import annotations`. A required constructor parameter left unfilled
+  for that reason raises a `TypeError` that says so; remove the import, or the quotes
+  around the annotation.
 
 * **Not responsible for threading.** The framework handles `Service.run()`, and a
   streamable `Repository`'s `stream()`, in background threads automatically. Neither

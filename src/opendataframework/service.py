@@ -7,7 +7,7 @@ a thread automatically so a service author never manages threading.
 
 from typing import Protocol, runtime_checkable
 
-from opendataframework.namespace import Namespace
+from opendataframework.namespace import ExecutionType
 
 
 @runtime_checkable
@@ -35,7 +35,7 @@ class ServiceProtocol(Protocol):
         ...
 
 
-class Service(Namespace):
+class Service(ExecutionType):
     """Decorator that registers a long-running executable class with the Context.
 
     ``@Service`` marks a class as a managed service — the ``Context`` drives its

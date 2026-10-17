@@ -10,9 +10,9 @@ from opendataframework.project import Project
 
 
 def make_ns():
-    class NS(Namespace): ...
+    class Scope(Namespace): ...
 
-    return NS
+    return Scope
 
 
 # --- lifecycle ----------------------------------------------------------------
@@ -221,4 +221,4 @@ def test_project_writes_log_files_under_configured_dir(tmp_path, monkeypatch):
     with Project(context=Context(namespaces={NS}, log_dir="logs")):
         pass
 
-    assert (tmp_path / "logs" / "a.log").exists()
+    assert (tmp_path / "logs" / "scope.a.log").exists()

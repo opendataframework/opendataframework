@@ -13,7 +13,7 @@ from opendataframework.config import Config
 
 @pytest.fixture
 def database() -> Database:
-    return Database(Config({"database": {"dsn": "sqlite:///test.db"}}))
+    return Database(Config({"component": {"database": {"dsn": "sqlite:///test.db"}}}))
 
 
 def test_database_reads_dsn_from_config(database):
@@ -21,7 +21,7 @@ def test_database_reads_dsn_from_config(database):
 
 
 def test_database_falls_back_to_default_dsn():
-    database = Database(Config({}))
+    database = Database(Config({"component": {"database": {}}}))
     assert database.dsn == "sqlite:///app.db"
 
 

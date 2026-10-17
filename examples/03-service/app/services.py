@@ -6,7 +6,7 @@ from opendataframework import Config, Service
 @Service
 class Heartbeat:
     def __init__(self, config: Config) -> None:
-        self.interval = config.get("heartbeat").get("interval", 1.0)
+        self.interval = config.service.heartbeat.get("interval", 1.0)
         self.count = 0
         self._running = False
 

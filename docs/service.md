@@ -31,7 +31,7 @@ Typical examples:
 * database processes
 * message queue workers
 * schedulers
-* agent runtimes
+* workers that feed an [Agent](agent.md#long-running-agents)
 * Docker containers
 
 ---
@@ -174,7 +174,7 @@ class Postgres:
         self,
         config: Config,
     ):
-        self.config = config
+        self.config = config.service.postgres
         self.pool = None
 
     def setup(self):
@@ -210,7 +210,7 @@ class UsersApi:
         config: Config,
         users: Users,
     ):
-        self.config = config
+        self.config = config.service.users_api
         self.users = users
         self.server = None
 
@@ -241,7 +241,7 @@ class Scheduler:
         config: Config,
         pipeline: DailyAnalytics,
     ):
-        self.config = config
+        self.config = config.service.scheduler
         self.pipeline = pipeline
         self._running = False
 
@@ -260,7 +260,7 @@ class Scheduler:
     def _wait_for_next_run(self):
         # block until the next scheduled run, e.g. once a day at 02:00
         now = datetime.now()
-        next_run = now.replace(hour=2, minute=0, second=0, microsecond=0)
+        next_run = now.replace(hour=self.config.get("hour", 2), minute=0, second=0, microsecond=0)
         if next_run <= now:
             next_run += timedelta(days=1)
 
@@ -321,6 +321,8 @@ class ServiceProtocol(Protocol):
 | ----------------------------------------- | ----------- |
 | Provide a reusable capability             | [Component](component.md) |
 | Run a process indefinitely                | `Service`   |
-| Execute a bounded unit of work once       | [Task](task.md)      |
+| Execute a bounded unit of work once, no arguments | [Task](task.md) |
+| Call a unit of work with arguments        | [Function](function.md) |
 | Coordinate multiple tasks into a workflow | [Pipeline](pipeline.md)  |
+| Work towards a goal handed over at call time | [Agent](agent.md) |
 | Manage persistent data                    | [Repository](repository.md)|

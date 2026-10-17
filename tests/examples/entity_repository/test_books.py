@@ -14,7 +14,7 @@ from opendataframework.config import Config
 
 @pytest.fixture
 def books(tmp_path) -> Books:
-    config = Config({"sqlite": {"path": str(tmp_path / "test.db")}})
+    config = Config({"component": {"sqlite": {"path": str(tmp_path / "test.db")}}})
     sqlite = SQLite(config)
     yield Books(sqlite)
     sqlite.on_stop()

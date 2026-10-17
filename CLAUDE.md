@@ -7,8 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 `opendataframework` is the **core framework** package of Open Data
 Framework (ODF) — the structural abstractions with zero third-party
 dependencies: `Entity`, `Repository`, `Component`, `Service`, `Task`,
-`Pipeline`, `Layer`, `Namespace`, `Context`, `Project`, `Config`,
-`Logger`, `View`. No UI, no CLI, no MCP server live here.
+`Pipeline`, `Agent`, `Function`, `Layer`, `Namespace`, `Context`, `Project`,
+`Config`, `Logger`, `View`. No UI, no CLI, no MCP server live here.
 
 ## Commands
 
@@ -24,11 +24,19 @@ poetry run pytest tests/path/to/test_file.py
 
 # Run a single test
 poetry run pytest tests/path/to/test_file.py::test_name
+
+# Lint (same hooks as CI); run inside the project's environment so the
+# hooks pinned to python3.14 can find it
+poetry run pre-commit run --all-files
+
+# Build the docs (optional `docs` group)
+poetry install --with docs
+poetry run mkdocs build --strict
 ```
 
 Requires Python >=3.14, managed with Poetry. The virtual environment is
-at `.venv/`. There is no `docs` or `ui`/`mcp`/`chat` extras group here —
-those belong to the sibling `odf` package.
+at `.venv/`. There is no `ui`/`mcp`/`chat` extras group here — those
+belong to the sibling `odf` package.
 
 ## Architecture
 
@@ -53,6 +61,8 @@ Project                  ← composition root; owns everything
 | `Service` | Long-running Component (worker, backing service) | `setup()` → `run()` → `stop()`; `run()` is backgrounded by the framework |
 | `Task` | Finite work unit; called explicitly | `execute()` |
 | `Pipeline` | Ordered composition of Tasks/Pipelines | `execute()` |
+| `Agent` | Goal-driven work unit whose steps are decided at run time; no model client or loop ships here | `invoke(...)` with free-form arguments; called via `context.call(name, **kwargs)` |
+| `Function` | Plain function made framework-aware (adoption on-ramp); injected into a class via `Annotated[Callable[...], func]` | none; called by the class holding it, or via `context.call(name, **kwargs)` |
 | `Layer` | Decorator that assigns a Component to a subsystem (`@Api`, `@Storage`, …) | — |
 
 (No `@Api`/`@Service`-backed HTTP server ships in this package — that's
@@ -141,11 +151,12 @@ footers. This overrides any default attribution behavior.
 `docs/` holds this package's own mkdocs-material narrative documentation
 (`docs/entity.md`, `docs/repository.md`, `docs/view.md`,
 `docs/component.md`, `docs/service.md`, `docs/task.md`, `docs/pipeline.md`,
-`docs/layer.md`, `docs/namespace.md`, `docs/context.md`, `docs/project.md`,
+`docs/agent.md`, `docs/function.md`, `docs/layer.md`, `docs/namespace.md`, `docs/context.md`, `docs/project.md`,
 `docs/config.md`, `docs/logger.md` — one page per module in
 `src/opendataframework/`, plus `docs/index.md`/`docs/examples.md`),
 built with `mkdocs.yml` at the repo root and deployed to GitHub Pages by
-`.github/workflows/docs.yml` on every push to `main`
+`.github/workflows/docs.yml` when a version tag is pushed — only for the
+highest tag, so tagging an older patch doesn't overwrite the site
 (`https://opendataframework.github.io/opendataframework/`). It links out
 to the sibling `odf` package's own separately-deployed docs site
 (`https://opendataframework.github.io/odf/`) rather than bundling that

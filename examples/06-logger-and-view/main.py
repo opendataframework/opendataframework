@@ -42,8 +42,8 @@ for reading in readings.all():
 print(f"\ndata_view():    {readings.data_view()}")
 print(f"field():         {readings.field()!r}")
 
-print("\nRecent log entries for Readings (see logs/readings.log):")
-for entry in project.context.tail_logs("Readings"):
+print("\nRecent log entries for Readings (see logs/repository.readings.log):")
+for entry in project.context.tail_logs("repository.readings"):
     print(f"  {entry['ts']} {entry['level']:<8} {entry['message']}")
 
 project.stop()

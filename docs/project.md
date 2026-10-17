@@ -41,12 +41,16 @@ For programmatic use — testing, tooling, dynamic configuration:
 ```python
 project = Project.from_dict(
     {
-        "users": {
-            "table": "users",
-            "schema": "public",
+        "repository": {
+            "users": {
+                "table": "users",
+                "schema": "public",
+            },
         },
-        "postgres": {
-            "database_url": "postgresql://localhost/mydb",
+        "service": {
+            "postgres": {
+                "database_url": "postgresql://localhost/mydb",
+            },
         },
     }
 )
@@ -70,7 +74,7 @@ project = Project.from_config("config.toml")  # imports `app` first
 This doesn't scan or auto-discover anything — it's exactly one
 `importlib.import_module()` call, equivalent to writing `import app`
 yourself. Registering `@Component`/`@Service`/`@Repository`/`@Task`/
-`@Pipeline` classes is still the job of that module's own imports, the same
+`@Pipeline`/`@Agent` classes (and `@Function` functions) is still the job of that module's own imports, the same
 way every example in this repo structures its `app/__init__.py`:
 
 ```python
@@ -79,7 +83,7 @@ from app import components, repositories, tasks
 ```
 
 `[project] app` is optional — omit it and import your app package by hand
-before calling `from_config`/`from_dict`, exactly as before this existed. A
+before calling `from_config`/`from_dict`. A
 missing or broken module raises immediately (`ImportError`), consistent
 with the framework's fail-fast posture elsewhere (e.g. `from_config`'s
 `FileNotFoundError` for a missing config path).

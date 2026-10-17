@@ -4,7 +4,7 @@ from opendataframework import Component, Config
 @Component
 class Greeter:
     def __init__(self, config: Config) -> None:
-        cfg = config.get("greeter")
+        cfg = config.component.greeter
         self.greeting = cfg.get("greeting", "Hello")
         self.name = cfg.get("name", "World")
 
