@@ -177,8 +177,7 @@ def _require_tool(tool: McpTool) -> None:
         else ""
     )
     raise TypeError(
-        f"MCP tool {tool.name!r}: the handler must be fully typed, but "
-        f"{'; '.join(problems)}{hint}"
+        f"MCP tool {tool.name!r}: the handler must be fully typed, but {'; '.join(problems)}{hint}"
     )
 
 
