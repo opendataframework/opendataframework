@@ -24,11 +24,19 @@ poetry run pytest tests/path/to/test_file.py
 
 # Run a single test
 poetry run pytest tests/path/to/test_file.py::test_name
+
+# Lint (same hooks as CI); run inside the project's environment so the
+# hooks pinned to python3.14 can find it
+poetry run pre-commit run --all-files
+
+# Build the docs (optional `docs` group)
+poetry install --with docs
+poetry run mkdocs build --strict
 ```
 
 Requires Python >=3.14, managed with Poetry. The virtual environment is
-at `.venv/`. There is no `docs` or `ui`/`mcp`/`chat` extras group here —
-those belong to the sibling `odf` package.
+at `.venv/`. There is no `ui`/`mcp`/`chat` extras group here — those
+belong to the sibling `odf` package.
 
 ## Architecture
 
@@ -147,7 +155,8 @@ footers. This overrides any default attribution behavior.
 `docs/config.md`, `docs/logger.md` — one page per module in
 `src/opendataframework/`, plus `docs/index.md`/`docs/examples.md`),
 built with `mkdocs.yml` at the repo root and deployed to GitHub Pages by
-`.github/workflows/docs.yml` on every push to `main`
+`.github/workflows/docs.yml` when a version tag is pushed — only for the
+highest tag, so tagging an older patch doesn't overwrite the site
 (`https://opendataframework.github.io/opendataframework/`). It links out
 to the sibling `odf` package's own separately-deployed docs site
 (`https://opendataframework.github.io/odf/`) rather than bundling that
