@@ -1,5 +1,5 @@
 site_name: Open Data Framework
-site_description: Lightweight, config-driven dependency-injection framework for data applications.
+site_description: Lightweight dependency-injection framework for data applications.
 repo_url: https://github.com/opendataframework/opendataframework
 repo_name: opendataframework/opendataframework
 
