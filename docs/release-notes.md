@@ -1,5 +1,17 @@
 # Release Notes
 
+## 0.4.0
+
+### Added
+
+- **View**: `TimeseriesView` gains two optional fields. `fields` selects which numeric
+  fields to plot — `None`, the default, plots every numeric field other than `field` and
+  `group`, as before. `group` names a field whose distinct values each get their own line
+  (e.g. `run_id`), so runs can be compared on one chart. `field` may be any field records
+  are ordered by, not only a timestamp (e.g. a training `step`). Existing
+  `TimeseriesView(field=...)` declarations are unchanged. Rendering the new fields happens
+  on the `odf` side. See [View](view.md#timeseries-comparing-runs-on-one-chart).
+
 ## 0.3.0
 
 ### Added
