@@ -310,6 +310,32 @@ re-implementing the injection rule.
 
 ---
 
+## Protocol
+
+`FunctionProtocol` documents the interface of a registered function: it is called
+with arguments and returns a result.
+
+```python
+from opendataframework import FunctionProtocol
+
+
+class FunctionProtocol(Protocol):
+    def __call__(self, *args, **kwargs) -> object: ...
+```
+
+Unlike `TaskProtocol`, it is **not** `@runtime_checkable`. Every callable would
+match it, so `isinstance()` against it would tell you nothing, and raises
+`TypeError` instead. The `Context` knows a function by its `@Function`
+registration, not by its shape. `FunctionProtocol` is a label: for type hints, and
+for the [events](events.md#function-calls) every call made through the `Context`
+emits:
+
+```python
+events.subscribe(on_call, protocol=FunctionProtocol)
+```
+
+---
+
 ## What Function is Not
 
 * **Not stateful, and without a lifecycle.** There is no instance, and no

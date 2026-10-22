@@ -355,6 +355,15 @@ class MetricsFetcher:
 
 ---
 
+## Events
+
+`on_start()`/`on_stop()` and every `open_stream()`/`stream()`/`close_stream()`
+call are reported as [events](events.md#which-protocols-emit-events), once per
+stream start and not per item. `all()`, `save()` and `delete()` are called by
+your code or by `odf`, never by the `Context`, so they are not.
+
+---
+
 ## What Repository is Not
 
 * **Not a service.** A `Repository` manages data access — it does not run indefinitely

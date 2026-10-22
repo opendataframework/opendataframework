@@ -62,6 +62,9 @@ file on its behalf:
 actually doing — the framework-level lifecycle noise above is covered either
 way.
 
+Logs are for people; for code that needs to react to the same calls, use
+[Events](events.md) instead of parsing log lines.
+
 ---
 
 ## Enabling File Logging

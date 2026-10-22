@@ -5,7 +5,8 @@ from opendataframework.component import Component
 from opendataframework.config import Config
 from opendataframework.context import Context, Lifecycle, Resolver
 from opendataframework.entity import Entity
-from opendataframework.function import Function
+from opendataframework.events import Event, Events
+from opendataframework.function import Function, FunctionProtocol
 from opendataframework.layer import Analytics, Api, Layer, Messaging, Monitoring, Security, Storage
 from opendataframework.logger import Logger
 from opendataframework.namespace import Namespace
@@ -51,7 +52,10 @@ __all__ = [
     "DataViewProtocol",
     "DocumentView",
     "Entity",
+    "Event",
+    "Events",
     "Function",
+    "FunctionProtocol",
     "ImageView",
     "Layer",
     "Lifecycle",

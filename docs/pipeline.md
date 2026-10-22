@@ -282,6 +282,10 @@ class PipelineProtocol(Protocol):
     def execute(self): ...
 ```
 
+Every `execute()` call is also reported as an
+[event](events.md#which-protocols-emit-events), as a `PipelineProtocol` call, and
+its steps' calls have it as their `parent`.
+
 ---
 
 ## Failure Handling

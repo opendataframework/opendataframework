@@ -1,0 +1,668 @@
+import threading
+import time
+from collections.abc import Callable
+from typing import Annotated
+
+import pytest
+
+from opendataframework.agent import Agent, AgentProtocol
+from opendataframework.component import Component, OnStartProtocol, OnStopProtocol
+from opendataframework.context import Context
+from opendataframework.events import Event, Events
+from opendataframework.function import Function, FunctionProtocol
+from opendataframework.namespace import Namespace
+from opendataframework.pipeline import Pipeline, PipelineProtocol
+from opendataframework.repository import (
+    CloseStreamProtocol,
+    OpenStreamProtocol,
+    StreamableProtocol,
+)
+from opendataframework.service import ServiceProtocol
+from opendataframework.task import Task, TaskProtocol
+
+# --- helpers -----------------------------------------------------------------
+
+
+def make_ns():
+    """Return a fresh isolated Namespace subclass for each test."""
+
+    class Scope(Namespace): ...
+
+    return Scope
+
+
+def collect(ctx: Context, protocol: type | None = None) -> list[Event]:
+    """Subscribe a list to ``ctx``'s events and return it."""
+    events: list[Event] = []
+    ctx.events.subscribe(events.append, protocol)
+    return events
+
+
+def calls(events: list[Event]) -> list[tuple[str, str, str]]:
+    """Reduce events to ``(key, method, state)`` for order assertions."""
+    return [(e.key, e.method, e.state) for e in events]
+
+
+def wait_for(condition: Callable[[], bool]) -> None:
+    """Poll ``condition`` until it holds, failing after about a second."""
+    for _ in range(100):
+        if condition():
+            return
+        time.sleep(0.01)
+    raise AssertionError("condition not met")
+
+
+# --- execution protocols -----------------------------------------------------
+
+
+def test_task_execute_emits_started_then_completed():
+    NS = make_ns()
+
+    @NS
+    @Task
+    class T:
+        def execute(self) -> int:
+            return 42
+
+    ctx = Context(namespaces={NS})
+    events = collect(ctx)
+    with ctx:
+        assert ctx.execute("scope.t") == 42
+
+    started, completed = events
+    assert (started.protocol, started.method, started.state) == (TaskProtocol, "execute", "started")
+    assert completed.state == "completed"
+    assert started.call_id == completed.call_id
+    assert started.parent is None and completed.parent is None
+    assert started.elapsed_ms is None
+    assert completed.elapsed_ms is not None and completed.elapsed_ms >= 0
+    assert completed.error is None
+
+
+def test_raising_task_emits_failed_and_still_raises():
+    NS = make_ns()
+    error = ValueError("nope")
+
+    @NS
+    @Task
+    class T:
+        def execute(self) -> None:
+            raise error
+
+    ctx = Context(namespaces={NS})
+    events = collect(ctx)
+    with ctx:
+        with pytest.raises(ValueError, match="nope"):
+            ctx.execute("scope.t")
+
+    assert [e.state for e in events] == ["started", "failed"]
+    assert events[1].error == repr(error)
+    assert events[1].elapsed_ms is not None
+
+
+def test_pipeline_steps_are_children_of_the_pipeline():
+    NS = make_ns()
+
+    @NS
+    @Task
+    class StepOne:
+        def execute(self) -> None: ...
+
+    @NS
+    @Task
+    class StepTwo:
+        def execute(self) -> None: ...
+
+    @NS
+    @Pipeline
+    class Flow:
+        def __init__(self, one: StepOne, two: StepTwo) -> None:
+            self.one = one
+            self.two = two
+
+        def execute(self) -> None:
+            self.one.execute()
+            self.two.execute()
+
+    ctx = Context(namespaces={NS})
+    events = collect(ctx)
+    with ctx:
+        ctx.execute("scope.flow")
+
+    assert calls(events) == [
+        ("scope.flow", "execute", "started"),
+        ("scope.step-one", "execute", "started"),
+        ("scope.step-one", "execute", "completed"),
+        ("scope.step-two", "execute", "started"),
+        ("scope.step-two", "execute", "completed"),
+        ("scope.flow", "execute", "completed"),
+    ]
+    flow = events[0]
+    assert flow.protocol is PipelineProtocol
+    assert all(e.protocol is TaskProtocol for e in events[1:5])
+    assert all(e.parent == flow.call_id for e in events[1:5])
+
+
+def test_function_injected_into_a_task_is_a_child_call():
+    NS = make_ns()
+
+    @NS
+    @Function
+    def load_data(path: str) -> int:
+        return len(path)
+
+    @NS
+    @Task
+    class DailyImport:
+        def __init__(self, load: Annotated[Callable[..., int], load_data]) -> None:
+            self.load = load
+
+        def execute(self) -> int:
+            return self.load("data.csv")
+
+    ctx = Context(namespaces={NS})
+    events = collect(ctx)
+    with ctx:
+        assert ctx.execute("scope.daily-import") == 8
+
+    task, call, called, done = events
+    assert (call.protocol, call.method, call.key) == (FunctionProtocol, "__call__", "scope.load-data")
+    assert call.parent == task.call_id
+    assert called.call_id == call.call_id and called.state == "completed"
+    assert done.state == "completed"
+
+
+def test_function_filter_receives_only_function_calls():
+    NS = make_ns()
+
+    @NS
+    @Function
+    def load_data(path: str) -> int:
+        return len(path)
+
+    @NS
+    @Task
+    class DailyImport:
+        def __init__(self, load: Annotated[Callable[..., int], load_data]) -> None:
+            self.load = load
+
+        def execute(self) -> int:
+            return self.load("data.csv")
+
+    @NS
+    @Component
+    class SlowCalls:
+        def __init__(self, events: Events) -> None:
+            self.seen: list[Event] = []
+            self._unsubscribe = events.subscribe(self.seen.append, protocol=FunctionProtocol)
+
+    with Context(namespaces={NS}) as ctx:
+        ctx.execute("scope.daily-import")
+        seen = ctx.get(SlowCalls).seen
+
+    assert [(e.key, e.state) for e in seen] == [
+        ("scope.load-data", "started"),
+        ("scope.load-data", "completed"),
+    ]
+
+
+def test_function_called_through_the_context_is_top_level():
+    NS = make_ns()
+
+    @NS
+    @Function
+    def load_data(path: str) -> int:
+        return len(path)
+
+    ctx = Context(namespaces={NS})
+    events = collect(ctx)
+    with ctx:
+        assert ctx.call("scope.load-data", path="abc") == 3
+        assert ctx.get(load_data)("abcd") == 4
+
+    assert [e.protocol for e in events] == [FunctionProtocol] * 4
+    assert all(e.parent is None for e in events)
+
+
+def test_direct_function_call_emits_nothing():
+    NS = make_ns()
+
+    @NS
+    @Function
+    def load_data(path: str) -> int:
+        return len(path)
+
+    ctx = Context(namespaces={NS})
+    events = collect(ctx)
+    with ctx:
+        assert load_data("abc") == 3
+
+    assert events == []
+
+
+def test_agent_invoke_emits_invoke_events():
+    NS = make_ns()
+
+    @NS
+    @Agent
+    class Archivist:
+        def invoke(self, question: str) -> str:
+            return question.upper()
+
+    ctx = Context(namespaces={NS})
+    events = collect(ctx)
+    with ctx:
+        assert ctx.call("scope.archivist", question="dune?") == "DUNE?"
+
+    assert [(e.protocol, e.method, e.state) for e in events] == [
+        (AgentProtocol, "invoke", "started"),
+        (AgentProtocol, "invoke", "completed"),
+    ]
+
+
+# --- lifecycle protocols -----------------------------------------------------
+
+
+def test_service_lifecycle_emits_setup_run_and_stop():
+    NS = make_ns()
+    running = threading.Event()
+
+    @NS
+    class Svc:
+        def setup(self) -> None: ...
+
+        def run(self) -> None:
+            running.set()
+
+        def stop(self) -> None: ...
+
+    ctx = Context(namespaces={NS})
+    events = collect(ctx, protocol=ServiceProtocol)
+    with ctx:
+        assert running.wait(timeout=1)
+        wait_for(lambda: ("scope.svc", "run", "completed") in calls(events))
+        assert calls(events)[:2] == [
+            ("scope.svc", "setup", "started"),
+            ("scope.svc", "setup", "completed"),
+        ]
+        run = next(e for e in events if e.method == "run")
+        assert run.parent is None
+
+    assert calls(events)[-2:] == [("scope.svc", "stop", "started"), ("scope.svc", "stop", "completed")]
+
+
+def test_service_run_started_from_a_task_is_still_top_level():
+    NS = make_ns()
+
+    @NS
+    class Svc:
+        def setup(self) -> None: ...
+        def run(self) -> None: ...
+        def stop(self) -> None: ...
+
+    with Context(namespaces={NS}) as ctx:
+        ctx.stop("scope.svc")
+        events = collect(ctx)
+        # Start the service from inside a protocol call, as a task calling
+        # context.start() would, so setup() has a parent to inherit.
+        with ctx.events.notify("scope.starter", TaskProtocol, "execute"):
+            ctx.start("scope.svc")
+        wait_for(lambda: any(e.method == "run" for e in events))
+
+    outer = events[0]
+    setup = next(e for e in events if e.method == "setup")
+    run = next(e for e in events if e.method == "run")
+    assert setup.parent == outer.call_id
+    assert run.parent is None
+
+
+def test_service_run_raising_emits_failed():
+    NS = make_ns()
+
+    @NS
+    class Svc:
+        def setup(self) -> None: ...
+
+        def run(self) -> None:
+            raise RuntimeError("boom")
+
+        def stop(self) -> None: ...
+
+    ctx = Context(namespaces={NS})
+    events = collect(ctx)
+    with ctx:
+        wait_for(lambda: any(e.method == "run" and e.state == "failed" for e in events))
+
+    failed = next(e for e in events if e.method == "run" and e.state == "failed")
+    assert failed.error == repr(RuntimeError("boom"))
+
+
+def test_stop_by_key_emits_stop_events():
+    NS = make_ns()
+
+    @NS
+    class Svc:
+        def setup(self) -> None: ...
+        def run(self) -> None: ...
+        def stop(self) -> None: ...
+
+    with Context(namespaces={NS}) as ctx:
+        events = collect(ctx)
+        ctx.stop("scope.svc")
+        assert calls(events) == [("scope.svc", "stop", "started"), ("scope.svc", "stop", "completed")]
+
+
+def test_setup_raising_emits_failed_and_open_raises():
+    NS = make_ns()
+
+    @NS
+    class Svc:
+        def setup(self) -> None:
+            raise RuntimeError("no db")
+
+        def run(self) -> None: ...
+        def stop(self) -> None: ...
+
+    ctx = Context(namespaces={NS})
+    events = collect(ctx)
+    with pytest.raises(RuntimeError, match="no db"):
+        ctx.open()
+
+    assert calls(events) == [("scope.svc", "setup", "started"), ("scope.svc", "setup", "failed")]
+    assert ctx.is_running("scope.svc") is False
+
+
+def test_on_start_and_on_stop_hooks_emit_events():
+    NS = make_ns()
+
+    @NS
+    class Users:
+        def on_start(self) -> None: ...
+        def on_stop(self) -> None: ...
+
+    ctx = Context(namespaces={NS})
+    events = collect(ctx)
+    with ctx:
+        assert [(e.protocol, e.method, e.state) for e in events] == [
+            (OnStartProtocol, "on_start", "started"),
+            (OnStartProtocol, "on_start", "completed"),
+        ]
+
+    assert [(e.protocol, e.method, e.state) for e in events[2:]] == [
+        (OnStopProtocol, "on_stop", "started"),
+        (OnStopProtocol, "on_stop", "completed"),
+    ]
+
+
+def test_on_start_raising_emits_failed_and_open_raises():
+    NS = make_ns()
+
+    @NS
+    class Users:
+        def on_start(self) -> None:
+            raise RuntimeError("cache")
+
+    ctx = Context(namespaces={NS})
+    events = collect(ctx)
+    with pytest.raises(RuntimeError, match="cache"):
+        ctx.open()
+
+    assert calls(events) == [("scope.users", "on_start", "started"), ("scope.users", "on_start", "failed")]
+
+
+def test_instance_without_hooks_emits_nothing():
+    NS = make_ns()
+
+    @NS
+    class Plain: ...
+
+    ctx = Context(namespaces={NS})
+    events = collect(ctx)
+    with ctx:
+        pass
+
+    assert events == []
+
+
+# --- stream protocols --------------------------------------------------------
+
+
+def test_stream_emits_open_stream_stream_and_close_stream():
+    NS = make_ns()
+
+    @NS
+    class Device:
+        def open_stream(self) -> None: ...
+        def close_stream(self) -> None: ...
+
+        def stream(self):
+            yield 1  # a finite source, so the stream completes on its own
+
+    with Context(namespaces={NS}) as ctx:
+        events = collect(ctx)
+        ctx.start_stream("scope.device")
+        wait_for(lambda: ("scope.device", "close_stream", "completed") in calls(events))
+
+    assert [(e.protocol, e.method, e.state) for e in events] == [
+        (OpenStreamProtocol, "open_stream", "started"),
+        (OpenStreamProtocol, "open_stream", "completed"),
+        (StreamableProtocol, "stream", "started"),
+        (StreamableProtocol, "stream", "completed"),
+        (CloseStreamProtocol, "close_stream", "started"),
+        (CloseStreamProtocol, "close_stream", "completed"),
+    ]
+    stream = events[2]
+    assert stream.parent is None
+
+
+def test_raising_stream_emits_failed_and_is_still_swallowed():
+    NS = make_ns()
+
+    @NS
+    class Device:
+        def stream(self):
+            raise RuntimeError("unplugged")
+            yield  # pragma: no cover
+
+    with Context(namespaces={NS}) as ctx:
+        events = collect(ctx)
+        ctx.start_stream("scope.device")
+        wait_for(lambda: any(e.state == "failed" for e in events))
+        wait_for(lambda: not ctx.is_streaming("scope.device"))
+
+    assert calls(events) == [("scope.device", "stream", "started"), ("scope.device", "stream", "failed")]
+    assert events[1].error == repr(RuntimeError("unplugged"))
+
+
+def test_raising_close_stream_emits_failed_and_is_still_swallowed():
+    NS = make_ns()
+
+    @NS
+    class Device:
+        def close_stream(self) -> None:
+            raise RuntimeError("stuck")
+
+        def stream(self):
+            yield 1
+
+    with Context(namespaces={NS}) as ctx:
+        events = collect(ctx, protocol=CloseStreamProtocol)
+        ctx.start_stream("scope.device")
+        wait_for(lambda: any(e.state == "failed" for e in events))
+
+    assert [e.state for e in events] == ["started", "failed"]
+
+
+# --- subscription ------------------------------------------------------------
+
+
+def test_protocol_filter_is_an_exact_match():
+    NS = make_ns()
+
+    @NS
+    @Task
+    class Step:
+        def execute(self) -> None: ...
+
+    @NS
+    @Pipeline
+    class Flow:
+        def __init__(self, step: Step) -> None:
+            self.step = step
+
+        def execute(self) -> None:
+            self.step.execute()
+
+    ctx = Context(namespaces={NS})
+    tasks = collect(ctx, protocol=TaskProtocol)
+    services = collect(ctx, protocol=ServiceProtocol)
+    with ctx:
+        ctx.execute("scope.flow")
+
+    assert {e.key for e in tasks} == {"scope.step"}
+    assert services == []
+
+
+def test_events_is_injected_as_the_contexts_own_instance():
+    NS = make_ns()
+
+    @NS
+    class Svc:
+        def setup(self) -> None: ...
+        def run(self) -> None: ...
+        def stop(self) -> None: ...
+
+    @NS
+    @Component
+    class Watcher:
+        # Every __init__ runs before any setup(), so subscribing here catches Svc's.
+        def __init__(self, events: Events) -> None:
+            self.events = events
+            self.seen: list[Event] = []
+            events.subscribe(self.seen.append, protocol=ServiceProtocol)
+
+    with Context(namespaces={NS}) as ctx:
+        watcher = ctx.get(Watcher)
+        assert watcher.events is ctx.events
+        assert ("scope.svc", "setup", "completed") in calls(watcher.seen)
+
+
+def test_subscribing_before_open_sees_startup():
+    NS = make_ns()
+
+    @NS
+    class Svc:
+        def setup(self) -> None: ...
+        def run(self) -> None: ...
+        def stop(self) -> None: ...
+
+    ctx = Context(namespaces={NS})
+    events = collect(ctx)
+    with ctx:
+        assert calls(events)[:2] == [
+            ("scope.svc", "setup", "started"),
+            ("scope.svc", "setup", "completed"),
+        ]
+
+
+def test_call_started_by_a_listener_is_top_level():
+    NS = make_ns()
+
+    @NS
+    @Task
+    class Load:
+        def execute(self) -> None:
+            raise ValueError("empty")
+
+    @NS
+    @Task
+    class Cleanup:
+        def execute(self) -> None: ...
+
+    ctx = Context(namespaces={NS})
+    events = collect(ctx)
+
+    def on_event(event: Event) -> None:
+        if event.key == "scope.load" and event.state == "failed":
+            ctx.execute("scope.cleanup")
+
+    ctx.events.subscribe(on_event)
+    with ctx:
+        with pytest.raises(ValueError, match="empty"):
+            ctx.execute("scope.load")
+
+    cleanup = [e for e in events if e.key == "scope.cleanup"]
+    assert [e.state for e in cleanup] == ["started", "completed"]
+    assert all(e.parent is None for e in cleanup)
+
+
+def test_raising_listener_does_not_affect_the_call_or_other_listeners(tmp_path):
+    NS = make_ns()
+
+    @NS
+    @Task
+    class T:
+        def execute(self) -> int:
+            return 42
+
+    def broken(event: Event) -> None:
+        raise RuntimeError("listener bug")
+
+    ctx = Context(namespaces={NS}, log_dir=tmp_path)
+    ctx.events.subscribe(broken)
+    events = collect(ctx)
+    with ctx:
+        assert ctx.execute("scope.t") == 42
+        messages = [(e["level"], e["message"]) for e in ctx.tail_logs("scope.t")]
+
+    assert [e.state for e in events] == ["started", "completed"]
+    assert ("WARNING", "listener raised RuntimeError('listener bug')") in messages
+
+
+def test_unsubscribe_stops_delivery_and_is_idempotent():
+    NS = make_ns()
+
+    @NS
+    @Task
+    class T:
+        def execute(self) -> None: ...
+
+    ctx = Context(namespaces={NS})
+    events: list[Event] = []
+    unsubscribe = ctx.events.subscribe(events.append)
+    with ctx:
+        ctx.execute("scope.t")
+        unsubscribe()
+        unsubscribe()
+        ctx.execute("scope.t")
+
+    assert len(events) == 2
+
+
+def test_match_style_listener_from_the_docs():
+    NS = make_ns()
+
+    @NS
+    @Task
+    class T:
+        def execute(self) -> None:
+            raise ValueError("bad")
+
+    failures: list[str] = []
+
+    def on_event(event: Event) -> None:
+        # A bare name in a pattern captures instead of comparing, so the
+        # protocol is checked in a guard.
+        match event:
+            case Event(state="failed", key=key) if event.protocol is TaskProtocol:
+                failures.append(key)
+            case _:
+                pass
+
+    ctx = Context(namespaces={NS})
+    ctx.events.subscribe(on_event)
+    with ctx:
+        with pytest.raises(ValueError):
+            ctx.execute("scope.t")
+
+    assert failures == ["scope.t"]

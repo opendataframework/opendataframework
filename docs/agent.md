@@ -359,6 +359,9 @@ class AgentProtocol(Protocol):
     def invoke(self, *args, **kwargs): ...
 ```
 
+Every `invoke()` call is also reported as an
+[event](events.md#which-protocols-emit-events).
+
 ---
 
 ## What Agent is Not
