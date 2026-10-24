@@ -4,7 +4,7 @@ Small, focused `opendataframework` projects, each isolating exactly one
 core abstraction, with runnable code you can read end-to-end. They live in
 [`examples/`](https://github.com/opendataframework/opendataframework/tree/main/examples)
 in the repo; each has its own `README.md` with a full walkthrough. Read
-1–9 in order — each one builds on ideas from the last.
+1–10 in order — each one builds on ideas from the last.
 
 | # | Example | Concept(s) | Docs |
 |---|---|---|---|
@@ -17,6 +17,7 @@ in the repo; each has its own `README.md` with a full walkthrough. Read
 | 7 | [`07-config-environments/`](https://github.com/opendataframework/opendataframework/tree/main/examples/07-config-environments) | Same `app/` code, two config directories (`config/dev/`, `config/prod/`) — no environment flag, just a different path. | [Config](config.md) |
 | 8 | [`08-function/`](https://github.com/opendataframework/opendataframework/tree/main/examples/08-function) | Plain functions made framework-aware with [Function](function.md): called by key through `project.context.call(...)` with an injected `@Component`, injected into a `@Task`, and still callable directly, unchanged. | [Function](function.md) |
 | 9 | [`09-agent/`](https://github.com/opendataframework/opendataframework/tree/main/examples/09-agent) | A `Librarian` [Agent](agent.md): handed a question through `project.context.call(...)`, it works towards an answer step by step, acting on an injected `@Component`. The model is a rule-based stand-in — no provider, no API key. | [Agent](agent.md) |
+| 10 | [`10-events/`](https://github.com/opendataframework/opendataframework/tree/main/examples/10-events) | Components declaring `events: Events` watch a [Pipeline](pipeline.md) run: a call tree built from each call's `parent`, failures queued for a [Service](service.md) to send, and [Function](function.md) calls counted with a protocol filter. | [Events](events.md) |
 
 Every example is self-contained: `config.toml` (or a `config/` directory)
 plus an `app/` package, runnable with `python main.py` from inside the

@@ -299,6 +299,9 @@ class ServiceProtocol(Protocol):
     def stop(self) -> None: ...
 ```
 
+Every `setup()`/`run()`/`stop()` call the `Context` makes is also reported as an
+[event](events.md#which-protocols-emit-events).
+
 ---
 
 ## What Service is Not

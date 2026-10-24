@@ -12,7 +12,9 @@ on the other end (e.g. the sibling ``odf`` package's UI).
 
 Every variant points at its field(s) generically (``field``/``fields``),
 never with a domain-specific attribute name — the meaning comes from which
-``View`` subclass it is, not from the attribute name.
+``View`` subclass it is, not from the attribute name. A variant may also
+name a field by its role in the representation (``TimeseriesView.group``),
+never by what it means in the domain (``run_id``).
 
 A view says nothing about the content itself, though. A repository whose
 view points at content (``ImageView``/``VideoView``/``AudioView``/
@@ -129,14 +131,23 @@ class LocationView:
 
 @dataclass
 class TimeseriesView:
-    """A line chart — the entity's other numeric fields plotted against a
-    timestamp field.
+    """A line chart — the entity's numeric fields plotted against an
+    ordering field, optionally one line per group.
 
     Attributes:
-        field: The entity's timestamp field.
+        field: The entity's ordering field, plotted as the x axis — a
+            timestamp, or any field records are ordered by (e.g. a
+            training ``step``).
+        fields: The numeric fields to plot, in order. ``None`` means every
+            numeric entity field other than ``field`` and ``group``.
+        group: A field whose distinct values each get their own line (e.g.
+            ``run_id``), so groups can be compared on one chart. ``None``
+            means all records form a single line.
     """
 
     field: str
+    fields: tuple[str, ...] | None = None
+    group: str | None = None
 
 
 DataView = (
@@ -206,7 +217,7 @@ class ReplayProtocol(Protocol):
     ``field()`` gets no such affordance — this only matters for
     ``LocationView``/``VideoView``/``AudioView``-backed repositories; a
     ``TimeseriesView`` repository is always replayable since it already
-    names its own timestamp via ``field``.
+    names its own ordering field via ``field``.
     """
 
     def field(self) -> str:

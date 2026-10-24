@@ -1,5 +1,31 @@
 # Release Notes
 
+## 0.4.0
+
+### Added
+
+- **Events**: the framework now reports every lifecycle and execution protocol call it
+  makes as an `Event`: a `Service`'s `setup()`/`run()`/`stop()`, `on_start()`/`on_stop()`,
+  a `Task`'s or `Pipeline`'s `execute()`, an `Agent`'s `invoke()`, a `@Function` call
+  made through the `Context`, and a repository's `open_stream()`/`stream()`/`close_stream()`.
+  Each call emits `started`, then `completed` or `failed`, with its duration, its error,
+  and the `parent` call it happened inside, so a pipeline's steps and a task's function
+  calls can be traced. A component declares `events: Events` to receive the `Context`'s
+  instance, the way it declares `logger: Logger`. Code holding the `Context` uses
+  `context.events`. `events.subscribe(listener, protocol=...)` returns an unsubscribe
+  function, and a listener's exception is logged and never affects the call. Events work
+  with file logging off, and log wording is unchanged. See [Events](events.md).
+- **Function**: added `FunctionProtocol`, the interface of a registered function and the
+  `protocol` its calls are reported under. It is deliberately not `runtime_checkable`.
+  See [Function](function.md#protocol).
+- **View**: `TimeseriesView` gains two optional fields. `fields` selects which numeric
+  fields to plot — `None`, the default, plots every numeric field other than `field` and
+  `group`, as before. `group` names a field whose distinct values each get their own line
+  (e.g. `run_id`), so runs can be compared on one chart. `field` may be any field records
+  are ordered by, not only a timestamp (e.g. a training `step`). Existing
+  `TimeseriesView(field=...)` declarations are unchanged. Rendering the new fields happens
+  on the `odf` side. See [View](view.md#timeseries-comparing-runs-on-one-chart).
+
 ## 0.3.0
 
 ### Added

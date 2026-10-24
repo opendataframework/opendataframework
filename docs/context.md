@@ -391,6 +391,14 @@ project.context.tail_logs("service.postgres", lines=300)
 # → [{"ts": ..., "level": ..., "message": ...}, ...], oldest first
 ```
 
+**Events** — every protocol call the `Context` makes on a component is reported
+to `context.events`, the same instance a component receives by declaring
+`events: Events` (see [Events](events.md)):
+
+```python
+project.context.events.subscribe(print, protocol=ServiceProtocol)
+```
+
 ---
 
 ## What Context is Not

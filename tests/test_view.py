@@ -73,6 +73,23 @@ def test_timeseries_view_holds_a_single_field():
     assert TimeseriesView(field="timestamp").field == "timestamp"
 
 
+def test_timeseries_view_defaults_to_every_field_in_one_line():
+    view = TimeseriesView(field="timestamp")
+
+    assert view.fields is None
+    assert view.group is None
+
+
+def test_timeseries_view_can_select_fields():
+    view = TimeseriesView(field="step", fields=("loss", "accuracy"))
+
+    assert view.fields == ("loss", "accuracy")
+
+
+def test_timeseries_view_can_group_records():
+    assert TimeseriesView(field="step", group="run_id").group == "run_id"
+
+
 def test_replay_protocol_detects_field_method():
     class Replayed:
         def field(self):

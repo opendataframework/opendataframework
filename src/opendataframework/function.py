@@ -10,12 +10,35 @@ to call it by name with its managed dependencies filled in.
 import functools
 import inspect
 from collections.abc import Callable, ItemsView, Iterable
+from typing import Protocol
 
 from opendataframework.namespace import Namespace, describe
 from opendataframework.utils import normalize
 
 _POSITIONAL = (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
 _VARIADIC = (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+
+
+class FunctionProtocol(Protocol):
+    """Expected interface for functions registered with ``@Function``.
+
+    A function is called with arguments and returns a result — the
+    function-shaped counterpart of ``TaskProtocol``. It is a label for type
+    hints and for events, not a way to detect a function: any callable would
+    match it structurally, so it is deliberately not ``runtime_checkable``
+    and ``isinstance()`` against it raises ``TypeError``. The ``Context``
+    knows a function by its ``@Function`` registration instead.
+
+    Every call of a registered function made through the ``Context`` —
+    injected, ``context.call()``, or ``context.get(func)`` — emits events
+    with this protocol (see ``opendataframework.events``)::
+
+        events.subscribe(on_call, protocol=FunctionProtocol)
+    """
+
+    def __call__(self, *args, **kwargs) -> object:
+        """Run the function with its arguments and return a result."""
+        ...
 
 
 class Function(Namespace):

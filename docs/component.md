@@ -364,6 +364,15 @@ See [Injecting a Function](function.md#injecting-a-function).
 
 ---
 
+## Events
+
+Every `on_start()`/`on_stop()` call the `Context` makes is reported as an
+[event](events.md#which-protocols-emit-events). `details()`, `chart()` and
+`mcp_tools()` are capability queries the `Context` never calls, so they are
+not.
+
+---
+
 ## What Component is Not
 
 * **Not a base class.** `Classifier` does not inherit from `Component`. The decorator

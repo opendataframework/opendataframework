@@ -115,7 +115,7 @@ name — the variant *is* the "view name" from the description above.
 | `StreamingAudioView` | `field: str` | a live feed | `StreamableProtocol` |
 | `DocumentView` | `field: str` | an arbitrary JSON-shaped value per record | `ReadableProtocol` |
 | `LocationView` | `fields: (lat_field, lon_field)` | one point per record | `ReadableProtocol` |
-| `TimeseriesView` | `field: str` (the timestamp field) | the entity's other numeric fields against a timestamp | `ReadableProtocol` |
+| `TimeseriesView` | `field: str` (the ordering field), `fields: tuple[str, ...] \| None`, `group: str \| None` | numeric fields against a timestamp or other ordering field, optionally one line per group | `ReadableProtocol` |
 
 Every variant except `TableView` needs exactly the repository capability its
 "Repository shape" column names — a `StreamingVideoView`/`StreamingAudioView`
@@ -194,6 +194,32 @@ as the field worth rendering as a collapsible JSON tree — instead of a
 consumer stringifying an arbitrary nested `dict` into an unreadable table
 cell.
 
+### Timeseries — comparing runs on one chart
+
+```python
+from opendataframework import Repository, Storage, TimeseriesView
+
+
+@Storage
+@Repository(Metric)
+class Metrics:
+    def all(self) -> list[Metric]: ...
+
+    def data_view(self) -> TimeseriesView:
+        return TimeseriesView(
+            field="step",
+            fields=("loss", "accuracy"),
+            group="run_id",
+        )
+```
+
+Given `Metric(id, run_id, step, loss, accuracy)`, this plots `loss` and
+`accuracy` against `step`, one line per distinct `run_id`, so runs can be
+compared on one chart. `field` needn't be a timestamp — any field records
+are ordered by works. Both `fields` and `group` are optional:
+`TimeseriesView(field="recorded_at")` plots every numeric field other than
+`field` (and `group`, when set) as a single line.
+
 ---
 
 ## Replay — scrubbing over time
@@ -236,7 +262,7 @@ class ReplayProtocol(Protocol):
 ```
 
 A `TimeseriesView` repository is always replayable already — it names its
-own timestamp field via `field` — so `field()` only adds an
+own ordering field via `field` — so `field()` only adds an
 affordance for `LocationView`/`VideoView`/`AudioView`-backed repositories. A
 repository with no `field()` simply gets no replay affordance.
 

@@ -223,6 +223,9 @@ class TaskProtocol(Protocol):
     def execute(self): ...
 ```
 
+Every `execute()` call is also reported as an
+[event](events.md#which-protocols-emit-events), as a `TaskProtocol` call.
+
 ---
 
 ## Task, Function or Agent?
