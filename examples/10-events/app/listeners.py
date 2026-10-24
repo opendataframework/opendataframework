@@ -33,7 +33,9 @@ class CallTrace:
         def walk(call: Event, depth: int) -> None:
             state = outcome.get(call.call_id, "running")
             name = f"{call.key} {call.method}()"
-            lines.append(f"{'  ' * depth}{name:<{40 - 2 * depth}} {call.protocol.__name__:<17} {state}")
+            lines.append(
+                f"{'  ' * depth}{name:<{40 - 2 * depth}} {call.protocol.__name__:<17} {state}"
+            )
             for child in calls:
                 if child.parent == call.call_id:
                     walk(child, depth + 1)

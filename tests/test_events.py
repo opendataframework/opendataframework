@@ -166,7 +166,11 @@ def test_function_injected_into_a_task_is_a_child_call():
         assert ctx.execute("scope.daily-import") == 8
 
     task, call, called, done = events
-    assert (call.protocol, call.method, call.key) == (FunctionProtocol, "__call__", "scope.load-data")
+    assert (call.protocol, call.method, call.key) == (
+        FunctionProtocol,
+        "__call__",
+        "scope.load-data",
+    )
     assert call.parent == task.call_id
     assert called.call_id == call.call_id and called.state == "completed"
     assert done.state == "completed"
@@ -288,7 +292,10 @@ def test_service_lifecycle_emits_setup_run_and_stop():
         run = next(e for e in events if e.method == "run")
         assert run.parent is None
 
-    assert calls(events)[-2:] == [("scope.svc", "stop", "started"), ("scope.svc", "stop", "completed")]
+    assert calls(events)[-2:] == [
+        ("scope.svc", "stop", "started"),
+        ("scope.svc", "stop", "completed"),
+    ]
 
 
 def test_service_run_started_from_a_task_is_still_top_level():
@@ -349,7 +356,10 @@ def test_stop_by_key_emits_stop_events():
     with Context(namespaces={NS}) as ctx:
         events = collect(ctx)
         ctx.stop("scope.svc")
-        assert calls(events) == [("scope.svc", "stop", "started"), ("scope.svc", "stop", "completed")]
+        assert calls(events) == [
+            ("scope.svc", "stop", "started"),
+            ("scope.svc", "stop", "completed"),
+        ]
 
 
 def test_setup_raising_emits_failed_and_open_raises():
@@ -407,7 +417,10 @@ def test_on_start_raising_emits_failed_and_open_raises():
     with pytest.raises(RuntimeError, match="cache"):
         ctx.open()
 
-    assert calls(events) == [("scope.users", "on_start", "started"), ("scope.users", "on_start", "failed")]
+    assert calls(events) == [
+        ("scope.users", "on_start", "started"),
+        ("scope.users", "on_start", "failed"),
+    ]
 
 
 def test_instance_without_hooks_emits_nothing():
@@ -470,7 +483,10 @@ def test_raising_stream_emits_failed_and_is_still_swallowed():
         wait_for(lambda: any(e.state == "failed" for e in events))
         wait_for(lambda: not ctx.is_streaming("scope.device"))
 
-    assert calls(events) == [("scope.device", "stream", "started"), ("scope.device", "stream", "failed")]
+    assert calls(events) == [
+        ("scope.device", "stream", "started"),
+        ("scope.device", "stream", "failed"),
+    ]
     assert events[1].error == repr(RuntimeError("unplugged"))
 
 

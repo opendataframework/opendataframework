@@ -51,9 +51,9 @@ around this.
 ## Subscribing
 
 ```python
-unsubscribe = events.subscribe(listener)                              # every event
-unsubscribe = events.subscribe(listener, protocol=ServiceProtocol)    # one protocol only
-unsubscribe()                                                         # stop; safe to call twice
+unsubscribe = events.subscribe(listener)  # every event
+unsubscribe = events.subscribe(listener, protocol=ServiceProtocol)  # one protocol only
+unsubscribe()  # stop; safe to call twice
 ```
 
 `protocol` is an exact match. `TaskProtocol` and `PipelineProtocol` both
