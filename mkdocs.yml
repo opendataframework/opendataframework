@@ -29,22 +29,24 @@ nav:
 
 theme:
   name: material
-  logo: images/logo.svg
-  favicon: images/logo.svg
+  custom_dir: overrides
+  logo: images/light.svg
+  favicon: images/light.svg
+  font: false
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
       primary: custom
       accent: custom
       toggle:
-        icon: material/weather-night
+        icon: material/brightness-7
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
       primary: custom
       accent: custom
       toggle:
-        icon: material/weather-sunny
+        icon: material/brightness-4
         name: Switch to light mode
   features:
     - navigation.sections
@@ -76,3 +78,6 @@ plugins:
 
 extra_css:
   - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/scheme-favicon.js
