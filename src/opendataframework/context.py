@@ -28,6 +28,7 @@ from opendataframework.events import Events
 from opendataframework.function import Function, FunctionProtocol, bind, string_hint
 from opendataframework.logger import Logger, LogManager
 from opendataframework.namespace import Namespace, parse, qualified
+from opendataframework.notifications import Notifications
 from opendataframework.pipeline import Pipeline, PipelineProtocol
 from opendataframework.repository import (
     CloseStreamProtocol,
@@ -128,7 +129,10 @@ class Resolver:
     instantiation is logged to that component's file — and ``Events``
     (see ``opendataframework.events``): an ``events: Events`` parameter
     receives the ``Context``'s own instance, and every call of a bound
-    function is reported to it as a ``FunctionProtocol`` call.
+    function is reported to it as a ``FunctionProtocol`` call — and
+    ``Notifications`` (see ``opendataframework.notifications``), resolved
+    contextually like ``Logger``: a ``notifications: Notifications``
+    parameter receives a view of the hub bound to the consuming class's key.
 
     Args:
         namespaces: Namespace subclasses to collect registered classes from.
@@ -136,6 +140,9 @@ class Resolver:
             ``LogManager`` (writes become no-ops) when omitted.
         events: Receives an event for every call of a bound function.
             Defaults to an ``Events`` with no listeners when omitted.
+        notifications: The hub a ``notifications: Notifications`` parameter
+            gets a bound view of. Defaults to a ``Notifications`` with no
+            subscribers when omitted.
 
     Example:
         >>> class NS(Namespace): ...
@@ -158,6 +165,7 @@ class Resolver:
         extra_instances: dict[type, object] | None = None,
         log_manager: LogManager | None = None,
         events: Events | None = None,
+        notifications: Notifications | None = None,
     ) -> None:
         """See class docstring for ``Args``."""
         self._namespaces = set(namespaces)
@@ -169,6 +177,9 @@ class Resolver:
         self._by_key: dict[str, type | Callable[..., object]] = {}
         self._log_manager = log_manager if log_manager is not None else LogManager()
         self._events = events if events is not None else Events(self._log_manager)
+        self._notifications = (
+            notifications if notifications is not None else Notifications(self._log_manager)
+        )
 
     @property
     def instances(self) -> dict[type, object]:
@@ -488,7 +499,9 @@ class Resolver:
         A ``dep`` annotated exactly as ``Logger`` is special-cased: instead of
         a shared instance, ``target`` receives a ``Logger`` bound to its own
         key (see ``opendataframework.logger.LogManager.logger_for``). One
-        annotated exactly as ``Events`` receives the ``Context``'s ``Events``. A class is
+        annotated exactly as ``Events`` receives the ``Context``'s ``Events``,
+        and one annotated exactly as ``Notifications`` a view of the hub bound
+        to ``target``'s key (see ``Notifications.bound_to``). A class is
         supplied only if already present in ``self._instances``, and a
         function only if already bound — unregistered ones in the signature
         are silently ignored.
@@ -499,6 +512,8 @@ class Resolver:
                 supplied[name] = self._log_manager.logger_for(self._keys[target])
             elif dep is Events:
                 supplied[name] = self._events
+            elif dep is Notifications:
+                supplied[name] = self._notifications.bound_to(self._keys[target])
             elif dep in self._instances:
                 supplied[name] = self._instances[dep]
             elif dep in self._functions:
@@ -932,11 +947,13 @@ class Context:
         extra = {Config: Config(config)} if config is not None else {}
         self._log_manager = LogManager(log_dir)
         self._events = Events(self._log_manager)
+        self._notifications = Notifications(self._log_manager, key_of=self.key)
         self._resolver = Resolver(
             namespaces if namespaces is not None else _DEFAULT_NAMESPACES,
             extra_instances=extra,
             log_manager=self._log_manager,
             events=self._events,
+            notifications=self._notifications,
         )
         self._lifecycle: Lifecycle | None = None
         self._stream_manager = StreamManager(log_manager=self._log_manager, events=self._events)
@@ -967,6 +984,22 @@ class Context:
             Event(key='service.postgres', protocol=<class '...ServiceProtocol'>, ...)
         """
         return self._events
+
+    @property
+    def notifications(self) -> Notifications:
+        """The hub every notification published in this ``Context`` goes through.
+
+        Unbound, unlike the view a ``notifications: Notifications`` parameter
+        receives, so ``publish()`` here needs ``key=``. Usable before
+        ``open()``, so a subscriber added first also sees notifications
+        published during startup. See ``opendataframework.notifications``.
+
+        Example:
+            >>> unsubscribe = context.notifications.subscribe(print, topic="orders.*")
+            >>> context.execute("task.take-order", customer="Le Petit", item="baguette")
+            Notification(key='task.take-order', topic='orders.received', ...)
+        """
+        return self._notifications
 
     @property
     def functions(self) -> dict[Callable[..., object], Callable[..., object]]:

@@ -31,6 +31,29 @@ from opendataframework.logger import LogManager
 _current_call: ContextVar[str | None] = ContextVar("opendataframework_call", default=None)
 
 
+def _current_call_id() -> str | None:
+    """Return the ``call_id`` of the protocol call in progress in this thread, if any.
+
+    Shared with ``opendataframework.notifications``, which records it as a
+    notification's ``parent``.
+    """
+    return _current_call.get()
+
+
+@contextmanager
+def _no_current_call() -> Iterator[None]:
+    """Run the block with no current call, so a call made inside it is top-level.
+
+    Used while listeners run — ``Events``' and ``Notifications``' alike — so a
+    call a listener makes is not a child of the call that triggered it.
+    """
+    token = _current_call.set(None)
+    try:
+        yield
+    finally:
+        _current_call.reset(token)
+
+
 @dataclass(frozen=True)
 class Event:
     """One state change of a protocol call the framework made.
@@ -177,12 +200,9 @@ class Events:
             ]
         if not listeners:
             return
-        token = _current_call.set(None)
-        try:
+        with _no_current_call():
             for listener in listeners:
                 try:
                     listener(event)
                 except Exception as exc:
                     self._log_manager.write(event.key, "WARNING", f"listener raised {exc!r}")
-        finally:
-            _current_call.reset(token)

@@ -44,7 +44,8 @@ project.context.events.subscribe(print)
 ```
 
 See [`examples/10-events/`](examples.md) for a full runnable project built
-around this.
+around this. For messages your own components publish, see
+[Notifications](notifications.md).
 
 ---
 
@@ -255,7 +256,9 @@ after `Slack` is set up, and anything reported earlier waits in the queue.
   code.
 
 * **Not a way to emit your own events.** `notify()` is how the framework
-  reports its protocol calls; it isn't meant for user code.
+  reports its protocol calls; it isn't meant for user code. To announce
+  something your own code did or saw, publish a
+  [Notification](notifications.md) instead.
 
 * **Not global.** Each `Context` has its own `Events` and its own listeners,
   so two `Project`s in one process never see each other's calls.

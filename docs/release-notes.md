@@ -1,5 +1,25 @@
 # Release Notes
 
+## 0.5.0
+
+### Added
+
+- **Notifications**: components can now publish a `Notification` about something that
+  happened (a file arrived, a threshold was crossed, an order came in), so others can
+  react without the publisher knowing who they are. A notification has a dotted `topic`, a read-only `payload`, an optional `summary`
+  for a UI to show, a `level` (`"info"`, `"success"`, `"warning"`, or `"error"`), and an
+  optional `subject` and `record` naming what it is about. It also records the protocol
+  call in progress as its `parent`. A component or function declares
+  `notifications: Notifications` and receives a view bound to its own key, the way it
+  declares `logger: Logger`, so `notifications.publish("orders.received", {...})` needs no
+  key. Code holding the `Context` uses `context.notifications`.
+  `subscribe(listener, topic=...)` takes an exact topic or a `"orders.*"` prefix and
+  returns an unsubscribe function. Delivery is synchronous, listeners run with no current
+  call, and a listener's exception is logged and never reaches the publisher. Each
+  publish is logged as `notified <topic>: <summary>`. Notifications are separate from
+  `Events`: the framework never publishes one, and neither hub delivers the other's type.
+  See [Notifications](notifications.md).
+
 ## 0.4.0
 
 ### Added

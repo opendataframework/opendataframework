@@ -26,6 +26,7 @@ nav:
       - Namespace: namespace.md
       - Logger: logger.md
       - Events: events.md
+      - Notifications: notifications.md
 
 theme:
   name: material

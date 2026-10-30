@@ -10,6 +10,7 @@ from opendataframework.function import Function, FunctionProtocol
 from opendataframework.layer import Analytics, Api, Layer, Messaging, Monitoring, Security, Storage
 from opendataframework.logger import Logger
 from opendataframework.namespace import Namespace
+from opendataframework.notifications import Notification, Notifications
 from opendataframework.pipeline import Pipeline, PipelineProtocol
 from opendataframework.project import Project
 from opendataframework.repository import (
@@ -64,6 +65,8 @@ __all__ = [
     "Messaging",
     "Monitoring",
     "Namespace",
+    "Notification",
+    "Notifications",
     "Pipeline",
     "PipelineProtocol",
     "Project",
