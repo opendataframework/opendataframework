@@ -71,8 +71,12 @@ class TakeOrders:
 ```
 
 `publish()` delivers the notification to every matching subscriber, writes
-`notified <topic>: <summary>` at `INFO` to the publisher's log, and returns
-the `Notification`.
+`notified <topic>: <summary> [parent=...]` to the publisher's log, and returns
+the `Notification`. The line is written at the log level matching the
+notification's `level` (`info` and `success` as `INFO`, `warning` as `WARNING`,
+`error` as `ERROR`), and `parent` is the call it was published during. Set
+`[project.logging] notifications = ...` to choose which are kept (see
+[Levels](logger.md#levels)).
 
 | Argument | Meaning |
 |---|---|

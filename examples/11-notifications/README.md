@@ -70,11 +70,14 @@ OrderCounter (topic='orders.*'):
   orders.large x1
 ```
 
-Each publish is also logged in the publisher's own file,
-`logs/task.take-orders.log`:
+Each publish is also logged in the publisher's own file, at the level matching
+the notification's, with the call it was published during as its `parent`
+(the ids differ on every run), in `logs/task.take-orders.log`:
 
 ```
-INFO     notified orders.received: Le Petit: 2 x baguette
-INFO     notified orders.received: Millers Ltd: 12 x sourdough
-INFO     notified orders.large: Large order from Millers Ltd: check flour stock
+INFO     execute() started [call=5e2b90c1 parent=-]
+INFO     notified orders.received: Le Petit: 2 x baguette [parent=5e2b90c1]
+INFO     notified orders.received: Millers Ltd: 12 x sourdough [parent=5e2b90c1]
+WARNING  notified orders.large: Large order from Millers Ltd: check flour stock [parent=5e2b90c1]
+INFO     execute() completed in 0.2ms [call=5e2b90c1 parent=-]
 ```

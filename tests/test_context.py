@@ -321,12 +321,12 @@ def test_on_start_and_on_stop_are_logged(tmp_path):
 
     with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
         messages = [e["message"] for e in ctx.tail_logs("scope.thing")]
-        assert "on_start() called" in messages
-        assert "on_start() complete" in messages
+        assert any(m.startswith("on_start() started [call=") for m in messages)
+        assert any(m.startswith("on_start() completed in ") for m in messages)
 
     messages = [e["message"] for e in ctx.tail_logs("scope.thing")]
-    assert "on_stop() called" in messages
-    assert "on_stop() complete" in messages
+    assert any(m.startswith("on_stop() started [call=") for m in messages)
+    assert any(m.startswith("on_stop() completed in ") for m in messages)
 
 
 # --- individual lifecycle control (UI actions) --------------------------------
@@ -684,7 +684,7 @@ def test_close_stream_exception_is_logged_not_raised(tmp_path):
         assert ctx.is_streaming("scope.device") is False
 
         messages = [e["message"] for e in ctx.tail_logs("scope.device")]
-        assert any("close_stream() raised" in m for m in messages)
+        assert any("close_stream() failed" in m for m in messages)
 
 
 def test_execute_runs_a_task_by_name():
@@ -811,12 +811,12 @@ def test_service_lifecycle_is_logged(tmp_path):
 
     with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
         messages = [e["message"] for e in ctx.tail_logs("scope.svc")]
-        assert "setup() starting" in messages
-        assert "setup() complete" in messages
+        assert any(m.startswith("setup() started [call=") for m in messages)
+        assert any(m.startswith("setup() completed in ") for m in messages)
 
     messages = [e["message"] for e in ctx.tail_logs("scope.svc")]
-    assert "stop() called" in messages
-    assert "stop() complete" in messages
+    assert any(m.startswith("stop() started [call=") for m in messages)
+    assert any(m.startswith("stop() completed in ") for m in messages)
 
 
 def test_service_run_exception_is_logged(tmp_path):
@@ -832,11 +832,11 @@ def test_service_run_exception_is_logged(tmp_path):
 
     with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
         for _ in range(50):
-            if any("raised" in e["message"] for e in ctx.tail_logs("scope.svc")):
+            if any("failed" in e["message"] for e in ctx.tail_logs("scope.svc")):
                 break
             threading.Event().wait(0.02)
         messages = [e["message"] for e in ctx.tail_logs("scope.svc")]
-        assert any("run() raised" in m and "boom" in m for m in messages)
+        assert any("run() failed" in m and "boom" in m for m in messages)
 
 
 def test_task_execute_is_logged(tmp_path):
@@ -854,7 +854,7 @@ def test_task_execute_is_logged(tmp_path):
 
     assert result == 42
     messages = [e["message"] for e in ctx.tail_logs("scope.t")]
-    assert "execute() started" in messages
+    assert any(m.startswith("execute() started [call=") for m in messages)
     assert any("execute() completed" in m for m in messages)
 
 
@@ -873,7 +873,7 @@ def test_task_execute_exception_is_logged_and_reraised(tmp_path):
             instance.execute()
 
     messages = [e["message"] for e in ctx.tail_logs("scope.t")]
-    assert any("execute() raised" in m and "nope" in m for m in messages)
+    assert any("execute() failed" in m and "nope" in m for m in messages)
 
 
 def test_pipeline_execute_is_logged(tmp_path):
@@ -888,7 +888,7 @@ def test_pipeline_execute_is_logged(tmp_path):
         ctx.instances[P].execute()
 
     messages = [e["message"] for e in ctx.tail_logs("scope.p")]
-    assert "execute() started" in messages
+    assert any(m.startswith("execute() started [call=") for m in messages)
 
 
 def test_component_has_no_execute_instrumentation(tmp_path):
@@ -1136,7 +1136,7 @@ def test_function_call_is_logged(tmp_path):
         messages = [e["message"] for e in ctx.tail_logs("function.load-data")]
 
     assert "load_data resolved" in messages
-    assert "call started" in messages
+    assert any(m.startswith("call started [call=") for m in messages)
     assert any("call completed" in m for m in messages)
 
 
@@ -1150,7 +1150,7 @@ def test_function_call_exception_is_logged_and_reraised(tmp_path):
             ctx.call("function.load-data")
         messages = [e["message"] for e in ctx.tail_logs("function.load-data")]
 
-    assert any("call raised" in m and "nope" in m for m in messages)
+    assert any("call failed" in m and "nope" in m for m in messages)
 
 
 def test_parameters_returns_only_caller_supplied_ones():
@@ -1280,7 +1280,7 @@ def test_call_through_an_injected_function_is_logged(tmp_path):
         ctx.instances[Report].load()
         messages = [e["message"] for e in ctx.tail_logs("function.load-data")]
 
-    assert "call started" in messages
+    assert any(m.startswith("call started [call=") for m in messages)
     assert any("call completed" in m for m in messages)
 
 
@@ -1507,7 +1507,7 @@ def test_agent_invoke_is_logged_through_call(tmp_path):
         assert ctx.call("scope.researcher") == 42
 
     messages = [e["message"] for e in ctx.tail_logs("scope.researcher")]
-    assert "invoke() started" in messages
+    assert any(m.startswith("invoke() started [call=") for m in messages)
     assert any("invoke() completed" in m for m in messages)
 
 
@@ -1524,7 +1524,7 @@ def test_agent_direct_invoke_is_logged(tmp_path):
         assert ctx.get(Researcher).invoke("dune?") == "dune?"
 
     messages = [e["message"] for e in ctx.tail_logs("scope.researcher")]
-    assert "invoke() started" in messages
+    assert any(m.startswith("invoke() started [call=") for m in messages)
     assert any("invoke() completed" in m for m in messages)
 
 
@@ -1542,7 +1542,7 @@ def test_agent_invoke_exception_is_logged_and_reraised(tmp_path):
             ctx.call("scope.researcher")
 
     messages = [e["message"] for e in ctx.tail_logs("scope.researcher")]
-    assert any("invoke() raised" in m and "nope" in m for m in messages)
+    assert any("invoke() failed" in m and "nope" in m for m in messages)
 
 
 def test_parameters_returns_an_agents_invoke_parameters():

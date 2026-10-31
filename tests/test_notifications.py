@@ -153,7 +153,9 @@ def test_publish_is_logged_on_the_publishers_key(tmp_path):
     with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
         ctx.execute("scope.take-order")
         messages = [entry["message"] for entry in ctx.tail_logs("scope.take-order")]
-    assert "notified orders.received: Le Petit: 2 baguettes" in messages
+    assert any(
+        m.startswith("notified orders.received: Le Petit: 2 baguettes [parent=") for m in messages
+    )
 
 
 def test_works_with_file_logging_off():
@@ -248,7 +250,7 @@ def test_component_subscribes_through_its_injected_view():
 
     @NS
     @Component
-    class Kitchen:
+    class PrepStation:
         def __init__(self, notifications: Notifications) -> None:
             self.orders: list[Notification] = []
             self._unsubscribe = notifications.subscribe(self.orders.append, "orders.*")
@@ -259,10 +261,10 @@ def test_component_subscribes_through_its_injected_view():
     publishing_task(NS)
     with Context(namespaces={NS}) as ctx:
         ctx.execute("scope.take-order")
-        kitchen = ctx.get(Kitchen)
-        assert [n.topic for n in kitchen.orders] == ["orders.received"]
+        station = ctx.get(PrepStation)
+        assert [n.topic for n in station.orders] == ["orders.received"]
     ctx.notifications.publish("orders.received", key="scope.x")
-    assert len(kitchen.orders) == 1
+    assert len(station.orders) == 1
 
 
 # --- delivery ----------------------------------------------------------------
@@ -337,7 +339,7 @@ def test_call_made_by_a_listener_is_top_level():
 def test_listener_may_publish():
     ctx = Context(namespaces={make_ns()})
     ctx.notifications.subscribe(
-        lambda n: ctx.notifications.publish("orders.cooked", key="scope.kitchen"),
+        lambda n: ctx.notifications.publish("orders.cooked", key="scope.station"),
         "orders.received",
     )
     received = collect(ctx)
@@ -365,3 +367,37 @@ def test_events_listeners_receive_no_notifications():
     with ctx:
         ctx.execute("scope.take-order")
     assert events and all(isinstance(e, Event) for e in events)
+
+
+# --- log lines ---------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("level", "log_level"),
+    [("info", "INFO"), ("success", "INFO"), ("warning", "WARNING"), ("error", "ERROR")],
+)
+def test_publish_is_logged_at_the_matching_level(tmp_path, level, log_level):
+    ctx = Context(namespaces={make_ns()}, log_dir=tmp_path)
+    ctx.notifications.publish("orders.received", key="scope.x", level=level)
+    (entry,) = ctx.tail_logs("scope.x")
+    assert entry["level"] == log_level
+    assert entry["message"] == "notified orders.received [parent=-]"
+
+
+def test_notifications_level_filters_publish_lines(tmp_path):
+    ctx = Context(namespaces={make_ns()}, log_dir=tmp_path, log_levels={"notifications": "ERROR"})
+    ctx.notifications.publish("orders.received", key="scope.x")
+    ctx.notifications.publish("orders.lost", key="scope.x", level="error")
+    assert [e["message"] for e in ctx.tail_logs("scope.x")] == ["notified orders.lost [parent=-]"]
+
+
+def test_publish_line_parent_is_the_publishing_call(tmp_path):
+    NS = make_ns()
+    publishing_task(NS)
+    with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
+        ctx.execute("scope.take-order")
+        messages = [e["message"] for e in ctx.tail_logs("scope.take-order")]
+
+    started = next(m for m in messages if m.startswith("execute() started"))
+    call = started.split("[call=")[1][:8]
+    assert f"notified orders.received [parent={call}]" in messages

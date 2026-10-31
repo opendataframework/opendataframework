@@ -231,10 +231,14 @@ exactly as shown, not normalized like the accessors above:
 [project]
 log-dir = "logs"   # see Logger
 app = "app"        # see Project — imports the app package
+
+[project.logging]  # see Logger — log level thresholds
+level = "INFO"
 ```
 
 See [Project](project.md#pointing-at-the-app-package) and
-[Logger](logger.md) for what each key does.
+[Logger](logger.md) (including [Levels](logger.md#levels)) for what each
+key does.
 
 ---
 

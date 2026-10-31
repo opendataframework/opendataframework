@@ -7,6 +7,10 @@ call is reported when it starts and again when it completes or fails, as an
 `Event`. Logs are for people; events are for code: alerting on a failure,
 collecting metrics, or animating a live view of the project.
 
+Every event is also written to its component's log file, with its call id
+and its parent's, so a call can be traced across files (see
+[Logger](logger.md#tracing-a-call-across-files)).
+
 It is the classic Observer pattern. `Events` is the subject, one per
 `Context`; a listener is any callable that takes an `Event`; listeners
 `subscribe`, and the framework notifies them around each protocol call.
@@ -251,9 +255,13 @@ after `Slack` is set up, and anything reported earlier waits in the queue.
 
 ## What Events is Not
 
-* **Not logging.** Events work with file logging off (`log_dir=None`), and
-  log lines are not events. `Logger` writes for people; `Events` reports for
-  code.
+* **Not logging, though it writes the call lines.** `Events` writes each
+  call's `started`/`completed`/`failed` line to the component's log, as
+  `execute() started [call=3f9a1c2e parent=-]`. `started` and `completed` are
+  written at `INFO`, `failed` at `ERROR`, and `[project.logging] events = ...`
+  sets their threshold (see [Levels](logger.md#levels)). Events are delivered
+  to listeners whether or not they're logged, and they work with file logging
+  off (`log_dir=None`). The log is for people; `Events` is for code.
 
 * **Not a way to emit your own events.** `notify()` is how the framework
   reports its protocol calls; it isn't meant for user code. To announce

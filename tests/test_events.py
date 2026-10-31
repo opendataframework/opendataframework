@@ -1,3 +1,4 @@
+import re
 import threading
 import time
 from collections.abc import Callable
@@ -682,3 +683,119 @@ def test_match_style_listener_from_the_docs():
             ctx.execute("scope.t")
 
     assert failures == ["scope.t"]
+
+
+# --- log lines ---------------------------------------------------------------
+
+
+_IDS = re.compile(r"\[call=(\w{8}) parent=(\w{8}|-)\]$")
+
+
+def traced(ctx: Context, key: str) -> list[tuple[str, str, str, str]]:
+    """Return ``(level, message, call, parent)`` for each traced line of ``key``'s log."""
+    lines = []
+    for entry in ctx.tail_logs(key):
+        if m := _IDS.search(entry["message"]):
+            lines.append((entry["level"], entry["message"], m[1], m[2]))
+    return lines
+
+
+def chain(NS):
+    """Register a pipeline → task → function chain; the function fails if asked to."""
+
+    @NS
+    @Function
+    def fetch(fail: bool = False) -> int:
+        if fail:
+            raise ValueError("nope")
+        return 1
+
+    @NS
+    @Task
+    class Load:
+        def __init__(self, fetch: Annotated[Callable[..., int], fetch]) -> None:
+            self.fetch = fetch
+            self.fail = False
+
+        def execute(self) -> int:
+            return self.fetch(fail=self.fail)
+
+    @NS
+    @Pipeline
+    class Nightly:
+        def __init__(self, load: Load) -> None:
+            self.load = load
+
+        def execute(self) -> int:
+            return self.load.execute()
+
+    return Load
+
+
+def test_every_call_line_carries_its_call_and_parent_ids(tmp_path):
+    NS = make_ns()
+    chain(NS)
+    ctx = Context(namespaces={NS}, log_dir=tmp_path)
+    events = collect(ctx)
+    with ctx:
+        ctx.execute("scope.nightly")
+
+    for key in ("scope.nightly", "scope.load", "scope.fetch"):
+        started, completed = (e for e in events if e.key == key)
+        lines = traced(ctx, key)
+        assert len(lines) == 2
+        for _, _, call, parent in lines:
+            assert call == started.call_id[:8]
+            assert parent == (started.parent[:8] if started.parent else "-")
+        assert lines[0][1].startswith(("execute() started", "call started"))
+        assert "completed in" in lines[1][1]
+
+
+def test_a_childs_parent_is_its_callers_call_across_files(tmp_path):
+    NS = make_ns()
+    chain(NS)
+    with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
+        ctx.execute("scope.nightly")
+        (_, _, nightly, top), _ = traced(ctx, "scope.nightly")
+        (_, _, load, load_parent), _ = traced(ctx, "scope.load")
+        (_, _, _, fetch_parent), _ = traced(ctx, "scope.fetch")
+
+    assert top == "-"
+    assert load_parent == nightly
+    assert fetch_parent == load
+
+
+def test_failed_line_is_an_error_and_keeps_its_parent_when_others_are_filtered(tmp_path):
+    NS = make_ns()
+    Load = chain(NS)
+    with Context(namespaces={NS}, log_dir=tmp_path, log_levels={"events": "WARNING"}) as ctx:
+        ctx.get(Load).fail = True
+        with pytest.raises(ValueError):
+            ctx.execute("scope.nightly")
+        ((_, _, load, _),) = traced(ctx, "scope.load")
+        ((level, message, _, parent),) = traced(ctx, "scope.fetch")
+
+    assert level == "ERROR"
+    assert message.startswith("call failed in ") and "ValueError('nope')" in message
+    assert parent == load
+
+
+def test_listener_exception_is_logged_whatever_the_events_level(tmp_path):
+    NS = make_ns()
+
+    @NS
+    @Task
+    class T:
+        def execute(self) -> None: ...
+
+    ctx = Context(namespaces={NS}, log_dir=tmp_path, log_levels={"events": "ERROR"})
+
+    def broken(event: Event) -> None:
+        raise RuntimeError("listener bug")
+
+    ctx.events.subscribe(broken)
+    with ctx:
+        ctx.execute("scope.t")
+        messages = [e["message"] for e in ctx.tail_logs("scope.t")]
+    assert "listener raised RuntimeError('listener bug')" in messages
+    assert not any("execute() started" in m for m in messages)

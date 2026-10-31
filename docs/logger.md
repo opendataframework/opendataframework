@@ -27,10 +27,10 @@ class ExportUsers:
 ```
 
 Four levels are available, each writing one line to the component's own log
-file:
+file, if the level passes the component's threshold (see [Levels](#levels)):
 
 ```python
-self.logger.debug("...")
+self.logger.debug("...")  # dropped by default
 self.logger.info("...")
 self.logger.warning("...")
 self.logger.error("...")
@@ -46,24 +46,98 @@ project built around this.
 
 ## Automatic Logging
 
-Most log lines require no code at all. `Context` writes to each component's log
-file on its behalf:
+Most log lines require no code at all. The framework writes to each
+component's log file on its behalf:
 
-* **Resolution** — `"Users resolved"` (the class or function's own name), once
+* **Resolution**: `"Users resolved"` (the class or function's own name), once
   each component is instantiated or each [Function](function.md) is bound.
-* **Lifecycle** — `setup()`/`run()`/`stop()` for a `Service`, `on_start()`/
-  `on_stop()` for a `Component`/`Repository` — start, completion, and any
-  raised exception.
-* **Execution** — `execute()` for a `Task`/`Pipeline`, `invoke()` for an
-  `Agent`, every call of a `Function` made through the `Context` — start,
-  duration, and any raised exception.
+* **Protocol calls**, written by [Events](events.md): every lifecycle or
+  execution call the framework makes (`setup()`/`run()`/`stop()`,
+  `on_start()`/`on_stop()`, `execute()`, `invoke()`, a `Function` call made
+  through the `Context`, a repository's `stream()`) is logged when it starts and
+  when it completes or fails, with its duration and any error.
+* **Notifications**: every [Notification](notifications.md) published is
+  logged on the publisher's key.
 
 `logger: Logger` is only needed for messages specific to what a component is
-actually doing — the framework-level lifecycle noise above is covered either
-way.
+actually doing. The framework-level lines above are covered either way.
 
 Logs are for people; for code that needs to react to the same calls, use
 [Events](events.md) instead of parsing log lines.
+
+### Tracing a call across files
+
+Each protocol-call line ends with the call's id and its parent's (the call it
+ran inside), shortened to 8 characters. `parent=-` marks a top-level call.
+A pipeline's steps log to their own files, and the ids tie them together:
+
+```
+# logs/pipeline.nightly-orders.log
+INFO     execute() started [call=3f9a1c2e parent=-]
+ERROR    execute() failed in 4.1ms: ValueError('courier unavailable') [call=3f9a1c2e parent=-]
+
+# logs/task.ship-orders.log
+INFO     execute() started [call=b71d04aa parent=3f9a1c2e]
+ERROR    execute() failed in 0.2ms: ValueError('courier unavailable') [call=b71d04aa parent=3f9a1c2e]
+```
+
+`grep 3f9a1c2e logs/*.log` finds the pipeline's call and every call made
+directly inside it; grep a child's own `call=` id to go one level deeper. A
+notification's line carries the call it was published during, as
+`[parent=...]`.
+
+---
+
+## Levels
+
+A line is written only if its level is at or above the threshold that
+applies to it. Users never pass a level name in code: the `Logger` method
+picks it, and the framework picks one for its own lines (`INFO` for a call
+starting or completing, `ERROR` for a failure, and a notification's own
+`level` for its line). Thresholds are set under `[project.logging]`:
+
+```toml
+[project.logging]
+level = "INFO"            # default for every line
+events = "WARNING"        # protocol-call lines: failures only
+notifications = "INFO"    # "notified <topic>" lines
+
+[project.logging.task]    # a namespace
+level = "INFO"            # every task
+take-orders = "DEBUG"     # one component
+```
+
+The namespace tables can also be written inline under `[project.logging]`,
+as `task.level = "INFO"` and `task.take-orders = "DEBUG"`; TOML reads both
+forms the same way.
+
+**The most specific setting wins.** For a protocol-call line about
+`task.take-orders`, the threshold is the first one set of:
+
+1. `task.take-orders`, the component;
+2. `task.level`, its namespace;
+3. `events`, the line's source (`notifications` for a notification's line;
+   a `Logger` call or a resolution line has none);
+4. `level`, the default;
+5. `INFO`.
+
+A component or namespace setting covers every line about it. So in the
+example above, every task's call lines are kept even though `events` is
+`WARNING`. Without any configuration the threshold is `INFO`, so
+`logger.debug()` lines are dropped until you enable them.
+
+Level names are `DEBUG`, `INFO`, `WARNING` and `ERROR`, in any casing. They
+are checked when the project is created. Namespace and component names are
+checked when it starts: a name that doesn't exist, like a typo
+`take-order`, raises `ValueError` listing the valid ones, rather than
+silently setting nothing. `level` is reserved inside a namespace table, so a
+component named `level` can't be set on its own.
+
+A listener's exception (`listener raised ...`) is logged with no source, so
+`events = "ERROR"` never hides a bug in your own listener.
+
+Constructing a `Context` directly, pass the same mapping as
+`Context(log_dir="logs", log_levels={"level": "DEBUG"})`.
 
 ---
 
@@ -94,7 +168,8 @@ a component, oldest first:
 
 ```python
 project.context.tail_logs("service.postgres", lines=100)
-# → [{"ts": "2026-08-08 10:00:00", "level": "INFO", "message": "setup() starting"}, ...]
+# → [{"ts": "2026-08-08 10:00:00", "level": "INFO",
+#      "message": "setup() started [call=3f9a1c2e parent=-]"}, ...]
 ```
 
 !!! tip "Seeing it in practice"

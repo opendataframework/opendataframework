@@ -19,6 +19,31 @@
   publish is logged as `notified <topic>: <summary>`. Notifications are separate from
   `Events`: the framework never publishes one, and neither hub delivers the other's type.
   See [Notifications](notifications.md).
+- **Logger**: log levels can now be set in config, under `[project.logging]`: a default
+  `level`, one for `events` (protocol-call lines) and one for `notifications`, and one per
+  namespace (`[project.logging.task] level = ...`) or per component
+  (`[project.logging.task] take-orders = "DEBUG"`). The most specific setting wins. Level
+  names are checked when the project is created, and namespace and component names when
+  it starts, so a typo raises instead of silently doing nothing. `Context` takes the same
+  mapping as `log_levels=`. See [Logger](logger.md#levels).
+- **Logger**: every protocol-call line now ends with the call's id and its parent's
+  (`[call=3f9a1c2e parent=-]`), and every notification's line with the call it was
+  published during. A pipeline's steps, which log to their own files, can now be traced
+  back to the pipeline with a single `grep`. See
+  [Logger](logger.md#tracing-a-call-across-files).
+
+### Changed
+
+- **Logger**: the default threshold is now `INFO`, so `logger.debug()` lines are dropped
+  unless enabled, e.g. with `[project.logging] level = "DEBUG"`.
+- **Logger**: protocol-call lines are now written by `Events`, with one wording for every
+  call: `<method>() started`, `<method>() completed in 1.2ms`, and
+  `<method>() failed in 1.2ms: <error>` at `ERROR` (`call ...` for a `@Function`), each
+  followed by its ids. They replace `setup() starting`/`setup() complete`,
+  `on_start() called`/`on_start() complete`, `stop() called`, `run() returned`, and
+  `... raised ...`. Code matching the old wording in `tail_logs()` output needs updating.
+- **Notifications**: a notification's log line is now written at the level matching its
+  own (`warning` as `WARNING`, `error` as `ERROR`) instead of always `INFO`.
 
 ## 0.4.0
 
