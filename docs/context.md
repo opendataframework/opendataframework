@@ -392,6 +392,10 @@ project.context.tail_logs("service.postgres", lines=300)
 # → [{"ts": ..., "level": ..., "key": ..., "message": ..., ...}, ...], oldest first
 ```
 
+**Traces** — `project.context.trace(call_id)` returns the tree of a protocol
+call and every call made inside it, across components' log files (see
+[Logger](logger.md#tracing-a-call-across-files)).
+
 **Events** — every protocol call the `Context` makes on a component is reported
 to `context.events`, the same instance a component receives by declaring
 `events: Events` (see [Events](events.md)):

@@ -24,7 +24,7 @@ from typing import Annotated, TypeAliasType, TypeVar, cast, get_origin, overload
 from opendataframework.agent import Agent, AgentProtocol
 from opendataframework.component import Component, OnStartProtocol, OnStopProtocol
 from opendataframework.config import Config
-from opendataframework.events import Events
+from opendataframework.events import Events, build_trace
 from opendataframework.function import Function, FunctionProtocol, bind, string_hint
 from opendataframework.logger import Logger, LogManager
 from opendataframework.namespace import Namespace, parse, qualified
@@ -1313,6 +1313,34 @@ class Context:
         if cls not in instances:
             raise KeyError(key)
         return cls, instances[cls]
+
+    def trace(self, call_id: str) -> dict:
+        """Return the tree of a protocol call and every call made inside it, from the logs.
+
+        Reads every log file once and follows ``parent`` links, so it works
+        after the fact — after the call ended, or the process restarted —
+        as long as the records were kept. Records dropped by a level
+        threshold can't appear: with ``[project.logging] events =
+        "WARNING"``, only failed calls do. See ``events.build_trace`` for
+        the shape of the tree, and to build one from live events instead.
+
+        Args:
+            call_id: The call's id — ``Event.call_id``, or a record's
+                ``call`` — in full or as a unique prefix, such as the 8
+                characters the ``text`` format shows.
+
+        Raises:
+            KeyError: If no logged call matches ``call_id``.
+            ValueError: If ``call_id`` is ambiguous, file logging is off, or
+                the log format is ``text``.
+
+        Example:
+            >>> logged = context.tail_logs("task.ship-orders")
+            >>> failed = [r for r in logged if r.get("state") == "failed"]
+            >>> context.trace(failed[-1]["parent"])["key"]
+            'pipeline.nightly-orders'
+        """
+        return build_trace(self._log_manager.records(), call_id)
 
     def tail_logs(self, key: str, lines: int = 300) -> list[dict]:
         """Return the last ``lines`` log entries for a resolved class or function.

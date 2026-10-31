@@ -36,7 +36,7 @@ the project config; see ``LogManager``.
 import json
 import re
 import threading
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from datetime import datetime
 from pathlib import Path
 
@@ -249,6 +249,30 @@ class LogManager:
             raw = path.read_text().splitlines()
         parse = _parse_json if self._format == "json" else _parse_line
         return [parse(line) for line in raw[-lines:]]
+
+    def records(self) -> Iterator[dict]:
+        """Yield every record in every log file, file by file, oldest first in each.
+
+        Used by ``Context.trace()`` to follow a call across files. Lines
+        that can't be parsed are skipped.
+
+        Raises:
+            ValueError: If file logging is off, or the format is ``text``,
+                whose lines keep only ``ts``, ``level`` and ``message``.
+        """
+        if self._dir is None:
+            raise ValueError("file logging is off: pass log_dir to read records back")
+        if self._format != "json":
+            raise ValueError('records need the "json" log format; [project.logging] sets "text"')
+        if not self._dir.exists():
+            return
+        for path in sorted(self._dir.glob(f"*{FORMATS['json']}")):
+            with self._lock:
+                raw = path.read_text().splitlines()
+            for line in raw:
+                record = _parse_json(line)
+                if record.get("ts") is not None:
+                    yield record
 
     def logger_for(self, component: str) -> Logger:
         """Return a ``Logger`` bound to ``component``'s own log file."""

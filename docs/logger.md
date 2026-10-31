@@ -114,7 +114,46 @@ so the schema is the same for every component, custom namespaces included.
 
 A pipeline's steps log to their own files, and the ids tie them together: a
 step's `parent` is the pipeline's `call`. `parent` is `null` for a top-level
-call. With the standard library:
+call. `context.trace(call_id)` follows those links for you and returns the
+whole call tree:
+
+```python
+logged = project.context.tail_logs("pipeline.nightly-orders")
+run = next(r for r in reversed(logged) if r.get("state") == "failed")
+trace = project.context.trace(run["call"])  # a full id, or a unique prefix like "3f9a1c2e"
+```
+
+```python
+{"call": "3f9a1c2e…", "parent": None, "key": "pipeline.nightly-orders",
+ "protocol": "PipelineProtocol", "method": "execute", "state": "failed",
+ "started": "2026-10-31T10:00:00.120+01:00", "ended": "2026-10-31T10:00:00.124+01:00",
+ "elapsed_ms": 4.1, "error": "ValueError('courier unavailable')",
+ "notifications": [],
+ "children": [
+     {"call": "7ceee7cb…", "key": "task.price-orders", "state": "completed", ...,
+      "children": [{"key": "function.price", ...}, ...]},
+     {"call": "b71d04aa…", "key": "task.ship-orders", "state": "failed", ...,
+      "children": []}]}
+```
+
+Each node merges a call's `started` and `completed`/`failed` records, and
+children are ordered by when they started. A call that hasn't ended shows as
+`"running"`. A notification is attached to the call it was published
+during, under `notifications`. The tree is plain, JSON-ready data, so a UI
+(such as the sibling [`odf`](https://opendataframework.github.io/odf/)
+package's) can draw it as-is.
+
+`trace()` reads every log file once, so it works after the call ended, and
+after a restart. It needs file logging in the default `json` format, and it
+can only show records that were kept: with `events = "WARNING"`, only failed
+calls appear, so a failure can still be traced back to its root but successful
+steps are missing.
+
+To build the same tree from live [Events](events.md) instead, as they
+arrive, use `opendataframework.events.build_trace(events, call_id)`. It takes
+`Event`s, log records, or a mix of both.
+
+The records can also be queried directly, with the standard library:
 
 ```python
 import json
@@ -122,7 +161,6 @@ from pathlib import Path
 
 records = [json.loads(line) for f in Path("logs").glob("*.jsonl") for line in f.open()]
 failed = [r for r in records if r.get("state") == "failed"]
-steps = [r for r in records if r.get("parent") == failed[-1]["call"]]
 ```
 
 Or, if you have [jq](https://jqlang.org/) installed:
@@ -130,9 +168,6 @@ Or, if you have [jq](https://jqlang.org/) installed:
 ```bash
 jq -c 'select(.state == "failed") | {key, call, parent, error}' logs/*.jsonl
 ```
-
-A notification's record carries the call it was published during as its
-`parent`, so the same lookup finds what a call announced.
 
 ### Text format
 

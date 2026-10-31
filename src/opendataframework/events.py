@@ -11,6 +11,7 @@ emits one.
 Each event is also written to the component's log file as a record —
 ``started`` and ``completed`` at ``INFO``, ``failed`` at ``ERROR`` — with its
 call id and its parent's as fields, so a call can be traced across files.
+``build_trace`` turns events, or those records, into a call tree.
 
 ``Events`` is the subject, one per ``Context`` — no process-global state, so
 multiple ``Project`` instances in the same process never share listeners
@@ -22,10 +23,11 @@ it as ``context.events``.
 
 import threading
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
+from datetime import datetime
 from uuid import uuid4
 
 from opendataframework.function import FunctionProtocol
@@ -245,3 +247,125 @@ class Events:
                     listener(event)
                 except Exception as exc:
                     self._log_manager.write(event.key, "WARNING", f"listener raised {exc!r}")
+
+
+def build_trace(items: Iterable[Event | Mapping[str, object]], call_id: str) -> dict:
+    """Return the call tree rooted at ``call_id``, built from events or log records.
+
+    ``items`` may be live ``Event``\\ s — as a listener receives them — or
+    log records, as ``LogManager.records()`` reads them back, in any order
+    and mixed. A call's ``started`` and ``completed``/``failed`` are merged
+    into one node; a call with no end yet is ``"running"``. Notification
+    records attach to the call they were published during, by ``parent``.
+
+    Args:
+        items: Events and/or log records. Records that are neither an
+            event's nor a notification's are ignored.
+        call_id: The root call's id, in full or as a unique prefix — the
+            8 characters the ``text`` log format shows.
+
+    Returns:
+        A JSON-ready tree. Each node has ``call``, ``parent``, ``key``,
+        ``protocol`` (its name), ``method``, ``state``, ``started`` and
+        ``ended`` (ISO 8601, or ``None`` when that record isn't there),
+        ``elapsed_ms``, ``error``, ``notifications`` (each with ``key``,
+        ``topic``, ``level``, ``message``, ``subject``, ``record``, ``ts``)
+        and ``children``, ordered by when they started.
+
+    Raises:
+        KeyError: If no call matches ``call_id``.
+        ValueError: If ``call_id`` is a prefix of more than one call.
+
+    Example:
+        >>> received: list[Event] = []
+        >>> context.events.subscribe(received.append)
+        >>> context.execute("pipeline.nightly-orders")
+        >>> build_trace(received, received[0].call_id)["children"][0]["key"]
+        'task.price-orders'
+    """
+    calls: dict[str, dict] = {}
+    notifications: dict[str, list[dict]] = {}
+    for item in items:
+        record = _as_record(item) if isinstance(item, Event) else item
+        if record.get("source") == "notifications" and record.get("parent"):
+            notifications.setdefault(str(record["parent"]), []).append(
+                {
+                    "key": record.get("key"),
+                    "topic": record.get("topic"),
+                    "level": record.get("notification_level"),
+                    "message": record.get("message"),
+                    "subject": record.get("subject"),
+                    "record": record.get("record"),
+                    "ts": record.get("ts"),
+                }
+            )
+            continue
+        if not record.get("call") or not record.get("state"):
+            continue
+        node = calls.setdefault(
+            str(record["call"]),
+            {
+                "call": record["call"],
+                "parent": record.get("parent"),
+                "key": record.get("key"),
+                "protocol": record.get("protocol"),
+                "method": record.get("method"),
+                "state": "running",
+                "started": None,
+                "ended": None,
+                "elapsed_ms": None,
+                "error": None,
+            },
+        )
+        if record["state"] == "started":
+            node["started"] = record.get("ts")
+        else:
+            node.update(
+                state=record["state"],
+                ended=record.get("ts"),
+                elapsed_ms=record.get("elapsed_ms"),
+                error=record.get("error"),
+            )
+    root = _match(calls, call_id)
+    children: dict[str, list[dict]] = {}
+    for node in calls.values():
+        if node["parent"]:
+            children.setdefault(str(node["parent"]), []).append(node)
+
+    def tree(node: dict) -> dict:
+        kids = sorted(children.get(node["call"], []), key=lambda n: str(n["started"] or n["ended"]))
+        return {
+            **node,
+            "notifications": notifications.get(node["call"], []),
+            "children": [tree(kid) for kid in kids],
+        }
+
+    return tree(root)
+
+
+def _as_record(event: Event) -> dict:
+    """Return ``event`` shaped like the log record ``Events`` writes for it."""
+    return {
+        "key": event.key,
+        "source": "events",
+        "call": event.call_id,
+        "parent": event.parent,
+        "protocol": event.protocol.__name__,
+        "method": event.method,
+        "state": event.state,
+        "ts": datetime.fromtimestamp(event.ts).astimezone().isoformat(timespec="milliseconds"),
+        "elapsed_ms": event.elapsed_ms,
+        "error": event.error,
+    }
+
+
+def _match(calls: Mapping[str, dict], call_id: str) -> dict:
+    """Return the call ``call_id`` names, in full or as a unique prefix."""
+    if call_id in calls:
+        return calls[call_id]
+    matches = [call for call in calls if call.startswith(call_id)] if call_id else []
+    if not matches:
+        raise KeyError(f"no call {call_id!r} in the trace")
+    if len(matches) > 1:
+        raise ValueError(f"call id {call_id!r} is ambiguous: it starts {len(matches)} calls")
+    return calls[matches[0]]

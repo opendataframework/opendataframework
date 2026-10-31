@@ -42,6 +42,15 @@
   and format names are checked when the project is created, and namespace and component
   names when it starts, so a typo raises instead of silently doing nothing. `Context`
   takes the same mapping as `log_config=`. See [Logger](logger.md#levels).
+- **Context**: `context.trace(call_id)` returns the tree of a protocol call and every
+  call made inside it, read from the logs: each node merges a call's `started` and
+  `completed`/`failed` records (`key`, `protocol`, `method`, `state`, `started`, `ended`,
+  `elapsed_ms`, `error`), lists the notifications published during it, and holds its
+  `children` in start order. It works after the call ended and after a restart, takes a
+  full id or a unique prefix, and needs file logging in the `json` format.
+  `opendataframework.events.build_trace(items, call_id)` builds the same JSON-ready tree
+  from live `Event`s or log records, so a UI can draw a call as it runs. See
+  [Logger](logger.md#tracing-a-call-across-files).
 - **Context**: `Resolver.namespaces` returns the namespaces a `Resolver` collects from.
 
 ### Changed

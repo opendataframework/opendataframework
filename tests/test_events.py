@@ -9,9 +9,10 @@ import pytest
 from opendataframework.agent import Agent, AgentProtocol
 from opendataframework.component import Component, OnStartProtocol, OnStopProtocol
 from opendataframework.context import Context
-from opendataframework.events import Event, Events
+from opendataframework.events import Event, Events, build_trace
 from opendataframework.function import Function, FunctionProtocol
 from opendataframework.namespace import Namespace
+from opendataframework.notifications import Notifications
 from opendataframework.pipeline import Pipeline, PipelineProtocol
 from opendataframework.repository import (
     CloseStreamProtocol,
@@ -814,3 +815,138 @@ def test_listener_exception_is_logged_whatever_the_events_level(tmp_path):
         logged = ctx.tail_logs("scope.t")
     assert "listener raised RuntimeError('listener bug')" in [r["message"] for r in logged]
     assert records(ctx, "scope.t") == []
+
+
+# --- traces ------------------------------------------------------------------
+
+
+def shape(node: dict) -> tuple:
+    """Reduce a trace node to ``(key, state, [children...])`` for assertions."""
+    return (node["key"], node["state"], [shape(child) for child in node["children"]])
+
+
+def test_trace_from_logs_is_the_call_tree(tmp_path):
+    NS = make_ns()
+    chain(NS)
+    with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
+        ctx.execute("scope.nightly")
+        (nightly, _) = records(ctx, "scope.nightly")
+        trace = ctx.trace(nightly["call"])
+
+    assert shape(trace) == (
+        "scope.nightly",
+        "completed",
+        [("scope.load", "completed", [("scope.fetch", "completed", [])])],
+    )
+    assert trace["parent"] is None
+    assert trace["protocol"] == "PipelineProtocol"
+    assert trace["started"] <= trace["ended"]
+    assert trace["elapsed_ms"] >= 0
+
+
+def test_trace_works_after_close_and_by_prefix(tmp_path):
+    NS = make_ns()
+    chain(NS)
+    with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
+        ctx.execute("scope.nightly")
+        (nightly, _) = records(ctx, "scope.nightly")
+    assert ctx.trace(nightly["call"][:8])["call"] == nightly["call"]
+
+
+def test_trace_from_a_child_is_its_subtree(tmp_path):
+    NS = make_ns()
+    chain(NS)
+    with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
+        ctx.execute("scope.nightly")
+        (load, _) = records(ctx, "scope.load")
+        assert shape(ctx.trace(load["call"])) == (
+            "scope.load",
+            "completed",
+            [("scope.fetch", "completed", [])],
+        )
+
+
+def test_trace_keeps_failures_when_only_failures_are_logged(tmp_path):
+    NS = make_ns()
+    Load = chain(NS)
+    config = {"events": "WARNING"}
+    with Context(namespaces={NS}, log_dir=tmp_path, log_config=config) as ctx:
+        ctx.get(Load).fail = True
+        with pytest.raises(ValueError):
+            ctx.execute("scope.nightly")
+        (nightly,) = records(ctx, "scope.nightly")
+        trace = ctx.trace(nightly["call"])
+
+    assert shape(trace) == (
+        "scope.nightly",
+        "failed",
+        [("scope.load", "failed", [("scope.fetch", "failed", [])])],
+    )
+    assert trace["started"] is None
+    assert trace["children"][0]["children"][0]["error"] == "ValueError('nope')"
+
+
+def test_trace_attaches_notifications_to_the_publishing_call(tmp_path):
+    NS = make_ns()
+
+    @NS
+    @Task
+    class Announce:
+        def __init__(self, notifications: Notifications) -> None:
+            self.notifications = notifications
+
+        def execute(self) -> None:
+            self.notifications.publish("orders.received", level="warning", summary="2 x baguette")
+
+    with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
+        ctx.execute("scope.announce")
+        (started, _) = records(ctx, "scope.announce")
+        (notification,) = ctx.trace(started["call"])["notifications"]
+
+    assert notification["key"] == "scope.announce"
+    assert notification["topic"] == "orders.received"
+    assert notification["level"] == "warning"
+    assert notification["message"] == "notified orders.received: 2 x baguette"
+
+
+def test_build_trace_from_live_events_and_running_calls():
+    NS = make_ns()
+    seen: list[Event] = []
+
+    @NS
+    @Task
+    class Slow:
+        def execute(self) -> None:
+            # Mid-call: the task has started but not ended.
+            seen.append(build_trace(list(events), events[0].call_id))
+
+    ctx = Context(namespaces={NS})
+    events = collect(ctx)
+    with ctx:
+        ctx.execute("scope.slow")
+
+    (running,) = seen
+    assert (running["key"], running["state"], running["ended"]) == ("scope.slow", "running", None)
+    done = build_trace(events, events[0].call_id)
+    assert (done["state"], done["protocol"]) == ("completed", "TaskProtocol")
+    assert done["started"] is not None
+
+
+def test_build_trace_unknown_and_ambiguous_ids():
+    base = {"source": "events", "state": "started", "ts": "2026-10-31T10:00:00.000+00:00"}
+    items = [{**base, "call": "abc1" + "0" * 28}, {**base, "call": "abc2" + "0" * 28}]
+    with pytest.raises(KeyError, match="no call 'fff'"):
+        build_trace(items, "fff")
+    with pytest.raises(ValueError, match="ambiguous"):
+        build_trace(items, "abc")
+    assert build_trace(items, "abc1")["call"].startswith("abc1")
+
+
+def test_trace_needs_json_file_logs(tmp_path):
+    with pytest.raises(ValueError, match="file logging is off"):
+        Context(namespaces={make_ns()}).trace("abc")
+    ctx = Context(namespaces={make_ns()}, log_dir=tmp_path, log_config={"format": "text"})
+    with pytest.raises(ValueError, match='"json" log format'):
+        ctx.trace("abc")
+    with pytest.raises(KeyError):
+        Context(namespaces={make_ns()}, log_dir=tmp_path / "empty").trace("abc")

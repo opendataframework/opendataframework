@@ -8,7 +8,9 @@ call is reported when it starts and again when it completes or fails, as an
 collecting metrics, or animating a live view of the project.
 
 Every event is also written to its component's log file, with its call id
-and its parent's, so a call can be traced across files (see
+and its parent's, so a call can be traced across files:
+`context.trace(call_id)` returns a call's whole tree from the logs, and
+`build_trace(events, call_id)` builds the same tree from live events (see
 [Logger](logger.md#tracing-a-call-across-files)).
 
 It is the classic Observer pattern. `Events` is the subject, one per
