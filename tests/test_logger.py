@@ -292,12 +292,12 @@ def test_text_format_writes_rendered_lines_to_a_log_file(tmp_path):
     assert (entry["level"], entry["message"]) == ("WARNING", "slow ms=900")
 
 
-def test_render_shortens_ids():
+def test_render_writes_full_ids():
     base = {"ts": "2026-10-31T10:00:00.123+01:00", "level": "INFO", "message": "m"}
     event = render({**base, "call": "a" * 32, "parent": None})
     notification = render({**base, "parent": "b" * 32})
-    assert event == "2026-10-31 10:00:00.123 INFO     m [call=aaaaaaaa parent=-]"
-    assert notification.endswith("m [parent=bbbbbbbb]")
+    assert event == f"2026-10-31 10:00:00.123 INFO     m [call={'a' * 32} parent=-]"
+    assert notification.endswith(f"m [parent={'b' * 32}]")
 
 
 def test_unknown_format_raises():

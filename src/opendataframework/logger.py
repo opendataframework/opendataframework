@@ -340,9 +340,9 @@ class Logger:
 def render(record: Mapping[str, object]) -> str:
     """Return ``record`` as one readable text line, the way the ``text`` format writes it.
 
-    An event's line ends with its ids shortened to 8 characters —
-    ``[call=b71d04aa parent=3f9a1c2e]``, ``parent=-`` for a top-level call —
-    and a notification's with ``[parent=...]``. User fields follow as
+    An event's line ends with its ids — ``[call=<id> parent=<id>]``, with
+    ``parent=-`` for a top-level call — and a notification's with
+    ``[parent=...]``. User fields follow as
     ``name=value`` pairs. A backslash or newline is escaped, so the result
     is always a single line.
 
@@ -354,18 +354,13 @@ def render(record: Mapping[str, object]) -> str:
     ts = str(record.get("ts") or "-")[:23].replace("T", " ")
     line = f"{ts} {record.get('level', 'INFO'):<8} {record.get('message', '')}"
     if "call" in record:
-        line += f" [call={_short(record['call'])} parent={_short(record.get('parent'))}]"
+        line += f" [call={record['call']} parent={record.get('parent') or '-'}]"
     elif "parent" in record:
-        line += f" [parent={_short(record['parent'])}]"
+        line += f" [parent={record['parent'] or '-'}]"
     fields = record.get("fields") or {}
     if fields:
         line += " " + " ".join(f"{name}={value!r}" for name, value in fields.items())
     return line.replace("\\", "\\\\").replace("\n", "\\n")
-
-
-def _short(call_id: object) -> str:
-    """Return a call id shortened to its first 8 characters, or ``-`` for none."""
-    return str(call_id)[:8] if call_id else "-"
 
 
 def _parse_json(line: str) -> dict:

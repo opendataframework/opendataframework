@@ -1328,13 +1328,12 @@ class Context:
 
         Args:
             call_id: The call's id — ``Event.call_id``, or a record's
-                ``call`` — in full or as a unique prefix, such as its first
-                8 characters.
+                ``call``.
 
         Raises:
-            KeyError: If no call in the ``.jsonl`` logs matches ``call_id``.
-            ValueError: If ``call_id`` is ambiguous, file logging is off, or
-                the configured log format is ``text``.
+            KeyError: If no call in the ``.jsonl`` logs has the id ``call_id``.
+            ValueError: If file logging is off, or the configured log format
+                is ``text``.
 
         Example:
             >>> logged = context.tail_logs("task.ship-orders")

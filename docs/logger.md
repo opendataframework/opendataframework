@@ -120,7 +120,7 @@ whole call tree:
 ```python
 logged = project.context.tail_logs("pipeline.nightly-orders")
 run = next(r for r in reversed(logged) if r.get("state") == "failed")
-trace = project.context.trace(run["call"])  # a full id, or a unique prefix like "3f9a1c2e"
+trace = project.context.trace(run["call"])
 ```
 
 ```python
@@ -150,8 +150,9 @@ configured format, never what happens to be on disk:
 * With `format = "json"` (the default), it reads the `.jsonl` files only.
   `.log` files left over from an earlier `text` setup are ignored, so their
   calls aren't found (`KeyError`).
-* With `format = "text"`, it raises `ValueError`: text lines keep only
-  shortened ids, with no call structure to rebuild a tree from.
+* With `format = "text"`, it raises `ValueError`: text lines read back as
+  only `ts`, `level` and `message`, with no call structure to rebuild a tree
+  from.
 * With file logging off (no `log_dir`), it raises `ValueError` too.
 
 It can only show records that were kept: with `events = "WARNING"`, only
@@ -188,17 +189,17 @@ format = "text"
 ```
 
 Files are then `logs/<namespace>.<name>.log`, with one readable line per
-record. Ids are shortened to 8 characters, and user fields are appended as
-`name=value`:
+record. Call and parent ids are written in full, and user fields are
+appended as `name=value`:
 
 ```
-2026-10-31 10:00:00.120 INFO     execute() started [call=3f9a1c2e parent=-]
-2026-10-31 10:00:00.123 INFO     execute() started [call=b71d04aa parent=3f9a1c2e]
-2026-10-31 10:00:00.124 ERROR    execute() failed in 0.2ms: ValueError('courier unavailable') [call=b71d04aa parent=3f9a1c2e]
+2026-10-31 10:00:00.120 INFO     execute() started [call=3f9a1c2e51b04d7c9e8f2a6b3c1d5e70 parent=-]
+2026-10-31 10:00:00.123 INFO     execute() started [call=b71d04aa9c2e4f1d8a3b6c5d7e9f0a1b parent=3f9a1c2e51b04d7c9e8f2a6b3c1d5e70]
+2026-10-31 10:00:00.124 ERROR    execute() failed in 0.2ms: ValueError('courier unavailable') [call=b71d04aa9c2e4f1d8a3b6c5d7e9f0a1b parent=3f9a1c2e51b04d7c9e8f2a6b3c1d5e70]
 2026-10-31 10:00:00.130 INFO     order taken order_id=7 customer='Le Petit'
 ```
 
-`grep 3f9a1c2e logs/*.log` then finds a call and everything made directly
+`grep 3f9a1c2e51b04d7c9e8f2a6b3c1d5e70 logs/*.log` then finds a call and everything made directly
 inside it. The text format keeps only `ts`, `level` and `message` when read
 back, and `context.trace()` isn't available. For structure, keep the default.
 

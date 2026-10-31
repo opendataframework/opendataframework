@@ -1,4 +1,3 @@
-import re
 import threading
 import time
 from collections.abc import Callable
@@ -782,17 +781,20 @@ def test_failed_record_is_an_error_and_keeps_its_parent_when_others_are_filtered
     assert fetch["parent"] == load["call"]
 
 
-def test_text_format_appends_shortened_ids(tmp_path):
+def test_text_format_appends_full_ids(tmp_path):
     NS = make_ns()
     chain(NS)
     config = {"format": "text"}
-    with Context(namespaces={NS}, log_dir=tmp_path, log_config=config) as ctx:
+    ctx = Context(namespaces={NS}, log_dir=tmp_path, log_config=config)
+    events = collect(ctx)
+    with ctx:
         ctx.execute("scope.nightly")
         nightly = ctx.tail_logs("scope.nightly")
         load = ctx.tail_logs("scope.load")
 
-    call = re.search(r"\[call=(\w{8}) parent=-\]$", nightly[-1]["message"])[1]
-    assert load[-1]["message"].endswith(f"parent={call}]")
+    pipeline = next(e for e in events if e.key == "scope.nightly")
+    assert nightly[-1]["message"].endswith(f"[call={pipeline.call_id} parent=-]")
+    assert load[-1]["message"].endswith(f"parent={pipeline.call_id}]")
     assert (tmp_path / "scope.nightly.log").exists()
 
 
@@ -844,13 +846,15 @@ def test_trace_from_logs_is_the_call_tree(tmp_path):
     assert trace["elapsed_ms"] >= 0
 
 
-def test_trace_works_after_close_and_by_prefix(tmp_path):
+def test_trace_works_after_close_and_needs_the_full_id(tmp_path):
     NS = make_ns()
     chain(NS)
     with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
         ctx.execute("scope.nightly")
         (nightly, _) = records(ctx, "scope.nightly")
-    assert ctx.trace(nightly["call"][:8])["call"] == nightly["call"]
+    assert ctx.trace(nightly["call"])["call"] == nightly["call"]
+    with pytest.raises(KeyError):
+        ctx.trace(nightly["call"][:8])
 
 
 def test_trace_from_a_child_is_its_subtree(tmp_path):
@@ -932,14 +936,12 @@ def test_build_trace_from_live_events_and_running_calls():
     assert done["started"] is not None
 
 
-def test_build_trace_unknown_and_ambiguous_ids():
-    base = {"source": "events", "state": "started", "ts": "2026-10-31T10:00:00.000+00:00"}
-    items = [{**base, "call": "abc1" + "0" * 28}, {**base, "call": "abc2" + "0" * 28}]
+def test_build_trace_unknown_id():
+    started = {"source": "events", "state": "started", "ts": "2026-10-31T10:00:00.000+00:00"}
+    items = [{**started, "call": "abc1" + "0" * 28}]
     with pytest.raises(KeyError, match="no call 'fff'"):
         build_trace(items, "fff")
-    with pytest.raises(ValueError, match="ambiguous"):
-        build_trace(items, "abc")
-    assert build_trace(items, "abc1")["call"].startswith("abc1")
+    assert build_trace(items, "abc1" + "0" * 28)["state"] == "running"
 
 
 def test_trace_needs_json_file_logs(tmp_path):

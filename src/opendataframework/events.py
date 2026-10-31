@@ -261,8 +261,8 @@ def build_trace(items: Iterable[Event | Mapping[str, object]], call_id: str) -> 
     Args:
         items: Events and/or log records. Records that are neither an
             event's nor a notification's are ignored.
-        call_id: The root call's id, in full or as a unique prefix — the
-            8 characters the ``text`` log format shows.
+        call_id: The root call's id — ``Event.call_id``, or a record's
+            ``call``.
 
     Returns:
         A JSON-ready tree. Each node has ``call``, ``parent``, ``key``,
@@ -273,8 +273,7 @@ def build_trace(items: Iterable[Event | Mapping[str, object]], call_id: str) -> 
         and ``children``, ordered by when they started.
 
     Raises:
-        KeyError: If no call matches ``call_id``.
-        ValueError: If ``call_id`` is a prefix of more than one call.
+        KeyError: If no call has the id ``call_id``.
 
     Example:
         >>> received: list[Event] = []
@@ -326,7 +325,9 @@ def build_trace(items: Iterable[Event | Mapping[str, object]], call_id: str) -> 
                 elapsed_ms=record.get("elapsed_ms"),
                 error=record.get("error"),
             )
-    root = _match(calls, call_id)
+    if call_id not in calls:
+        raise KeyError(f"no call {call_id!r} in the trace")
+    root = calls[call_id]
     children: dict[str, list[dict]] = {}
     for node in calls.values():
         if node["parent"]:
@@ -357,15 +358,3 @@ def _as_record(event: Event) -> dict:
         "elapsed_ms": event.elapsed_ms,
         "error": event.error,
     }
-
-
-def _match(calls: Mapping[str, dict], call_id: str) -> dict:
-    """Return the call ``call_id`` names, in full or as a unique prefix."""
-    if call_id in calls:
-        return calls[call_id]
-    matches = [call for call in calls if call.startswith(call_id)] if call_id else []
-    if not matches:
-        raise KeyError(f"no call {call_id!r} in the trace")
-    if len(matches) > 1:
-        raise ValueError(f"call id {call_id!r} is ambiguous: it starts {len(matches)} calls")
-    return calls[matches[0]]

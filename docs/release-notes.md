@@ -32,7 +32,7 @@
   `"fields": {"order_id": 7}`. `tail_logs()` returns the full records. See
   [Logger](logger.md#log-format).
 - **Logger**: `[project.logging] format = "text"` writes readable `.log` files instead,
-  one line per record, with ids shortened to 8 characters (`[call=3f9a1c2e parent=-]`)
+  one line per record, with the call and parent ids in full (`[call=<id> parent=-]`)
   and fields appended as `name=value`. `opendataframework.logger.render(record)` turns
   a JSON record into that line. See [Logger](logger.md#text-format).
 - **Logger**: log levels can now be set in config, under `[project.logging]`: a default
@@ -42,16 +42,16 @@
   and format names are checked when the project is created, and namespace and component
   names when it starts, so a typo raises instead of silently doing nothing. `Context`
   takes the same mapping as `log_config=`. See [Logger](logger.md#levels).
-- **Context**: `context.trace(call_id)` returns the tree of a protocol call and every
-  call made inside it, read from the logs: each node merges a call's `started` and
+- **Context**: `context.trace(call_id)` returns the tree of a protocol call and every call
+  made inside it, read from the logs: each node merges a call's `started` and
   `completed`/`failed` records (`key`, `protocol`, `method`, `state`, `started`, `ended`,
   `elapsed_ms`, `error`), lists the notifications published during it, and holds its
-  `children` in start order. It works after the call ended and after a restart, takes a
-  full id or a unique prefix, and reads the `.jsonl` files of the configured `json`
-  format only: with `format = "text"` it raises `ValueError`, and leftover `.log` files
-  are ignored. `opendataframework.events.build_trace(items, call_id)` builds the same
-  JSON-ready tree from live `Event`s or log records, so a UI can draw a call as it runs.
-  See [Logger](logger.md#tracing-a-call-across-files).
+  `children` in start order. It works after the call ended and after a restart, takes the
+  call's full id, and reads the `.jsonl` files of the configured `json` format only: with
+  `format = "text"` it raises `ValueError`, and leftover `.log` files are ignored.
+  `opendataframework.events.build_trace(items, call_id)` builds the same JSON-ready tree
+  from live `Event`s or log records, so a UI can draw a call as it runs. See
+  [Logger](logger.md#tracing-a-call-across-files).
 - **Context**: `Resolver.namespaces` returns the namespaces a `Resolver` collects from.
 
 ### Changed
