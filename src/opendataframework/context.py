@@ -1317,22 +1317,24 @@ class Context:
     def trace(self, call_id: str) -> dict:
         """Return the tree of a protocol call and every call made inside it, from the logs.
 
-        Reads every log file once and follows ``parent`` links, so it works
-        after the fact — after the call ended, or the process restarted —
-        as long as the records were kept. Records dropped by a level
+        Reads every ``.jsonl`` log file once and follows ``parent`` links,
+        so it works after the fact — after the call ended, or the process
+        restarted — as long as the records were kept. Which files it reads
+        follows the configured log format, never what is on disk: ``.log``
+        files left from an earlier ``text`` setup are ignored. Records dropped by a level
         threshold can't appear: with ``[project.logging] events =
         "WARNING"``, only failed calls do. See ``events.build_trace`` for
         the shape of the tree, and to build one from live events instead.
 
         Args:
             call_id: The call's id — ``Event.call_id``, or a record's
-                ``call`` — in full or as a unique prefix, such as the 8
-                characters the ``text`` format shows.
+                ``call`` — in full or as a unique prefix, such as its first
+                8 characters.
 
         Raises:
-            KeyError: If no logged call matches ``call_id``.
+            KeyError: If no call in the ``.jsonl`` logs matches ``call_id``.
             ValueError: If ``call_id`` is ambiguous, file logging is off, or
-                the log format is ``text``.
+                the configured log format is ``text``.
 
         Example:
             >>> logged = context.tail_logs("task.ship-orders")

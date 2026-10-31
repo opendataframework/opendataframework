@@ -47,10 +47,11 @@
   `completed`/`failed` records (`key`, `protocol`, `method`, `state`, `started`, `ended`,
   `elapsed_ms`, `error`), lists the notifications published during it, and holds its
   `children` in start order. It works after the call ended and after a restart, takes a
-  full id or a unique prefix, and needs file logging in the `json` format.
-  `opendataframework.events.build_trace(items, call_id)` builds the same JSON-ready tree
-  from live `Event`s or log records, so a UI can draw a call as it runs. See
-  [Logger](logger.md#tracing-a-call-across-files).
+  full id or a unique prefix, and reads the `.jsonl` files of the configured `json`
+  format only: with `format = "text"` it raises `ValueError`, and leftover `.log` files
+  are ignored. `opendataframework.events.build_trace(items, call_id)` builds the same
+  JSON-ready tree from live `Event`s or log records, so a UI can draw a call as it runs.
+  See [Logger](logger.md#tracing-a-call-across-files).
 - **Context**: `Resolver.namespaces` returns the namespaces a `Resolver` collects from.
 
 ### Changed

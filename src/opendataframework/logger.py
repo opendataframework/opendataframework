@@ -251,14 +251,17 @@ class LogManager:
         return [parse(line) for line in raw[-lines:]]
 
     def records(self) -> Iterator[dict]:
-        """Yield every record in every log file, file by file, oldest first in each.
+        """Yield every record in every ``.jsonl`` file, file by file, oldest first in each.
 
-        Used by ``Context.trace()`` to follow a call across files. Lines
-        that can't be parsed are skipped.
+        Used by ``Context.trace()`` to follow a call across files. Only the
+        configured ``json`` format is read: ``.log`` files left from an
+        earlier ``text`` setup are ignored. Lines that can't be parsed are
+        skipped.
 
         Raises:
-            ValueError: If file logging is off, or the format is ``text``,
-                whose lines keep only ``ts``, ``level`` and ``message``.
+            ValueError: If file logging is off, or the configured format is
+                ``text``, whose lines keep only ``ts``, ``level`` and
+                ``message``.
         """
         if self._dir is None:
             raise ValueError("file logging is off: pass log_dir to read records back")

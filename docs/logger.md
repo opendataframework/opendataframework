@@ -143,11 +143,20 @@ during, under `notifications`. The tree is plain, JSON-ready data, so a UI
 (such as the sibling [`odf`](https://opendataframework.github.io/odf/)
 package's) can draw it as-is.
 
-`trace()` reads every log file once, so it works after the call ended, and
-after a restart. It needs file logging in the default `json` format, and it
-can only show records that were kept: with `events = "WARNING"`, only failed
-calls appear, so a failure can still be traced back to its root but successful
-steps are missing.
+`trace()` reads every `.jsonl` file in the log directory once, so it works
+after the call ended, and after a restart. Which files it reads follows the
+configured format, never what happens to be on disk:
+
+* With `format = "json"` (the default), it reads the `.jsonl` files only.
+  `.log` files left over from an earlier `text` setup are ignored, so their
+  calls aren't found (`KeyError`).
+* With `format = "text"`, it raises `ValueError`: text lines keep only
+  shortened ids, with no call structure to rebuild a tree from.
+* With file logging off (no `log_dir`), it raises `ValueError` too.
+
+It can only show records that were kept: with `events = "WARNING"`, only
+failed calls appear, so a failure can still be traced back to its root but
+successful steps are missing.
 
 To build the same tree from live [Events](events.md) instead, as they
 arrive, use `opendataframework.events.build_trace(events, call_id)`. It takes
@@ -191,7 +200,7 @@ record. Ids are shortened to 8 characters, and user fields are appended as
 
 `grep 3f9a1c2e logs/*.log` then finds a call and everything made directly
 inside it. The text format keeps only `ts`, `level` and `message` when read
-back. For structure, keep the default.
+back, and `context.trace()` isn't available. For structure, keep the default.
 
 `opendataframework.logger.render(record)` turns a JSON record into that same
 line, e.g. to pretty-print a `.jsonl` file.
