@@ -1,0 +1,1716 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Lightweight dependency-injection framework for data applications.">
+      
+      
+      
+      
+        <link rel="prev" href="../examples/">
+      
+      
+        <link rel="next" href="../entity/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../images/light.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Release Notes - Open Data Framework</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+      <link rel="stylesheet" href="../termynal.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#release-notes" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Open Data Framework" class="md-header__button md-logo" aria-label="Open Data Framework" data-md-component="logo">
+      <img class="odf-logo odf-logo--light" src="../images/light.svg" alt="logo">
+<img class="odf-logo odf-logo--dark" src="../images/dark.svg" alt="logo">
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Open Data Framework
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Release Notes
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/opendataframework/opendataframework" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    opendataframework/opendataframework
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Open Data Framework" class="md-nav__button md-logo" aria-label="Open Data Framework" data-md-component="logo">
+      <img class="odf-logo odf-logo--light" src="../images/light.svg" alt="logo">
+<img class="odf-logo odf-logo--dark" src="../images/dark.svg" alt="logo">
+    </a>
+    Open Data Framework
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/opendataframework/opendataframework" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    opendataframework/opendataframework
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Notes
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#050" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.5.0
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.5.0">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#040" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.4.0
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.4.0">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#030" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.3.0
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.3.0">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#docs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Docs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#020" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.2.0
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.2.0">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixed_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#docs_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Docs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../entity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Entity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../repository/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Repository
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../view/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    View
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../component/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Component
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../task/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Task
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../function/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Function
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../layer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Layer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../context/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Context
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../namespace/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Namespace
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../logger/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logger
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../events/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Events
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#050" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.5.0
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.5.0">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#040" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.4.0
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.4.0">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#030" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.3.0
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.3.0">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#docs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Docs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#020" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.2.0
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.2.0">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixed_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#docs_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Docs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="release-notes">Release Notes<a class="headerlink" href="#release-notes" title="Permanent link">&para;</a></h1>
+<h2 id="050">0.5.0<a class="headerlink" href="#050" title="Permanent link">&para;</a></h2>
+<h3 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Notifications</strong>: components can now publish a <code>Notification</code> about something that
+  happened (a file arrived, a threshold was crossed, an order came in), so others can
+  react without the publisher knowing who they are. A notification has a dotted <code>topic</code>,
+  a read-only <code>payload</code>, an optional <code>summary</code> for a UI to show, a <code>level</code> (<code>"info"</code>,
+  <code>"success"</code>, <code>"warning"</code>, or <code>"error"</code>), and an optional <code>subject</code> and <code>record</code> naming
+  what it is about. It also records the protocol call in progress as its <code>parent</code>. A
+  component or function declares <code>notifications: Notifications</code> and receives a view
+  bound to its own key, the way it declares <code>logger: Logger</code>, so
+  <code>notifications.publish("orders.received", {...})</code> needs no key. Code holding the
+  <code>Context</code> uses <code>context.notifications</code>. <code>subscribe(listener, topic=...)</code> takes an exact
+  topic or a <code>"orders.*"</code> prefix and returns an unsubscribe function. Delivery is
+  synchronous, listeners run with no current call, and a listener's exception is logged
+  and never reaches the publisher. Each publish is logged as
+  <code>notified &lt;topic&gt;: &lt;summary&gt;</code>, at the level matching the notification's own.
+  Notifications are separate from <code>Events</code>: the framework never publishes one, and
+  neither hub delivers the other's type. New example: <code>examples/11-notifications/</code>. See
+  <a href="../notifications/">Notifications</a>.</li>
+<li><strong>Logger</strong>: logs are now structured. Each line is a record, and by default a file is
+  JSON Lines, <code>logs/&lt;namespace&gt;.&lt;name&gt;.jsonl</code>, one JSON object per line. Every record has
+  <code>ts</code> (ISO 8601 with milliseconds), <code>level</code>, <code>key</code>, <code>namespace</code>, <code>name</code>, <code>source</code> and
+  <code>message</code>. Records Events writes add the event's <code>call</code>, <code>parent</code>, <code>protocol</code>, <code>method</code>,
+  <code>state</code>, <code>elapsed_ms</code> and <code>error</code>, so a pipeline's steps, which log to their own files,
+  can be traced back to the pipeline by <code>parent</code>. Notification records add <code>topic</code>,
+  <code>notification_level</code>, <code>subject</code>, <code>record</code> and <code>parent</code>. <code>Logger</code> calls take keyword
+  arguments as structured fields: <code>logger.info("order taken", order_id=7)</code> writes
+  <code>"fields": {"order_id": 7}</code>. <code>tail_logs()</code> returns the full records. See
+  <a href="../logger/#log-format">Logger</a>.</li>
+<li><strong>Logger</strong>: <code>[project.logging] format = "text"</code> writes readable <code>.log</code> files instead,
+  one line per record, with the call and parent ids in full (<code>[call=&lt;id&gt; parent=-]</code>)
+  and fields appended as <code>name=value</code>. <code>opendataframework.logger.render(record)</code> turns
+  a JSON record into that line. See <a href="../logger/#text-format">Logger</a>.</li>
+<li><strong>Logger</strong>: log levels can now be set in config, under <code>[project.logging]</code>: a default
+  <code>level</code>, one for <code>events</code> (protocol-call records) and one for <code>notifications</code>, and one
+  per namespace (<code>[project.logging.task] level = ...</code>) or per component
+  (<code>[project.logging.task] take-orders = "DEBUG"</code>). The most specific setting wins. Level
+  and format names are checked when the project is created, and namespace and component
+  names when it starts, so a typo raises instead of silently doing nothing. <code>Context</code>
+  takes the same mapping as <code>log_config=</code>. See <a href="../logger/#levels">Logger</a>.</li>
+<li><strong>Context</strong>: <code>context.trace(call_id)</code> returns the tree of a protocol call and every call
+  made inside it, read from the logs: each node merges a call's <code>started</code> and
+  <code>completed</code>/<code>failed</code> records (<code>key</code>, <code>protocol</code>, <code>method</code>, <code>state</code>, <code>started</code>, <code>ended</code>,
+  <code>elapsed_ms</code>, <code>error</code>), lists the notifications published during it, and holds its
+  <code>children</code> in start order. It works after the call ended and after a restart, takes the
+  call's full id, and reads the <code>.jsonl</code> files of the configured <code>json</code> format only: with
+  <code>format = "text"</code> it raises <code>ValueError</code>, and leftover <code>.log</code> files are ignored.
+  <code>opendataframework.events.build_trace(items, call_id)</code> builds the same JSON-ready tree
+  from live <code>Event</code>s or log records, so a UI can draw a call as it runs. See
+  <a href="../logger/#tracing-a-call-across-files">Logger</a>.</li>
+<li><strong>Context</strong>: <code>Resolver.namespaces</code> returns the namespaces a <code>Resolver</code> collects from.</li>
+</ul>
+<h3 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Logger</strong> (breaking): log files are now JSON Lines (<code>.jsonl</code>) by default instead of
+  text (<code>.log</code>), and <code>ts</code> is ISO 8601 with milliseconds and the UTC offset. Set
+  <code>[project.logging] format = "text"</code> to keep readable text files. <code>tail_logs()</code> still
+  returns <code>ts</code>, <code>level</code> and <code>message</code> in every record, plus the other fields.</li>
+<li><strong>Logger</strong> (breaking): the default threshold is now <code>INFO</code>, so <code>logger.debug()</code> records
+  are dropped unless enabled, e.g. with <code>[project.logging] level = "DEBUG"</code>.</li>
+<li><strong>Logger</strong> (breaking): protocol-call records are now written by <code>Events</code>, with one
+  wording for every call: <code>&lt;method&gt;() started</code>, <code>&lt;method&gt;() completed in 1.2ms</code>, and
+  <code>&lt;method&gt;() failed in 1.2ms: &lt;error&gt;</code> at <code>ERROR</code> (<code>call ...</code> for a <code>@Function</code>). They
+  replace <code>setup() starting</code>/<code>setup() complete</code>,
+  <code>on_start() called</code>/<code>on_start() complete</code>, <code>stop() called</code>, <code>run() returned</code>, and
+  <code>... raised ...</code>. Code matching the old wording in <code>tail_logs()</code> output needs updating.</li>
+</ul>
+<h2 id="040">0.4.0<a class="headerlink" href="#040" title="Permanent link">&para;</a></h2>
+<h3 id="added_1">Added<a class="headerlink" href="#added_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Events</strong>: the framework now reports every lifecycle and execution protocol call it
+  makes as an <code>Event</code>: a <code>Service</code>'s <code>setup()</code>/<code>run()</code>/<code>stop()</code>, <code>on_start()</code>/<code>on_stop()</code>,
+  a <code>Task</code>'s or <code>Pipeline</code>'s <code>execute()</code>, an <code>Agent</code>'s <code>invoke()</code>, a <code>@Function</code> call
+  made through the <code>Context</code>, and a repository's <code>open_stream()</code>/<code>stream()</code>/<code>close_stream()</code>.
+  Each call emits <code>started</code>, then <code>completed</code> or <code>failed</code>, with its duration, its error,
+  and the <code>parent</code> call it happened inside, so a pipeline's steps and a task's function
+  calls can be traced. A component declares <code>events: Events</code> to receive the <code>Context</code>'s
+  instance, the way it declares <code>logger: Logger</code>. Code holding the <code>Context</code> uses
+  <code>context.events</code>. <code>events.subscribe(listener, protocol=...)</code> returns an unsubscribe
+  function, and a listener's exception is logged and never affects the call. Events work
+  with file logging off, and log wording is unchanged. See <a href="../events/">Events</a>.</li>
+<li><strong>Function</strong>: added <code>FunctionProtocol</code>, the interface of a registered function and the
+  <code>protocol</code> its calls are reported under. It is deliberately not <code>runtime_checkable</code>.
+  See <a href="../function/#protocol">Function</a>.</li>
+<li><strong>View</strong>: <code>TimeseriesView</code> gains two optional fields. <code>fields</code> selects which numeric
+  fields to plot — <code>None</code>, the default, plots every numeric field other than <code>field</code> and
+  <code>group</code>, as before. <code>group</code> names a field whose distinct values each get their own line
+  (e.g. <code>run_id</code>), so runs can be compared on one chart. <code>field</code> may be any field records
+  are ordered by, not only a timestamp (e.g. a training <code>step</code>). Existing
+  <code>TimeseriesView(field=...)</code> declarations are unchanged. Rendering the new fields happens
+  on the <code>odf</code> side. See <a href="../view/#timeseries-comparing-runs-on-one-chart">View</a>.</li>
+</ul>
+<h2 id="030">0.3.0<a class="headerlink" href="#030" title="Permanent link">&para;</a></h2>
+<h3 id="added_2">Added<a class="headerlink" href="#added_2" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Agent</strong>: added <code>@Agent</code>, an execution type for goal-driven work whose steps are decided
+  at run time — typically by a language model. An agent is a class with a single <code>invoke()</code>
+  method whose signature is its author's to choose; everything it may act on is declared
+  through its constructor like any other dependency, so it can also be injected into a
+  <code>Pipeline</code>, a <code>Service</code>, or another agent. <code>context.call("agent.librarian", question=...)</code>
+  invokes one by key, <code>context.parameters(Librarian)</code> returns the parameters of
+  its <code>invoke()</code>, and every invocation is logged like a <code>Task</code>'s <code>execute()</code>. <code>@Agent</code> on a
+  class without <code>invoke()</code> raises <code>TypeError</code> at decoration time. <code>AgentProtocol</code> documents
+  the interface. The framework still ships no model client and no agent loop — <code>invoke()</code> is
+  where a library or provider SDK of your choice goes. See <a href="../agent/">Agent</a>.</li>
+<li><strong>Function</strong>: added <code>@Function</code>, a marker that makes a plain function known to the
+  framework the way <code>@Component</code> does a class — so an existing function-based codebase can
+  be adopted without a class refactor first. The function is returned unchanged, and direct
+  calls behave exactly as before. Through the <code>Context</code>, parameters annotated with a managed
+  type are injected and the rest are call arguments: <code>context.call("function.load-data", path=...)</code>
+  calls by key, <code>context.get(load_data)</code> returns the function with its
+  dependencies bound, <code>context.functions</code> lists what was resolved, and
+  <code>context.parameters(func)</code> returns the parameters a caller must supply. A class — or
+  another function — asks for one by naming it in its signature,
+  <code>Annotated[Callable[..., int], load_data]</code>, and receives it with its dependencies bound
+  and its calls logged — and with a signature that leaves the injected parameters out, so
+  it can be handed to a library that builds a tool schema from a callable; the function
+  then takes part in dependency ordering and cycle detection. Functions have no lifecycle and aren't in <code>context.instances</code>. See
+  <a href="../function/">Function</a>.</li>
+<li><strong>View</strong>: added <code>ContentMetadata</code>/<code>ContentMetadataProtocol</code> so a <code>Repository</code> whose view
+  points at content (<code>ImageView</code>/<code>VideoView</code>/<code>AudioView</code>/<code>DocumentView</code>) can declare, per
+  record, that content's <code>filename</code> and <code>content_type</code> via an optional
+  <code>content_metadata(entity)</code> method, detected structurally like <code>DataViewProtocol</code>/
+  <code>ReplayProtocol</code>. The values needn't be entity fields — a repository may derive them or
+  return constants. Existing views are unchanged. Using this to label, type and offer
+  content for download happens on the <code>odf</code> side. See <a href="../view/">View</a>.</li>
+<li><strong>Layer</strong>: a function registered with <code>@Function</code> can now be tagged with a layer
+  (<code>@Storage @Function def load_data(...)</code>), like a class. See <a href="../layer/">Layer</a>.</li>
+<li><strong>Context</strong>: a required parameter that is not injected because its annotation is a
+  string (every annotation under <code>from __future__ import annotations</code>) now fails with a
+  <code>TypeError</code> that names the string annotation as the cause, for a constructor and for a
+  function called through the <code>Context</code>. String annotations are still not injected.</li>
+</ul>
+<h3 id="changed_1">Changed<a class="headerlink" href="#changed_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Namespace</strong> (breaking): each decorator now states what it may be applied to, and
+  raises <code>TypeError</code> at decoration time otherwise. Two cases were accepted before:
+  a class under two execution types (<code>@Component @Task class X</code>) — a class takes one —
+  and a layer on a class no execution type has registered (<code>@Storage class X</code>, or
+  <code>@Component @Storage class X</code> with the layer underneath). To migrate, keep a single
+  execution type on the class and put the layer above it. <code>@Component</code> and the other
+  execution types on a function still raise, and now point to <code>@Function</code>. A plain
+  <code>Namespace</code> subclass accepts a function as well as a class. See
+  <a href="../namespace/#what-each-decorator-accepts">Namespace</a>.</li>
+<li><strong>Context</strong> (breaking): async is not supported, and now says so. An <code>async def</code>
+  function registered with <code>@Function</code>, or an <code>async def</code> <code>execute()</code>, <code>invoke()</code>,
+  <code>setup()</code>/<code>run()</code>/<code>stop()</code>, <code>on_start()</code>/<code>on_stop()</code> or repository stream method, makes
+  <code>project.start()</code> raise <code>TypeError</code> naming it. These were previously called without
+  being awaited — a hook that silently never ran, or a call logged as complete before it
+  started. To migrate, make it synchronous, or keep it out of the <code>Context</code> and call it
+  yourself. See <a href="../context/#what-context-is-not">Context</a>.</li>
+<li><strong>Component</strong> (breaking): an <code>McpTool</code> now requires a described, fully typed handler,
+  and raises when it is created otherwise — <code>ValueError</code> for an empty <code>description</code>,
+  <code>TypeError</code> for a handler with an unannotated parameter, <code>*args</code>/<code>**kwargs</code>, no return
+  annotation, or an annotation left as a string. A caller, typically a model, sees
+  nothing of a tool but its description and signature, and a handler without them was
+  accepted and offered with a schema that said little. To migrate, annotate the handler's
+  parameters and return value (<code>-&gt; None</code> counts), replace a lambda with a method or a
+  function, and remove <code>from __future__ import annotations</code> from the handler's module.
+  See <a href="../component/#mcp-tools">Component</a>.</li>
+<li><strong>Context</strong> (breaking): everything addressed by a string is now addressed by a key,
+  <code>&lt;namespace&gt;.&lt;name&gt;</code> — <code>execute("task.load-job")</code>, <code>call("agent.librarian", ...)</code>,
+  <code>start("service.postgres")</code>, <code>start_stream("repository.webcam")</code>,
+  <code>tail_logs("component.cache")</code> and the rest. The name is the registered one (kebab-case
+  class or function name, or the explicit <code>name=</code>), and keys are accepted in any casing.
+  A name is only unique within its namespace, and the bare names used before collided
+  across them: with a <code>@Component class Loader</code> and a <code>@Task class Loader</code>,
+  <code>execute("Loader")</code> could find the component and raise <code>TypeError</code>, a <code>@Function</code> and an
+  <code>@Agent</code> sharing a name could not be <code>call()</code>ed at all, and every same-named object
+  wrote to one log file. Now each is reachable, and log files are named
+  <code>&lt;namespace&gt;.&lt;name&gt;.log</code> (<code>logs/task.loader.log</code>). <code>context.key(obj)</code> returns the key
+  of a class or function you hold. A string without a namespace raises <code>ValueError</code>, and
+  the <code>ValueError</code> <code>call()</code> raised for a function and an agent sharing a name is gone. To
+  migrate, prefix every name passed to the <code>Context</code> with its namespace, and point
+  anything reading log files at the new names. See
+  <a href="../context/#by-key-single-component-control">Context</a>.</li>
+<li><strong>Namespace</strong> (breaking): registering one object under two names in the same
+  namespace (<code>@Task("a") @Task("b") class X</code>) now raises <code>ValueError</code>, so every object
+  has exactly one key. See <a href="../namespace/#names-are-unique-per-namespace-keys-everywhere">Namespace</a>.</li>
+<li><strong>Repository</strong> (breaking): <code>@Repository(...)</code> now requires its argument to be a class
+  registered with <code>@Entity</code>, and raises <code>TypeError</code> at decoration time otherwise. The docs
+  always described the argument as the <code>Entity</code> class, but any class was accepted — so
+  <code>@Repository</code> written directly above the repository class (entity left out) took that
+  class for its own entity, registered nothing, and left the repository silently missing
+  from the <code>Context</code>. To migrate, add <code>@Entity</code> to the entity class; for a type you don't
+  own, call <code>Entity(SomeType)</code> once or wrap it in a small entity class. See
+  <a href="../repository/">Repository</a>.</li>
+</ul>
+<h3 id="fixed">Fixed<a class="headerlink" href="#fixed" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Context</strong>: a class that declared the same dependency under two constructor parameters
+  (<code>def __init__(self, source: Db, target: Db)</code>) failed at <code>project.start()</code> with a
+  misleading <code>Circular dependency detected among: Sync</code>. It still fails — the <code>Context</code>
+  holds a single <code>Db</code>, so both parameters would receive the same object — but now with a
+  <code>ValueError</code> that says so and names the class, the dependency and the parameters.</li>
+<li><strong>Config</strong>: key normalisation only applied to the name being looked up, not to the keys
+  in the data, so a key written as <code>exclude_years</code> (or <code>ExcludeYears</code>) in TOML couldn't be
+  found by any access path. <code>config.exclude_years</code> and <code>config["exclude_years"]</code> raised,
+  and <code>config.get("exclude_years", default)</code> silently returned the default. <code>Config</code> now
+  normalises its keys to kebab-case on construction (recursively through nested tables),
+  so snake_case/kebab-case/PascalCase are interchangeable on both sides. Two keys in the
+  same table that normalise to the same name (e.g. <code>exclude_years</code> and <code>exclude-years</code>)
+  now raise <code>ValueError</code> instead of one silently shadowing the other. See <a href="../config/">Config</a>.</li>
+<li><strong>Namespace</strong>: applying a decorator (<code>@Component</code>, <code>@Task</code>, <code>@Service</code>, ...) to a function
+  instead of a class registered nothing and raised nothing — the bare form silently rebound
+  the function's name to a namespace instance, and the factory form registered the function
+  as if it were a class. Both now raise <code>TypeError</code> at decoration time, naming the namespace
+  and the offending object. <code>@Repository</code> applied directly to a function (entity left out)
+  raises the same way. See <a href="../namespace/">Namespace</a>.</li>
+</ul>
+<h3 id="docs">Docs<a class="headerlink" href="#docs" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Config sections in the docs and examples now follow a class's key: a <code>@Service class
+  Postgres</code> reads <code>[service.postgres]</code> as <code>config.service.postgres</code>, instead of a flat
+  <code>[postgres]</code>. The section, the <code>Context</code> key and the log file now share one name, and
+  same-named classes in different namespaces no longer share a section. This is a
+  convention, not a <code>Config</code> change — any structure still works. See
+  <a href="../config/#config-structure-convention">Config</a>.</li>
+<li>A <code>Task</code>'s <code>execute()</code> takes no arguments, by design, and the docs no longer suggest
+  giving it an optional parameter to receive the previous step's result, as the 0.2.0
+  notes did. Work whose input the caller decides is a <a href="../function/">Function</a>; a value
+  that differs per deployment is config, and one that follows from earlier runs is state
+  kept in a repository. A pipeline passes a task's result on to a function or a component
+  method, not to another task. See
+  <a href="../task/#task-function-or-agent">Task, Function or Agent?</a>.</li>
+<li>Corrected pages that had fallen behind 0.3.0: <a href="../entity/">Entity</a> no longer says a
+  duplicate name silently overwrites (it has raised since 0.2.0), <a href="../agent/">Agent</a> and
+  <a href="../component/">Component</a> describe how a server such as <code>odf</code>'s offers agents and
+  functions as tools without <code>mcp_tools()</code>, and <a href="../service/">Service</a> examples read their
+  own config section.</li>
+</ul>
+<h2 id="020">0.2.0<a class="headerlink" href="#020" title="Permanent link">&para;</a></h2>
+<h3 id="added_3">Added<a class="headerlink" href="#added_3" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Project</strong>: <code>Project.from_dict()</code> now imports the module named under <code>[project] app</code>
+  (if present) before constructing the <code>Context</code> — equivalent to writing <code>import app</code> by
+  hand before calling <code>from_config()</code>/<code>from_dict()</code>. <code>from_config()</code> gets this for free
+  since it delegates to <code>from_dict()</code>. Fails fast on a missing/broken module (<code>ImportError</code>
+  propagates uncaught). See <a href="../project/">Project</a>.</li>
+<li><strong>Config</strong>: <code>Config.get()</code> and <code>Config[]</code> now run the key through <code>normalize()</code>, same as
+  <code>__getattr__</code>, so snake_case/kebab-case/PascalCase are interchangeable on every access
+  path — including looking a section up by its class-derived name (e.g.
+  <code>config.get("Postgres")</code> for a <code>[postgres]</code> TOML section). See <a href="../config/">Config</a>.</li>
+<li><strong>Component</strong>: added <code>McpTool</code>/<code>McpToolsProtocol</code> so a <code>Component</code> can expose its own MCP
+  tools via an optional <code>mcp_tools()</code> method, detected structurally like
+  <code>DetailsProtocol</code>/<code>ChartProtocol</code>. Wiring this into an actual MCP server happens on the
+  <code>odf</code> side. See <a href="../component/">Component</a>.</li>
+</ul>
+<h3 id="fixed_1">Fixed<a class="headerlink" href="#fixed_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Namespace</strong>: registering two classes under the same name (via kebab-casing or an
+  explicit name) used to silently overwrite the earlier registration. Both registration
+  paths now raise <code>ValueError</code> naming both colliding classes. See <a href="../namespace/">Namespace</a>.</li>
+<li><strong>Config</strong>: <code>Config.__init__</code> previously stored the given dict by reference, so mutating
+  the original dict after passing it to <code>Project.from_dict()</code> would silently leak through —
+  contradicting the documented read-only/immutable contract. <code>Config</code> now owns a deep copy
+  instead. See <a href="../config/">Config</a>.</li>
+</ul>
+<h3 id="changed_2">Changed<a class="headerlink" href="#changed_2" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>View</strong>: renamed <code>ReplayProtocol.replay_field</code> to <code>field</code>, aligning with the generic
+  <code>field</code>/<code>fields</code> naming convention used by every other <code>View</code> variant. See <a href="../view/">View</a>.</li>
+</ul>
+<h3 id="docs_1">Docs<a class="headerlink" href="#docs_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Clarified that a <code>Task</code>'s <code>execute()</code> can already accept an optional parameter to receive
+  the previous step's return value directly within a <code>Pipeline</code>'s own <code>execute()</code> — no
+  framework change needed, just previously undocumented. The only fixed zero-arg contract
+  is <code>Context.execute(name)</code>, the external CLI/UI/MCP entry point. See <a href="../pipeline/">Pipeline</a>.</li>
+<li>Fixed the Startup/Shutdown Order diagrams in <a href="../context/">Context</a>, which mislabeled
+  <code>Config</code> as a <code>Component</code>. <code>Config</code> isn't decorated with <code>@Component</code> and is pre-seeded
+  before resolution starts, so <code>Lifecycle</code> never iterates over it.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../examples/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Examples">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Examples
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../entity/" class="md-footer__link md-footer__link--next" aria-label="Next: Entity">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Entity
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.code.copy", "content.code.annotate", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../javascripts/scheme-favicon.js"></script>
+      
+        <script src="../termynal.js"></script>
+      
+    
+  </body>
+</html>
