@@ -222,3 +222,7 @@ __marimo__/
 
 .DS_Store
 todo.md
+
+# Per-component logs (`[project] log-dir`, default "logs"): .jsonl, or .log
+# with format = "text"
+logs/
