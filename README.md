@@ -10,7 +10,7 @@ Lightweight dependency-injection framework for data applications.
 This package provides structural abstractions —
 `Entity`, `Repository`, `Component`, `Service`, `Task`, `Pipeline`,
 `Agent`, `Function`, `Layer`, `Namespace`, `Context`, `Project`, `Config`,
-`Logger`, `View` — with zero third-party dependencies. No UI, no CLI, no MCP server.
+`Logger`, `Events`, `Notifications`, `View` — with zero third-party dependencies. No UI, no CLI, no MCP server.
 
 > Need the CLI, UI, or MCP server? That's the
 > [`odf`](https://opendataframework.github.io/odf/) package, which
@@ -291,7 +291,10 @@ class Postgres:
 
 Per-component logging handle, injectable via constructor DI like any
 other dependency — writes land in that component's own log file with no
-name argument needed.
+name argument needed. Logs are structured: one JSON record per line by
+default, keyword arguments become fields, and every protocol call the
+framework makes is logged with its call and parent ids, so a run can be
+traced across files.
 
 ```python
 @Task
@@ -301,7 +304,40 @@ class ExportUsers:
         self.logger = logger
 
     def execute(self) -> None:
-        self.logger.info("export starting")
+        self.logger.info("export starting", users=len(self.users.all()))
+```
+
+## Events
+
+Reports every protocol call the framework makes — a `Service`'s `setup()`,
+a `Task`'s `execute()`, a `@Function` call — as `started`, then `completed`
+or `failed`, with timing and the `parent` call it ran inside.
+
+```python
+@Component
+class FailureAlerts:
+    def __init__(self, events: Events):
+        self._unsubscribe = events.subscribe(self.on_event)
+
+    def on_event(self, event: Event) -> None:
+        if event.state == "failed":
+            ...
+```
+
+## Notifications
+
+Lets a component announce that something happened — a file arrived, an
+order came in — so others can react without the publisher knowing who
+they are. Never emitted by the framework itself.
+
+```python
+@Task
+class TakeOrders:
+    def __init__(self, notifications: Notifications):
+        self.notifications = notifications
+
+    def execute(self) -> None:
+        self.notifications.publish("orders.received", {"id": 7}, summary="Le Petit: 2 x baguette")
 ```
 
 ## Context

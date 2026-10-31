@@ -6,20 +6,21 @@
 
 - **Notifications**: components can now publish a `Notification` about something that
   happened (a file arrived, a threshold was crossed, an order came in), so others can
-  react without the publisher knowing who they are. A notification has a dotted `topic`, a read-only `payload`, an optional `summary`
-  for a UI to show, a `level` (`"info"`, `"success"`, `"warning"`, or `"error"`), and an
-  optional `subject` and `record` naming what it is about. It also records the protocol
-  call in progress as its `parent`. A component or function declares
-  `notifications: Notifications` and receives a view bound to its own key, the way it
-  declares `logger: Logger`, so `notifications.publish("orders.received", {...})` needs no
-  key. Code holding the `Context` uses `context.notifications`.
-  `subscribe(listener, topic=...)` takes an exact topic or a `"orders.*"` prefix and
-  returns an unsubscribe function. Delivery is synchronous, listeners run with no current
-  call, and a listener's exception is logged and never reaches the publisher. Each
-  publish is logged as `notified <topic>: <summary>`, at the level matching the
-  notification's own. Notifications are separate from
-  `Events`: the framework never publishes one, and neither hub delivers the other's type.
-  See [Notifications](notifications.md).
+  react without the publisher knowing who they are. A notification has a dotted `topic`,
+  a read-only `payload`, an optional `summary` for a UI to show, a `level` (`"info"`,
+  `"success"`, `"warning"`, or `"error"`), and an optional `subject` and `record` naming
+  what it is about. It also records the protocol call in progress as its `parent`. A
+  component or function declares `notifications: Notifications` and receives a view
+  bound to its own key, the way it declares `logger: Logger`, so
+  `notifications.publish("orders.received", {...})` needs no key. Code holding the
+  `Context` uses `context.notifications`. `subscribe(listener, topic=...)` takes an exact
+  topic or a `"orders.*"` prefix and returns an unsubscribe function. Delivery is
+  synchronous, listeners run with no current call, and a listener's exception is logged
+  and never reaches the publisher. Each publish is logged as
+  `notified <topic>: <summary>`, at the level matching the notification's own.
+  Notifications are separate from `Events`: the framework never publishes one, and
+  neither hub delivers the other's type. New example: `examples/11-notifications/`. See
+  [Notifications](notifications.md).
 - **Logger**: logs are now structured. Each line is a record, and by default a file is
   JSON Lines, `logs/<namespace>.<name>.jsonl`, one JSON object per line. Every record has
   `ts` (ISO 8601 with milliseconds), `level`, `key`, `namespace`, `name`, `source` and
@@ -41,21 +42,22 @@
   and format names are checked when the project is created, and namespace and component
   names when it starts, so a typo raises instead of silently doing nothing. `Context`
   takes the same mapping as `log_config=`. See [Logger](logger.md#levels).
+- **Context**: `Resolver.namespaces` returns the namespaces a `Resolver` collects from.
 
 ### Changed
 
-- **Logger**: log files are now JSON Lines (`.jsonl`) by default instead of text (`.log`),
-  and `ts` is ISO 8601 with milliseconds and the UTC offset. Set
+- **Logger** (breaking): log files are now JSON Lines (`.jsonl`) by default instead of
+  text (`.log`), and `ts` is ISO 8601 with milliseconds and the UTC offset. Set
   `[project.logging] format = "text"` to keep readable text files. `tail_logs()` still
   returns `ts`, `level` and `message` in every record, plus the other fields.
-- **Logger**: the default threshold is now `INFO`, so `logger.debug()` records are
-  dropped unless enabled, e.g. with `[project.logging] level = "DEBUG"`.
-- **Logger**: protocol-call records are now written by `Events`, with one wording for
-  every call: `<method>() started`, `<method>() completed in 1.2ms`, and
+- **Logger** (breaking): the default threshold is now `INFO`, so `logger.debug()` records
+  are dropped unless enabled, e.g. with `[project.logging] level = "DEBUG"`.
+- **Logger** (breaking): protocol-call records are now written by `Events`, with one
+  wording for every call: `<method>() started`, `<method>() completed in 1.2ms`, and
   `<method>() failed in 1.2ms: <error>` at `ERROR` (`call ...` for a `@Function`). They
-  replace `setup() starting`/`setup() complete`, `on_start() called`/`on_start() complete`,
-  `stop() called`, `run() returned`, and `... raised ...`. Code matching the old wording in
-  `tail_logs()` output needs updating.
+  replace `setup() starting`/`setup() complete`,
+  `on_start() called`/`on_start() complete`, `stop() called`, `run() returned`, and
+  `... raised ...`. Code matching the old wording in `tail_logs()` output needs updating.
 
 ## 0.4.0
 

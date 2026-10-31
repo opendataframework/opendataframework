@@ -147,8 +147,9 @@ worked examples.
 | [Layer](layer.md) | Decorator that assigns a registered class or function to a subsystem |
 
 Supporting the above are [Context](context.md), [Config](config.md),
-[Project](project.md), [Namespace](namespace.md), and [Logger](logger.md) —
-the machinery that registers, resolves, and organises everything.
+[Project](project.md), [Namespace](namespace.md), [Logger](logger.md),
+[Events](events.md), and [Notifications](notifications.md) — the machinery
+that registers, resolves, organises, and reports on everything.
 
 | Machinery | Role |
 |---|---|
@@ -156,4 +157,6 @@ the machinery that registers, resolves, and organises everything.
 | [Config](config.md) | Wraps loaded TOML into the nested object components read via DI |
 | [Project](project.md) | Composition root; owns the `Context` and starts/stops the application |
 | [Namespace](namespace.md) | Base class behind every decorator (`@Component`, `@Service`, …); not an end-user concept |
-| [Logger](logger.md) | Per-component logging handle, injected already bound to its own class name |
+| [Logger](logger.md) | Per-component logging handle, injected already bound to its own key; writes structured JSON Lines records |
+| [Events](events.md) | Reports every protocol call the framework makes, with timing and its parent call |
+| [Notifications](notifications.md) | Lets a component publish that something happened, for others to react to |
