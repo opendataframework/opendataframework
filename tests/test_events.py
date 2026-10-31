@@ -8,9 +8,10 @@ import pytest
 from opendataframework.agent import Agent, AgentProtocol
 from opendataframework.component import Component, OnStartProtocol, OnStopProtocol
 from opendataframework.context import Context
-from opendataframework.events import Event, Events
+from opendataframework.events import Event, Events, build_trace
 from opendataframework.function import Function, FunctionProtocol
 from opendataframework.namespace import Namespace
+from opendataframework.notifications import Notifications
 from opendataframework.pipeline import Pipeline, PipelineProtocol
 from opendataframework.repository import (
     CloseStreamProtocol,
@@ -682,3 +683,272 @@ def test_match_style_listener_from_the_docs():
             ctx.execute("scope.t")
 
     assert failures == ["scope.t"]
+
+
+# --- log records -------------------------------------------------------------
+
+
+def records(ctx: Context, key: str) -> list[dict]:
+    """Return the event records in ``key``'s log."""
+    return [r for r in ctx.tail_logs(key) if r.get("source") == "events"]
+
+
+def chain(NS):
+    """Register a pipeline → task → function chain; the function fails if asked to."""
+
+    @NS
+    @Function
+    def fetch(fail: bool = False) -> int:
+        if fail:
+            raise ValueError("nope")
+        return 1
+
+    @NS
+    @Task
+    class Load:
+        def __init__(self, fetch: Annotated[Callable[..., int], fetch]) -> None:
+            self.fetch = fetch
+            self.fail = False
+
+        def execute(self) -> int:
+            return self.fetch(fail=self.fail)
+
+    @NS
+    @Pipeline
+    class Nightly:
+        def __init__(self, load: Load) -> None:
+            self.load = load
+
+        def execute(self) -> int:
+            return self.load.execute()
+
+    return Load
+
+
+def test_every_event_record_carries_the_events_fields(tmp_path):
+    NS = make_ns()
+    chain(NS)
+    ctx = Context(namespaces={NS}, log_dir=tmp_path)
+    events = collect(ctx)
+    with ctx:
+        ctx.execute("scope.nightly")
+
+    for key in ("scope.nightly", "scope.load", "scope.fetch"):
+        started, completed = (e for e in events if e.key == key)
+        first, second = records(ctx, key)
+        for record, event in ((first, started), (second, completed)):
+            assert record["call"] == event.call_id
+            assert record["parent"] == event.parent
+            assert record["protocol"] == event.protocol.__name__
+            assert record["method"] == event.method
+            assert record["state"] == event.state
+            assert (record["key"], record["namespace"]) == (key, "scope")
+        assert "elapsed_ms" not in first and "error" not in first
+        assert second["elapsed_ms"] >= 0 and "error" not in second
+        assert first["message"] in ("execute() started", "call started")
+        assert second["message"].startswith(("execute() completed in ", "call completed in "))
+
+
+def test_a_childs_parent_is_its_callers_call_across_files(tmp_path):
+    NS = make_ns()
+    chain(NS)
+    with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
+        ctx.execute("scope.nightly")
+        nightly, _ = records(ctx, "scope.nightly")
+        load, _ = records(ctx, "scope.load")
+        fetch, _ = records(ctx, "scope.fetch")
+
+    assert nightly["parent"] is None
+    assert load["parent"] == nightly["call"]
+    assert fetch["parent"] == load["call"]
+
+
+def test_failed_record_is_an_error_and_keeps_its_parent_when_others_are_filtered(tmp_path):
+    NS = make_ns()
+    Load = chain(NS)
+    with Context(namespaces={NS}, log_dir=tmp_path, log_config={"events": "WARNING"}) as ctx:
+        ctx.get(Load).fail = True
+        with pytest.raises(ValueError):
+            ctx.execute("scope.nightly")
+        (load,) = records(ctx, "scope.load")
+        (fetch,) = records(ctx, "scope.fetch")
+
+    assert fetch["level"] == "ERROR"
+    assert fetch["state"] == "failed"
+    assert fetch["error"] == "ValueError('nope')"
+    assert fetch["message"].startswith("call failed in ")
+    assert fetch["message"].endswith(": ValueError('nope')")
+    assert fetch["parent"] == load["call"]
+
+
+def test_text_format_appends_full_ids(tmp_path):
+    NS = make_ns()
+    chain(NS)
+    config = {"format": "text"}
+    ctx = Context(namespaces={NS}, log_dir=tmp_path, log_config=config)
+    events = collect(ctx)
+    with ctx:
+        ctx.execute("scope.nightly")
+        nightly = ctx.tail_logs("scope.nightly")
+        load = ctx.tail_logs("scope.load")
+
+    pipeline = next(e for e in events if e.key == "scope.nightly")
+    assert nightly[-1]["message"].endswith(f"[call={pipeline.call_id} parent=-]")
+    assert load[-1]["message"].endswith(f"parent={pipeline.call_id}]")
+    assert (tmp_path / "scope.nightly.log").exists()
+
+
+def test_listener_exception_is_logged_whatever_the_events_level(tmp_path):
+    NS = make_ns()
+
+    @NS
+    @Task
+    class T:
+        def execute(self) -> None: ...
+
+    ctx = Context(namespaces={NS}, log_dir=tmp_path, log_config={"events": "ERROR"})
+
+    def broken(event: Event) -> None:
+        raise RuntimeError("listener bug")
+
+    ctx.events.subscribe(broken)
+    with ctx:
+        ctx.execute("scope.t")
+        logged = ctx.tail_logs("scope.t")
+    assert "listener raised RuntimeError('listener bug')" in [r["message"] for r in logged]
+    assert records(ctx, "scope.t") == []
+
+
+# --- traces ------------------------------------------------------------------
+
+
+def shape(node: dict) -> tuple:
+    """Reduce a trace node to ``(key, state, [children...])`` for assertions."""
+    return (node["key"], node["state"], [shape(child) for child in node["children"]])
+
+
+def test_trace_from_logs_is_the_call_tree(tmp_path):
+    NS = make_ns()
+    chain(NS)
+    with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
+        ctx.execute("scope.nightly")
+        (nightly, _) = records(ctx, "scope.nightly")
+        trace = ctx.trace(nightly["call"])
+
+    assert shape(trace) == (
+        "scope.nightly",
+        "completed",
+        [("scope.load", "completed", [("scope.fetch", "completed", [])])],
+    )
+    assert trace["parent"] is None
+    assert trace["protocol"] == "PipelineProtocol"
+    assert trace["started"] <= trace["ended"]
+    assert trace["elapsed_ms"] >= 0
+
+
+def test_trace_works_after_close_and_needs_the_full_id(tmp_path):
+    NS = make_ns()
+    chain(NS)
+    with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
+        ctx.execute("scope.nightly")
+        (nightly, _) = records(ctx, "scope.nightly")
+    assert ctx.trace(nightly["call"])["call"] == nightly["call"]
+    with pytest.raises(KeyError):
+        ctx.trace(nightly["call"][:8])
+
+
+def test_trace_from_a_child_is_its_subtree(tmp_path):
+    NS = make_ns()
+    chain(NS)
+    with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
+        ctx.execute("scope.nightly")
+        (load, _) = records(ctx, "scope.load")
+        assert shape(ctx.trace(load["call"])) == (
+            "scope.load",
+            "completed",
+            [("scope.fetch", "completed", [])],
+        )
+
+
+def test_trace_keeps_failures_when_only_failures_are_logged(tmp_path):
+    NS = make_ns()
+    Load = chain(NS)
+    config = {"events": "WARNING"}
+    with Context(namespaces={NS}, log_dir=tmp_path, log_config=config) as ctx:
+        ctx.get(Load).fail = True
+        with pytest.raises(ValueError):
+            ctx.execute("scope.nightly")
+        (nightly,) = records(ctx, "scope.nightly")
+        trace = ctx.trace(nightly["call"])
+
+    assert shape(trace) == (
+        "scope.nightly",
+        "failed",
+        [("scope.load", "failed", [("scope.fetch", "failed", [])])],
+    )
+    assert trace["started"] is None
+    assert trace["children"][0]["children"][0]["error"] == "ValueError('nope')"
+
+
+def test_trace_attaches_notifications_to_the_publishing_call(tmp_path):
+    NS = make_ns()
+
+    @NS
+    @Task
+    class Announce:
+        def __init__(self, notifications: Notifications) -> None:
+            self.notifications = notifications
+
+        def execute(self) -> None:
+            self.notifications.publish("orders.received", level="warning", summary="2 x baguette")
+
+    with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
+        ctx.execute("scope.announce")
+        (started, _) = records(ctx, "scope.announce")
+        (notification,) = ctx.trace(started["call"])["notifications"]
+
+    assert notification["key"] == "scope.announce"
+    assert notification["topic"] == "orders.received"
+    assert notification["level"] == "warning"
+    assert notification["message"] == "notified orders.received: 2 x baguette"
+
+
+def test_build_trace_from_live_events_and_running_calls():
+    NS = make_ns()
+    seen: list[Event] = []
+
+    @NS
+    @Task
+    class Slow:
+        def execute(self) -> None:
+            # Mid-call: the task has started but not ended.
+            seen.append(build_trace(list(events), events[0].call_id))
+
+    ctx = Context(namespaces={NS})
+    events = collect(ctx)
+    with ctx:
+        ctx.execute("scope.slow")
+
+    (running,) = seen
+    assert (running["key"], running["state"], running["ended"]) == ("scope.slow", "running", None)
+    done = build_trace(events, events[0].call_id)
+    assert (done["state"], done["protocol"]) == ("completed", "TaskProtocol")
+    assert done["started"] is not None
+
+
+def test_build_trace_unknown_id():
+    started = {"source": "events", "state": "started", "ts": "2026-10-31T10:00:00.000+00:00"}
+    items = [{**started, "call": "abc1" + "0" * 28}]
+    with pytest.raises(KeyError, match="no call 'fff'"):
+        build_trace(items, "fff")
+    assert build_trace(items, "abc1" + "0" * 28)["state"] == "running"
+
+
+def test_trace_needs_json_file_logs(tmp_path):
+    with pytest.raises(ValueError, match="file logging is off"):
+        Context(namespaces={make_ns()}).trace("abc")
+    ctx = Context(namespaces={make_ns()}, log_dir=tmp_path, log_config={"format": "text"})
+    with pytest.raises(ValueError, match='"json" log format'):
+        ctx.trace("abc")
+    with pytest.raises(KeyError):
+        Context(namespaces={make_ns()}, log_dir=tmp_path / "empty").trace("abc")

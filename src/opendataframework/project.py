@@ -142,8 +142,9 @@ class Project:
         ``config: Config`` in their constructors receive it via DI.
 
         Also enables per-component file logging under ``[project] log-dir``
-        (default ``"logs"``, relative to the current working directory) —
-        see ``opendataframework.logger.LogManager``.
+        (default ``"logs"``, relative to the current working directory),
+        in the format and at the levels set under ``[project.logging]``
+        (default: JSON Lines, ``INFO`` and up) — see ``opendataframework.logger.LogManager``.
 
         Imports the module named under ``[project] app`` (if present)
         before constructing the ``Context`` — equivalent to writing
@@ -176,5 +177,7 @@ class Project:
         app = config.get("project", {}).get("app")
         if app is not None:
             importlib.import_module(app)
-        log_dir = config.get("project", {}).get("log-dir", "logs")
-        return cls(context=Context(config=config, log_dir=log_dir), config=config)
+        project = config.get("project", {})
+        log_dir = project.get("log-dir", "logs")
+        context = Context(config=config, log_dir=log_dir, log_config=project.get("logging"))
+        return cls(context=context, config=config)

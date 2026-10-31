@@ -7,6 +7,12 @@ call is reported when it starts and again when it completes or fails, as an
 `Event`. Logs are for people; events are for code: alerting on a failure,
 collecting metrics, or animating a live view of the project.
 
+Every event is also written to its component's log file, with its call id
+and its parent's, so a call can be traced across files:
+`context.trace(call_id)` returns a call's whole tree from the logs, and
+`build_trace(events, call_id)` builds the same tree from live events (see
+[Logger](logger.md#tracing-a-call-across-files)).
+
 It is the classic Observer pattern. `Events` is the subject, one per
 `Context`; a listener is any callable that takes an `Event`; listeners
 `subscribe`, and the framework notifies them around each protocol call.
@@ -44,7 +50,8 @@ project.context.events.subscribe(print)
 ```
 
 See [`examples/10-events/`](examples.md) for a full runnable project built
-around this.
+around this. For messages your own components publish, see
+[Notifications](notifications.md).
 
 ---
 
@@ -250,12 +257,20 @@ after `Slack` is set up, and anything reported earlier waits in the queue.
 
 ## What Events is Not
 
-* **Not logging.** Events work with file logging off (`log_dir=None`), and
-  log lines are not events. `Logger` writes for people; `Events` reports for
-  code.
+* **Not logging, though it writes the call records.** `Events` writes each
+  call's `started`/`completed`/`failed` as a record in the component's log,
+  with the event's fields (`call`, `parent`, `protocol`, `method`, `state`,
+  `elapsed_ms`, `error`; see [Log Format](logger.md#log-format)). `started` and
+  `completed` are written at `INFO`, `failed` at `ERROR`, and
+  `[project.logging] events = ...` sets their threshold (see
+  [Levels](logger.md#levels)). Events are delivered to listeners whether or
+  not they're logged, and they work with file logging off (`log_dir=None`).
+  The log is for people and tools; `Events` is for code in the process.
 
 * **Not a way to emit your own events.** `notify()` is how the framework
-  reports its protocol calls; it isn't meant for user code.
+  reports its protocol calls; it isn't meant for user code. To announce
+  something your own code did or saw, publish a
+  [Notification](notifications.md) instead.
 
 * **Not global.** Each `Context` has its own `Events` and its own listeners,
   so two `Project`s in one process never see each other's calls.

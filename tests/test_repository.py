@@ -13,7 +13,7 @@ from opendataframework.repository import (
 class User: ...
 
 
-class Order: ...
+class Invoice: ...
 
 
 @pytest.fixture(autouse=True)
@@ -21,7 +21,7 @@ def _entities():
     # Registered per test rather than decorated at module level: the registry
     # is process-wide, and other test modules register their own ``User``.
     Entity(User)
-    Entity(Order)
+    Entity(Invoice)
 
 
 def test_repository_is_namespace_subclass():
@@ -71,11 +71,11 @@ def test_different_entities_tracked_independently():
     @Repository(User)
     class Users: ...
 
-    @Repository(Order)
-    class Orders: ...
+    @Repository(Invoice)
+    class Invoices: ...
 
     assert Repository.entity(Users) is User
-    assert Repository.entity(Orders) is Order
+    assert Repository.entity(Invoices) is Invoice
 
 
 def test_repository_namespace_is_independent_from_component():

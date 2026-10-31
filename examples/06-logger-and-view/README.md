@@ -39,4 +39,4 @@ This saves two readings, lists them back, prints `data_view()` (a
 reads back the log entries `Readings` wrote for itself via
 `project.context.tail_logs("repository.readings")` (see
 [`docs/context.md`](../../docs/context.md)) — the same lines persisted to
-`logs/repository.readings.log`.
+`logs/repository.readings.jsonl`.

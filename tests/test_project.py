@@ -221,4 +221,36 @@ def test_project_writes_log_files_under_configured_dir(tmp_path, monkeypatch):
     with Project(context=Context(namespaces={NS}, log_dir="logs")):
         pass
 
-    assert (tmp_path / "logs" / "scope.a.log").exists()
+    assert (tmp_path / "logs" / "scope.a.jsonl").exists()
+
+
+# --- logging levels -------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "toml",
+    [
+        '[project.logging]\nevents = "WARNING"\n\n'
+        '[project.logging.task]\nlevel = "ERROR"\nload = "DEBUG"\n',
+        '[project.logging]\nevents = "WARNING"\ntask.level = "ERROR"\ntask.load = "DEBUG"\n',
+    ],
+    ids=["table", "inline"],
+)
+def test_from_config_passes_project_logging_to_the_context(tmp_path, toml):
+    f = tmp_path / "config.toml"
+    f.write_text(toml)
+
+    log_manager = Project.from_config(str(f)).context._log_manager
+    assert log_manager.threshold("task.load", "events") == 10
+    assert log_manager.threshold("task.other", "events") == 40
+    assert log_manager.threshold("service.db", "events") == 30
+
+
+def test_from_dict_rejects_an_unknown_level_name():
+    with pytest.raises(ValueError, match="LOUD"):
+        Project.from_dict({"project": {"logging": {"level": "LOUD"}}})
+
+
+def test_from_dict_passes_the_log_format_to_the_context():
+    project = Project.from_dict({"project": {"logging": {"format": "text"}}})
+    assert project.context._log_manager._format == "text"

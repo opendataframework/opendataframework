@@ -20,12 +20,12 @@ def test_bare_decorator():
 
 
 def test_factory_decorator():
-    class Order: ...
+    class Invoice: ...
 
-    result = Entity(name="order")(Order)
+    result = Entity(name="invoice")(Invoice)
 
-    assert result is Order
-    assert Entity.get("order") is Order
+    assert result is Invoice
+    assert Entity.get("invoice") is Invoice
 
 
 def test_bare_decorator_returns_class_unchanged():

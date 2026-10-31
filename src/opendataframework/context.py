@@ -11,12 +11,12 @@ Every protocol call the three make is logged and also reported as an
 ``Event`` to the ``Context``'s ``Events`` (see ``opendataframework.events``).
 """
 
+import contextlib
 import contextvars
 import functools
 import inspect
 import threading
-import time
-from collections.abc import Callable, Hashable, Iterable, Iterator
+from collections.abc import Callable, Hashable, Iterable, Iterator, Mapping
 from pathlib import Path
 from queue import Empty, Full, Queue
 from typing import Annotated, TypeAliasType, TypeVar, cast, get_origin, overload
@@ -24,10 +24,11 @@ from typing import Annotated, TypeAliasType, TypeVar, cast, get_origin, overload
 from opendataframework.agent import Agent, AgentProtocol
 from opendataframework.component import Component, OnStartProtocol, OnStopProtocol
 from opendataframework.config import Config
-from opendataframework.events import Events
+from opendataframework.events import Events, build_trace
 from opendataframework.function import Function, FunctionProtocol, bind, string_hint
 from opendataframework.logger import Logger, LogManager
 from opendataframework.namespace import Namespace, parse, qualified
+from opendataframework.notifications import Notifications
 from opendataframework.pipeline import Pipeline, PipelineProtocol
 from opendataframework.repository import (
     CloseStreamProtocol,
@@ -37,7 +38,7 @@ from opendataframework.repository import (
 )
 from opendataframework.service import Service, ServiceProtocol
 from opendataframework.task import Task, TaskProtocol
-from opendataframework.utils import normalize
+from opendataframework.utils import kebab, normalize
 
 _STREAM_ENDED = object()
 
@@ -58,31 +59,20 @@ def _is_async(func: object) -> bool:
     return inspect.iscoroutinefunction(func) or inspect.isasyncgenfunction(func)
 
 
-def _logged_execute(
-    execute, name: str, log_manager: LogManager, events: Events, protocol: type, method: str
-):
-    """Wrap a bound ``execute`` method to log its start, duration, and errors.
+def _notified_call(execute, name: str, events: Events, protocol: type, method: str):
+    """Wrap a bound ``execute`` method so each call is reported to ``events``.
 
     ``protocol`` and ``method`` name the protocol call being wrapped, so the
     same wrapper also serves an ``Agent``'s ``invoke()`` and a ``Function``
-    called through the ``Context``. Each call is also reported to ``events``.
+    called through the ``Context``. ``events`` also writes the call's start,
+    duration, and any error to ``name``'s log.
     """
-    label = "call" if protocol is FunctionProtocol else f"{method}()"
 
     @functools.wraps(execute)
     def wrapped(*args, **kwargs):
-        """Call the wrapped ``execute``, logging its start, duration, and errors."""
+        """Call the wrapped ``execute`` inside ``events.notify()``."""
         with events.notify(name, protocol, method):
-            log_manager.write(name, "INFO", f"{label} started")
-            start = time.monotonic()
-            try:
-                result = execute(*args, **kwargs)
-            except Exception as exc:
-                log_manager.write(name, "ERROR", f"{label} raised {exc!r}")
-                raise
-            elapsed_ms = (time.monotonic() - start) * 1000
-            log_manager.write(name, "INFO", f"{label} completed in {elapsed_ms:.1f}ms")
-            return result
+            return execute(*args, **kwargs)
 
     return wrapped
 
@@ -128,7 +118,10 @@ class Resolver:
     instantiation is logged to that component's file — and ``Events``
     (see ``opendataframework.events``): an ``events: Events`` parameter
     receives the ``Context``'s own instance, and every call of a bound
-    function is reported to it as a ``FunctionProtocol`` call.
+    function is reported to it as a ``FunctionProtocol`` call — and
+    ``Notifications`` (see ``opendataframework.notifications``), resolved
+    contextually like ``Logger``: a ``notifications: Notifications``
+    parameter receives a view of the hub bound to the consuming class's key.
 
     Args:
         namespaces: Namespace subclasses to collect registered classes from.
@@ -136,6 +129,9 @@ class Resolver:
             ``LogManager`` (writes become no-ops) when omitted.
         events: Receives an event for every call of a bound function.
             Defaults to an ``Events`` with no listeners when omitted.
+        notifications: The hub a ``notifications: Notifications`` parameter
+            gets a bound view of. Defaults to a ``Notifications`` with no
+            subscribers when omitted.
 
     Example:
         >>> class NS(Namespace): ...
@@ -158,6 +154,7 @@ class Resolver:
         extra_instances: dict[type, object] | None = None,
         log_manager: LogManager | None = None,
         events: Events | None = None,
+        notifications: Notifications | None = None,
     ) -> None:
         """See class docstring for ``Args``."""
         self._namespaces = set(namespaces)
@@ -169,6 +166,18 @@ class Resolver:
         self._by_key: dict[str, type | Callable[..., object]] = {}
         self._log_manager = log_manager if log_manager is not None else LogManager()
         self._events = events if events is not None else Events(self._log_manager)
+        self._notifications = (
+            notifications if notifications is not None else Notifications(self._log_manager)
+        )
+
+    @property
+    def namespaces(self) -> set[type[Namespace]]:
+        """The namespaces registered classes and functions are collected from.
+
+        Returns:
+            A copy of the set.
+        """
+        return set(self._namespaces)
 
     @property
     def instances(self) -> dict[type, object]:
@@ -265,10 +274,9 @@ class Resolver:
                 self._instances[node] = self._instantiate(node)
             else:
                 self._injected[node] = self._inject(node)
-                self._functions[node] = _logged_execute(
+                self._functions[node] = _notified_call(
                     bind(node, self._injected[node]),
                     self._keys[node],
-                    self._log_manager,
                     self._events,
                     FunctionProtocol,
                     "__call__",
@@ -488,7 +496,9 @@ class Resolver:
         A ``dep`` annotated exactly as ``Logger`` is special-cased: instead of
         a shared instance, ``target`` receives a ``Logger`` bound to its own
         key (see ``opendataframework.logger.LogManager.logger_for``). One
-        annotated exactly as ``Events`` receives the ``Context``'s ``Events``. A class is
+        annotated exactly as ``Events`` receives the ``Context``'s ``Events``,
+        and one annotated exactly as ``Notifications`` a view of the hub bound
+        to ``target``'s key (see ``Notifications.bound_to``). A class is
         supplied only if already present in ``self._instances``, and a
         function only if already bound — unregistered ones in the signature
         are silently ignored.
@@ -499,6 +509,8 @@ class Resolver:
                 supplied[name] = self._log_manager.logger_for(self._keys[target])
             elif dep is Events:
                 supplied[name] = self._events
+            elif dep is Notifications:
+                supplied[name] = self._notifications.bound_to(self._keys[target])
             elif dep in self._instances:
                 supplied[name] = self._instances[dep]
             elif dep in self._functions:
@@ -578,9 +590,7 @@ class Lifecycle:
         """Call a non-``Service`` instance's ``on_start()`` hook."""
         name = self._keys[cls]
         with self._events.notify(name, OnStartProtocol, "on_start"):
-            self._log_manager.write(name, "INFO", "on_start() called")
             instance.on_start()
-            self._log_manager.write(name, "INFO", "on_start() complete")
 
     def start_one(self, cls: type) -> None:
         """Start a single ``ServiceProtocol`` instance. No-op if already running.
@@ -598,9 +608,7 @@ class Lifecycle:
         instance = self._instances[cls]
         name = self._keys[cls]
         with self._events.notify(name, ServiceProtocol, "setup"):
-            self._log_manager.write(name, "INFO", "setup() starting")
             instance.setup()
-            self._log_manager.write(name, "INFO", "setup() complete")
         # An empty context, so run() is a top-level call rather than a child
         # of whatever call started the service.
         t = threading.Thread(
@@ -626,9 +634,7 @@ class Lifecycle:
         instance = self._instances[cls]
         name = self._keys[cls]
         with self._events.notify(name, ServiceProtocol, "stop"):
-            self._log_manager.write(name, "INFO", "stop() called")
             instance.stop()
-            self._log_manager.write(name, "INFO", "stop() complete")
         self._running[cls] = False
 
     def is_running(self, cls: type) -> bool:
@@ -636,16 +642,9 @@ class Lifecycle:
         return self._running.get(cls, False)
 
     def _run(self, cls: type, instance: ServiceProtocol) -> None:
-        """Run ``instance.run()``, logging its start, return, and any exception."""
-        name = self._keys[cls]
-        with self._events.notify(name, ServiceProtocol, "run"):
-            self._log_manager.write(name, "INFO", "run() started")
-            try:
-                instance.run()
-                self._log_manager.write(name, "INFO", "run() returned")
-            except Exception as exc:
-                self._log_manager.write(name, "ERROR", f"run() raised {exc!r}")
-                raise
+        """Run ``instance.run()``; ``events`` logs its start, return, and any exception."""
+        with self._events.notify(self._keys[cls], ServiceProtocol, "run"):
+            instance.run()
 
     def on_stop(self) -> None:
         """Deactivate all instances in reverse dependency order.
@@ -672,9 +671,7 @@ class Lifecycle:
         """Call a non-``Service`` instance's ``on_stop()`` hook."""
         name = self._keys[cls]
         with self._events.notify(name, OnStopProtocol, "on_stop"):
-            self._log_manager.write(name, "INFO", "on_stop() called")
             instance.on_stop()
-            self._log_manager.write(name, "INFO", "on_stop() complete")
 
 
 def _publish_latest(q: Queue, item: object) -> None:
@@ -765,9 +762,7 @@ class StreamManager:
         try:
             if isinstance(instance, OpenStreamProtocol):
                 with self._events.notify(name, OpenStreamProtocol, "open_stream"):
-                    self._log_manager.write(name, "INFO", "open_stream() called")
                     instance.open_stream()
-                    self._log_manager.write(name, "INFO", "open_stream() complete")
             with self._lock:
                 self._subscribers[cls] = []
                 event = threading.Event()
@@ -833,28 +828,28 @@ class StreamManager:
         """Drive ``instance.stream()``, fanning entities out to subscribers until done."""
         name = self._keys[cls]
         try:
-            with self._events.notify(name, StreamableProtocol, "stream"):
+            # A raising stream() is logged by events as a failed call.
+            with (
+                contextlib.suppress(Exception),
+                self._events.notify(name, StreamableProtocol, "stream"),
+            ):
                 for entity in instance.stream():
                     if stop_event.is_set():
                         break
                     for q in list(self._subscribers.get(cls, ())):
                         _publish_latest(q, entity)
-        except Exception as exc:
-            self._log_manager.write(name, "ERROR", f"stream raised {exc!r}")
         finally:
             # Runs whether the loop above ended via stop_event, the source
             # exhausting itself (e.g. a device disconnecting), or an
             # exception — close_stream() releases the resource in all three
             # cases, not just an explicit stop_stream() call.
             if isinstance(instance, CloseStreamProtocol):
-                try:
-                    with self._events.notify(name, CloseStreamProtocol, "close_stream"):
-                        self._log_manager.write(name, "INFO", "close_stream() called")
-                        instance.close_stream()
-                except Exception as exc:
-                    self._log_manager.write(name, "ERROR", f"close_stream() raised {exc!r}")
-                else:
-                    self._log_manager.write(name, "INFO", "close_stream() complete")
+                # A raising close_stream() is logged by events as a failed call.
+                with (
+                    contextlib.suppress(Exception),
+                    self._events.notify(name, CloseStreamProtocol, "close_stream"),
+                ):
+                    instance.close_stream()
             with self._lock:
                 subscribers = self._subscribers.pop(cls, [])
                 self._threads.pop(cls, None)
@@ -879,11 +874,15 @@ class Context:
             Defaults to all of the built-in ones listed above.
         config: Configuration dict, pre-seeded as ``Config`` into the
             container.
-        log_dir: Directory to write per-component ``<namespace>.<name>.log``
-            files under.
+        log_dir: Directory to write per-component ``<namespace>.<name>.jsonl``
+            files (``.log`` in the ``text`` format) under.
             ``None`` (the default) disables file logging entirely — see
             ``opendataframework.logger.LogManager``. ``Project.from_config``/``from_dict``
             opt in to a real directory.
+        log_config: Log format and level thresholds, shaped like
+            ``[project.logging]`` — see ``opendataframework.logger.LogManager``.
+            ``None`` writes JSON Lines and keeps ``INFO`` and up. Names of
+            namespaces and components in it are checked by ``open()``.
 
     Attributes:
         instances: Class-to-instance mapping, populated after ``open()`` returns.
@@ -927,16 +926,19 @@ class Context:
         namespaces: Iterable[type[Namespace]] | None = None,
         config: dict | None = None,
         log_dir: str | Path | None = None,
+        log_config: Mapping[str, object] | None = None,
     ) -> None:
         """See class docstring for ``Args``."""
         extra = {Config: Config(config)} if config is not None else {}
-        self._log_manager = LogManager(log_dir)
+        self._log_manager = LogManager(log_dir, log_config)
         self._events = Events(self._log_manager)
+        self._notifications = Notifications(self._log_manager, key_of=self.key)
         self._resolver = Resolver(
             namespaces if namespaces is not None else _DEFAULT_NAMESPACES,
             extra_instances=extra,
             log_manager=self._log_manager,
             events=self._events,
+            notifications=self._notifications,
         )
         self._lifecycle: Lifecycle | None = None
         self._stream_manager = StreamManager(log_manager=self._log_manager, events=self._events)
@@ -967,6 +969,22 @@ class Context:
             Event(key='service.postgres', protocol=<class '...ServiceProtocol'>, ...)
         """
         return self._events
+
+    @property
+    def notifications(self) -> Notifications:
+        """The hub every notification published in this ``Context`` goes through.
+
+        Unbound, unlike the view a ``notifications: Notifications`` parameter
+        receives, so ``publish()`` here needs ``key=``. Usable before
+        ``open()``, so a subscriber added first also sees notifications
+        published during startup. See ``opendataframework.notifications``.
+
+        Example:
+            >>> unsubscribe = context.notifications.subscribe(print, topic="orders.*")
+            >>> context.execute("task.take-order", customer="Le Petit", item="baguette")
+            Notification(key='task.take-order', topic='orders.received', ...)
+        """
+        return self._notifications
 
     @property
     def functions(self) -> dict[Callable[..., object], Callable[..., object]]:
@@ -1041,15 +1059,20 @@ class Context:
         ``Lifecycle`` from the result and calls ``Lifecycle.on_start()``.
 
         Raises:
-            ValueError: If a circular dependency is detected, or a gathered
+            ValueError: If a circular dependency is detected, a gathered
                 object would not have exactly one key (see
-                ``Resolver._index``).
+                ``Resolver._index``), or ``log_config`` names a namespace or
+                component that does not exist (see ``LogManager.validate``).
             TypeError: If a registered function, or a method the ``Context``
                 calls, is async — see ``_require_sync``.
         """
         self._require_sync()
         self._resolver.resolve()
         keys = self._resolver.keys
+        self._log_manager.validate(
+            (kebab(namespace.__name__) for namespace in self._resolver.namespaces),
+            keys.values(),
+        )
         self._instrument(keys)
         self._functions = self._resolver.functions
         self._stream_manager = StreamManager(keys, self._log_manager, self._events)
@@ -1291,6 +1314,35 @@ class Context:
             raise KeyError(key)
         return cls, instances[cls]
 
+    def trace(self, call_id: str) -> dict:
+        """Return the tree of a protocol call and every call made inside it, from the logs.
+
+        Reads every ``.jsonl`` log file once and follows ``parent`` links,
+        so it works after the fact — after the call ended, or the process
+        restarted — as long as the records were kept. Which files it reads
+        follows the configured log format, never what is on disk: ``.log``
+        files left from an earlier ``text`` setup are ignored. Records dropped by a level
+        threshold can't appear: with ``[project.logging] events =
+        "WARNING"``, only failed calls do. See ``events.build_trace`` for
+        the shape of the tree, and to build one from live events instead.
+
+        Args:
+            call_id: The call's id — ``Event.call_id``, or a record's
+                ``call``.
+
+        Raises:
+            KeyError: If no call in the ``.jsonl`` logs has the id ``call_id``.
+            ValueError: If file logging is off, or the configured log format
+                is ``text``.
+
+        Example:
+            >>> logged = context.tail_logs("task.ship-orders")
+            >>> failed = [r for r in logged if r.get("state") == "failed"]
+            >>> context.trace(failed[-1]["parent"])["key"]
+            'pipeline.nightly-orders'
+        """
+        return build_trace(self._log_manager.records(), call_id)
+
     def tail_logs(self, key: str, lines: int = 300) -> list[dict]:
         """Return the last ``lines`` log entries for a resolved class or function.
 
@@ -1300,7 +1352,9 @@ class Context:
             lines: Maximum number of most-recent entries to return.
 
         Returns:
-            A list of ``{"ts", "level", "message"}`` dicts, oldest first.
+            Log records, oldest first, each with at least ``"ts"``,
+            ``"level"`` and ``"message"``; in the default ``json`` format,
+            the full record (``key``, ``source``, ``call``, ``fields``, ...).
             Empty if file logging is disabled or nothing was logged.
 
         Raises:
@@ -1367,19 +1421,17 @@ class Context:
         for cls, instance in self._resolver.instances.items():
             if cls in tasks | pipelines and hasattr(instance, "execute"):
                 protocol = PipelineProtocol if cls in pipelines else TaskProtocol
-                instance.execute = _logged_execute(
+                instance.execute = _notified_call(
                     instance.execute,
                     keys[cls],
-                    self._log_manager,
                     self._events,
                     protocol,
                     "execute",
                 )
             if cls in agents:
-                instance.invoke = _logged_execute(
+                instance.invoke = _notified_call(
                     instance.invoke,
                     keys[cls],
-                    self._log_manager,
                     self._events,
                     AgentProtocol,
                     "invoke",
