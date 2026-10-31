@@ -383,12 +383,13 @@ A function and an agent may share a name — `"function.librarian"` and
 `call()` — a function's parameters minus the injected ones, or the
 parameters of an agent's `invoke()`.
 
-**Logs** — read back a component's recent log lines (see
-[Logger](logger.md)); each key has its own `<namespace>.<name>.log` file:
+**Logs** — read back a component's recent log records (see
+[Logger](logger.md#log-format)); each key has its own
+`<namespace>.<name>.jsonl` file:
 
 ```python
 project.context.tail_logs("service.postgres", lines=300)
-# → [{"ts": ..., "level": ..., "message": ...}, ...], oldest first
+# → [{"ts": ..., "level": ..., "key": ..., "message": ..., ...}, ...], oldest first
 ```
 
 **Events** — every protocol call the `Context` makes on a component is reported

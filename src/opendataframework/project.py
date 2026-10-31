@@ -143,8 +143,8 @@ class Project:
 
         Also enables per-component file logging under ``[project] log-dir``
         (default ``"logs"``, relative to the current working directory),
-        keeping the levels set under ``[project.logging]`` (default ``INFO``
-        and up) — see ``opendataframework.logger.LogManager``.
+        in the format and at the levels set under ``[project.logging]``
+        (default: JSON Lines, ``INFO`` and up) — see ``opendataframework.logger.LogManager``.
 
         Imports the module named under ``[project] app`` (if present)
         before constructing the ``Context`` — equivalent to writing
@@ -179,5 +179,5 @@ class Project:
             importlib.import_module(app)
         project = config.get("project", {})
         log_dir = project.get("log-dir", "logs")
-        context = Context(config=config, log_dir=log_dir, log_levels=project.get("logging"))
+        context = Context(config=config, log_dir=log_dir, log_config=project.get("logging"))
         return cls(context=context, config=config)

@@ -255,13 +255,15 @@ after `Slack` is set up, and anything reported earlier waits in the queue.
 
 ## What Events is Not
 
-* **Not logging, though it writes the call lines.** `Events` writes each
-  call's `started`/`completed`/`failed` line to the component's log, as
-  `execute() started [call=3f9a1c2e parent=-]`. `started` and `completed` are
-  written at `INFO`, `failed` at `ERROR`, and `[project.logging] events = ...`
-  sets their threshold (see [Levels](logger.md#levels)). Events are delivered
-  to listeners whether or not they're logged, and they work with file logging
-  off (`log_dir=None`). The log is for people; `Events` is for code.
+* **Not logging, though it writes the call records.** `Events` writes each
+  call's `started`/`completed`/`failed` as a record in the component's log,
+  with the event's fields (`call`, `parent`, `protocol`, `method`, `state`,
+  `elapsed_ms`, `error`; see [Log Format](logger.md#log-format)). `started` and
+  `completed` are written at `INFO`, `failed` at `ERROR`, and
+  `[project.logging] events = ...` sets their threshold (see
+  [Levels](logger.md#levels)). Events are delivered to listeners whether or
+  not they're logged, and they work with file logging off (`log_dir=None`).
+  The log is for people and tools; `Events` is for code in the process.
 
 * **Not a way to emit your own events.** `notify()` is how the framework
   reports its protocol calls; it isn't meant for user code. To announce

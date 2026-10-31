@@ -321,11 +321,11 @@ def test_on_start_and_on_stop_are_logged(tmp_path):
 
     with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
         messages = [e["message"] for e in ctx.tail_logs("scope.thing")]
-        assert any(m.startswith("on_start() started [call=") for m in messages)
+        assert "on_start() started" in messages
         assert any(m.startswith("on_start() completed in ") for m in messages)
 
     messages = [e["message"] for e in ctx.tail_logs("scope.thing")]
-    assert any(m.startswith("on_stop() started [call=") for m in messages)
+    assert "on_stop() started" in messages
     assert any(m.startswith("on_stop() completed in ") for m in messages)
 
 
@@ -811,11 +811,11 @@ def test_service_lifecycle_is_logged(tmp_path):
 
     with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
         messages = [e["message"] for e in ctx.tail_logs("scope.svc")]
-        assert any(m.startswith("setup() started [call=") for m in messages)
+        assert "setup() started" in messages
         assert any(m.startswith("setup() completed in ") for m in messages)
 
     messages = [e["message"] for e in ctx.tail_logs("scope.svc")]
-    assert any(m.startswith("stop() started [call=") for m in messages)
+    assert "stop() started" in messages
     assert any(m.startswith("stop() completed in ") for m in messages)
 
 
@@ -854,7 +854,7 @@ def test_task_execute_is_logged(tmp_path):
 
     assert result == 42
     messages = [e["message"] for e in ctx.tail_logs("scope.t")]
-    assert any(m.startswith("execute() started [call=") for m in messages)
+    assert "execute() started" in messages
     assert any("execute() completed" in m for m in messages)
 
 
@@ -888,7 +888,7 @@ def test_pipeline_execute_is_logged(tmp_path):
         ctx.instances[P].execute()
 
     messages = [e["message"] for e in ctx.tail_logs("scope.p")]
-    assert any(m.startswith("execute() started [call=") for m in messages)
+    assert "execute() started" in messages
 
 
 def test_component_has_no_execute_instrumentation(tmp_path):
@@ -1136,7 +1136,7 @@ def test_function_call_is_logged(tmp_path):
         messages = [e["message"] for e in ctx.tail_logs("function.load-data")]
 
     assert "load_data resolved" in messages
-    assert any(m.startswith("call started [call=") for m in messages)
+    assert "call started" in messages
     assert any("call completed" in m for m in messages)
 
 
@@ -1280,7 +1280,7 @@ def test_call_through_an_injected_function_is_logged(tmp_path):
         ctx.instances[Report].load()
         messages = [e["message"] for e in ctx.tail_logs("function.load-data")]
 
-    assert any(m.startswith("call started [call=") for m in messages)
+    assert "call started" in messages
     assert any("call completed" in m for m in messages)
 
 
@@ -1507,7 +1507,7 @@ def test_agent_invoke_is_logged_through_call(tmp_path):
         assert ctx.call("scope.researcher") == 42
 
     messages = [e["message"] for e in ctx.tail_logs("scope.researcher")]
-    assert any(m.startswith("invoke() started [call=") for m in messages)
+    assert "invoke() started" in messages
     assert any("invoke() completed" in m for m in messages)
 
 
@@ -1524,7 +1524,7 @@ def test_agent_direct_invoke_is_logged(tmp_path):
         assert ctx.get(Researcher).invoke("dune?") == "dune?"
 
     messages = [e["message"] for e in ctx.tail_logs("scope.researcher")]
-    assert any(m.startswith("invoke() started [call=") for m in messages)
+    assert "invoke() started" in messages
     assert any("invoke() completed" in m for m in messages)
 
 
@@ -1821,10 +1821,10 @@ def test_same_name_in_different_namespaces_is_addressed_by_key(builtin_namespace
         assert not any("execute()" in m for m in messages)
 
     assert sorted(p.name for p in tmp_path.iterdir()) == [
-        "agent.loader.log",
-        "component.loader.log",
-        "function.loader.log",
-        "task.loader.log",
+        "agent.loader.jsonl",
+        "component.loader.jsonl",
+        "function.loader.jsonl",
+        "task.loader.jsonl",
     ]
 
 

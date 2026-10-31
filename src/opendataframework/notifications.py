@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Literal, get_args
 
-from opendataframework.events import _current_call_id, _no_current_call, trace_ids
+from opendataframework.events import _current_call_id, _no_current_call
 from opendataframework.logger import LogManager
 
 Level = Literal["info", "success", "warning", "error"]
@@ -148,8 +148,10 @@ class Notifications:
 
         Listeners run before this returns, with no current call; an exception
         from one is logged and never raised here. Each publish is also logged
-        on the publisher's key, as ``notified <topic>: <summary> [parent=...]``,
-        at the log level matching ``level`` (``success`` logs as ``INFO``).
+        on the publisher's key, as a record with ``message``
+        ``"notified <topic>: <summary>"`` and ``topic``, ``subject``,
+        ``record`` and ``parent`` as fields (never ``payload``), at the log
+        level matching ``level`` (``success`` logs as ``INFO``).
 
         Args:
             topic: Dotted name of what happened. Non-empty, with no ``*``.
@@ -197,8 +199,15 @@ class Notifications:
         self._log_manager.write(
             key,
             _LOG_LEVELS[level],
-            f"{message} {trace_ids(None, notification.parent)}",
+            message,
             source="notifications",
+            extra={
+                "topic": topic,
+                "notification_level": level,
+                "subject": notification.subject,
+                "record": record,
+                "parent": notification.parent,
+            },
         )
         self._dispatch(notification)
         return notification

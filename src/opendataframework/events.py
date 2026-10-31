@@ -8,9 +8,9 @@ repository's ``open_stream()``/``stream()``/``close_stream()`` — it emits an
 ``Event`` when the call starts and when it completes or fails. Nothing else
 emits one.
 
-Each event is also written to the component's log file — ``started`` and
-``completed`` at ``INFO``, ``failed`` at ``ERROR`` — with its call id and its
-parent's, so a call can be traced across files (see ``trace_ids``).
+Each event is also written to the component's log file as a record —
+``started`` and ``completed`` at ``INFO``, ``failed`` at ``ERROR`` — with its
+call id and its parent's as fields, so a call can be traced across files.
 
 ``Events`` is the subject, one per ``Context`` — no process-global state, so
 multiple ``Project`` instances in the same process never share listeners
@@ -43,23 +43,6 @@ def _current_call_id() -> str | None:
     notification's ``parent``.
     """
     return _current_call.get()
-
-
-def trace_ids(call_id: str | None, parent: str | None = None) -> str:
-    """Return the ``[call=... parent=...]`` suffix a log line is traced by.
-
-    Each id is shortened to its first 8 characters — enough to grep for —
-    and a missing one is written as ``-``. With ``call_id`` ``None``, only
-    the parent is written, as on a notification's line.
-
-    Example:
-        >>> trace_ids("a1b2c3d4e5f6...", None)
-        '[call=a1b2c3d4 parent=-]'
-    """
-    parent_part = f"parent={parent[:8] if parent else '-'}"
-    if call_id is None:
-        return f"[{parent_part}]"
-    return f"[call={call_id[:8]} {parent_part}]"
 
 
 @contextmanager
@@ -178,7 +161,8 @@ class Events:
         meant for user code. While the call runs, it is the current call, so
         calls made inside it get it as their ``parent``. An exception from
         the call is re-raised unchanged. Each event is also written to
-        ``key``'s log, as ``<method>() started [call=... parent=...]``.
+        ``key``'s log, as a record with ``message`` ``"<method>() started"``
+        and the event's ``call``/``parent``/``protocol``/... as fields.
 
         Example:
             >>> with events.notify("service.postgres", ServiceProtocol, "setup"):
@@ -186,38 +170,58 @@ class Events:
         """
         call_id = uuid4().hex
         parent = _current_call.get()
-        label = "call" if protocol is FunctionProtocol else f"{method}()"
-        ids = trace_ids(call_id, parent)
-        self._log_manager.write(key, "INFO", f"{label} started {ids}", source="events")
-        self._dispatch(Event(key, protocol, method, "started", call_id, parent, time.time()))
+        self._emit(Event(key, protocol, method, "started", call_id, parent, time.time()))
         token = _current_call.set(call_id)
         start = time.monotonic()
         try:
             yield
         except Exception as exc:
             elapsed_ms = (time.monotonic() - start) * 1000
-            self._log_manager.write(
-                key,
-                "ERROR",
-                f"{label} failed in {elapsed_ms:.1f}ms: {exc!r} {ids}",
-                source="events",
+            self._emit(
+                Event(
+                    key,
+                    protocol,
+                    method,
+                    "failed",
+                    call_id,
+                    parent,
+                    time.time(),
+                    elapsed_ms,
+                    repr(exc),
+                )
             )
-            failed = Event(
-                key, protocol, method, "failed", call_id, parent, time.time(), elapsed_ms, repr(exc)
-            )
-            self._dispatch(failed)
             raise
         else:
             elapsed_ms = (time.monotonic() - start) * 1000
-            self._log_manager.write(
-                key, "INFO", f"{label} completed in {elapsed_ms:.1f}ms {ids}", source="events"
+            self._emit(
+                Event(key, protocol, method, "completed", call_id, parent, time.time(), elapsed_ms)
             )
-            completed = Event(
-                key, protocol, method, "completed", call_id, parent, time.time(), elapsed_ms
-            )
-            self._dispatch(completed)
         finally:
             _current_call.reset(token)
+
+    def _emit(self, event: Event) -> None:
+        """Write ``event`` to its component's log, then deliver it to listeners."""
+        label = "call" if event.protocol is FunctionProtocol else f"{event.method}()"
+        if event.state == "started":
+            message = f"{label} started"
+        else:
+            message = f"{label} {event.state} in {event.elapsed_ms:.1f}ms"
+            if event.error is not None:
+                message += f": {event.error}"
+        extra: dict[str, object] = {
+            "call": event.call_id,
+            "parent": event.parent,
+            "protocol": event.protocol.__name__,
+            "method": event.method,
+            "state": event.state,
+        }
+        if event.elapsed_ms is not None:
+            extra["elapsed_ms"] = round(event.elapsed_ms, 3)
+        if event.error is not None:
+            extra["error"] = event.error
+        level = "ERROR" if event.state == "failed" else "INFO"
+        self._log_manager.write(event.key, level, message, source="events", extra=extra)
+        self._dispatch(event)
 
     def _dispatch(self, event: Event) -> None:
         """Call every listener subscribed to ``event``'s protocol, isolating their failures.

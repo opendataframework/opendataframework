@@ -685,19 +685,12 @@ def test_match_style_listener_from_the_docs():
     assert failures == ["scope.t"]
 
 
-# --- log lines ---------------------------------------------------------------
+# --- log records -------------------------------------------------------------
 
 
-_IDS = re.compile(r"\[call=(\w{8}) parent=(\w{8}|-)\]$")
-
-
-def traced(ctx: Context, key: str) -> list[tuple[str, str, str, str]]:
-    """Return ``(level, message, call, parent)`` for each traced line of ``key``'s log."""
-    lines = []
-    for entry in ctx.tail_logs(key):
-        if m := _IDS.search(entry["message"]):
-            lines.append((entry["level"], entry["message"], m[1], m[2]))
-    return lines
+def records(ctx: Context, key: str) -> list[dict]:
+    """Return the event records in ``key``'s log."""
+    return [r for r in ctx.tail_logs(key) if r.get("source") == "events"]
 
 
 def chain(NS):
@@ -732,7 +725,7 @@ def chain(NS):
     return Load
 
 
-def test_every_call_line_carries_its_call_and_parent_ids(tmp_path):
+def test_every_event_record_carries_the_events_fields(tmp_path):
     NS = make_ns()
     chain(NS)
     ctx = Context(namespaces={NS}, log_dir=tmp_path)
@@ -742,13 +735,18 @@ def test_every_call_line_carries_its_call_and_parent_ids(tmp_path):
 
     for key in ("scope.nightly", "scope.load", "scope.fetch"):
         started, completed = (e for e in events if e.key == key)
-        lines = traced(ctx, key)
-        assert len(lines) == 2
-        for _, _, call, parent in lines:
-            assert call == started.call_id[:8]
-            assert parent == (started.parent[:8] if started.parent else "-")
-        assert lines[0][1].startswith(("execute() started", "call started"))
-        assert "completed in" in lines[1][1]
+        first, second = records(ctx, key)
+        for record, event in ((first, started), (second, completed)):
+            assert record["call"] == event.call_id
+            assert record["parent"] == event.parent
+            assert record["protocol"] == event.protocol.__name__
+            assert record["method"] == event.method
+            assert record["state"] == event.state
+            assert (record["key"], record["namespace"]) == (key, "scope")
+        assert "elapsed_ms" not in first and "error" not in first
+        assert second["elapsed_ms"] >= 0 and "error" not in second
+        assert first["message"] in ("execute() started", "call started")
+        assert second["message"].startswith(("execute() completed in ", "call completed in "))
 
 
 def test_a_childs_parent_is_its_callers_call_across_files(tmp_path):
@@ -756,28 +754,45 @@ def test_a_childs_parent_is_its_callers_call_across_files(tmp_path):
     chain(NS)
     with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
         ctx.execute("scope.nightly")
-        (_, _, nightly, top), _ = traced(ctx, "scope.nightly")
-        (_, _, load, load_parent), _ = traced(ctx, "scope.load")
-        (_, _, _, fetch_parent), _ = traced(ctx, "scope.fetch")
+        nightly, _ = records(ctx, "scope.nightly")
+        load, _ = records(ctx, "scope.load")
+        fetch, _ = records(ctx, "scope.fetch")
 
-    assert top == "-"
-    assert load_parent == nightly
-    assert fetch_parent == load
+    assert nightly["parent"] is None
+    assert load["parent"] == nightly["call"]
+    assert fetch["parent"] == load["call"]
 
 
-def test_failed_line_is_an_error_and_keeps_its_parent_when_others_are_filtered(tmp_path):
+def test_failed_record_is_an_error_and_keeps_its_parent_when_others_are_filtered(tmp_path):
     NS = make_ns()
     Load = chain(NS)
-    with Context(namespaces={NS}, log_dir=tmp_path, log_levels={"events": "WARNING"}) as ctx:
+    with Context(namespaces={NS}, log_dir=tmp_path, log_config={"events": "WARNING"}) as ctx:
         ctx.get(Load).fail = True
         with pytest.raises(ValueError):
             ctx.execute("scope.nightly")
-        ((_, _, load, _),) = traced(ctx, "scope.load")
-        ((level, message, _, parent),) = traced(ctx, "scope.fetch")
+        (load,) = records(ctx, "scope.load")
+        (fetch,) = records(ctx, "scope.fetch")
 
-    assert level == "ERROR"
-    assert message.startswith("call failed in ") and "ValueError('nope')" in message
-    assert parent == load
+    assert fetch["level"] == "ERROR"
+    assert fetch["state"] == "failed"
+    assert fetch["error"] == "ValueError('nope')"
+    assert fetch["message"].startswith("call failed in ")
+    assert fetch["message"].endswith(": ValueError('nope')")
+    assert fetch["parent"] == load["call"]
+
+
+def test_text_format_appends_shortened_ids(tmp_path):
+    NS = make_ns()
+    chain(NS)
+    config = {"format": "text"}
+    with Context(namespaces={NS}, log_dir=tmp_path, log_config=config) as ctx:
+        ctx.execute("scope.nightly")
+        nightly = ctx.tail_logs("scope.nightly")
+        load = ctx.tail_logs("scope.load")
+
+    call = re.search(r"\[call=(\w{8}) parent=-\]$", nightly[-1]["message"])[1]
+    assert load[-1]["message"].endswith(f"parent={call}]")
+    assert (tmp_path / "scope.nightly.log").exists()
 
 
 def test_listener_exception_is_logged_whatever_the_events_level(tmp_path):
@@ -788,7 +803,7 @@ def test_listener_exception_is_logged_whatever_the_events_level(tmp_path):
     class T:
         def execute(self) -> None: ...
 
-    ctx = Context(namespaces={NS}, log_dir=tmp_path, log_levels={"events": "ERROR"})
+    ctx = Context(namespaces={NS}, log_dir=tmp_path, log_config={"events": "ERROR"})
 
     def broken(event: Event) -> None:
         raise RuntimeError("listener bug")
@@ -796,6 +811,6 @@ def test_listener_exception_is_logged_whatever_the_events_level(tmp_path):
     ctx.events.subscribe(broken)
     with ctx:
         ctx.execute("scope.t")
-        messages = [e["message"] for e in ctx.tail_logs("scope.t")]
-    assert "listener raised RuntimeError('listener bug')" in messages
-    assert not any("execute() started" in m for m in messages)
+        logged = ctx.tail_logs("scope.t")
+    assert "listener raised RuntimeError('listener bug')" in [r["message"] for r in logged]
+    assert records(ctx, "scope.t") == []

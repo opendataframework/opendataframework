@@ -153,9 +153,7 @@ def test_publish_is_logged_on_the_publishers_key(tmp_path):
     with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
         ctx.execute("scope.take-order")
         messages = [entry["message"] for entry in ctx.tail_logs("scope.take-order")]
-    assert any(
-        m.startswith("notified orders.received: Le Petit: 2 baguettes [parent=") for m in messages
-    )
+    assert "notified orders.received: Le Petit: 2 baguettes" in messages
 
 
 def test_works_with_file_logging_off():
@@ -369,7 +367,12 @@ def test_events_listeners_receive_no_notifications():
     assert events and all(isinstance(e, Event) for e in events)
 
 
-# --- log lines ---------------------------------------------------------------
+# --- log records -------------------------------------------------------------
+
+
+def published(ctx: Context, key: str) -> list[dict]:
+    """Return the notification records in ``key``'s log."""
+    return [r for r in ctx.tail_logs(key) if r.get("source") == "notifications"]
 
 
 @pytest.mark.parametrize(
@@ -378,26 +381,32 @@ def test_events_listeners_receive_no_notifications():
 )
 def test_publish_is_logged_at_the_matching_level(tmp_path, level, log_level):
     ctx = Context(namespaces={make_ns()}, log_dir=tmp_path)
-    ctx.notifications.publish("orders.received", key="scope.x", level=level)
-    (entry,) = ctx.tail_logs("scope.x")
-    assert entry["level"] == log_level
-    assert entry["message"] == "notified orders.received [parent=-]"
+    ctx.notifications.publish("orders.received", {"id": 7}, key="scope.x", level=level)
+    (record,) = published(ctx, "scope.x")
+    assert record["level"] == log_level
+    assert record["notification_level"] == level
+    assert record["message"] == "notified orders.received"
+    assert record["topic"] == "orders.received"
+    assert record["parent"] is None
+    assert "payload" not in record
 
 
-def test_notifications_level_filters_publish_lines(tmp_path):
-    ctx = Context(namespaces={make_ns()}, log_dir=tmp_path, log_levels={"notifications": "ERROR"})
+def test_notifications_level_filters_publish_records(tmp_path):
+    config = {"notifications": "ERROR"}
+    ctx = Context(namespaces={make_ns()}, log_dir=tmp_path, log_config=config)
     ctx.notifications.publish("orders.received", key="scope.x")
     ctx.notifications.publish("orders.lost", key="scope.x", level="error")
-    assert [e["message"] for e in ctx.tail_logs("scope.x")] == ["notified orders.lost [parent=-]"]
+    assert [r["topic"] for r in published(ctx, "scope.x")] == ["orders.lost"]
 
 
-def test_publish_line_parent_is_the_publishing_call(tmp_path):
+def test_publish_record_carries_subject_record_and_the_publishing_call(tmp_path):
     NS = make_ns()
-    publishing_task(NS)
+    publishing_task(NS, subject="repository.orders", record=7)
     with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
         ctx.execute("scope.take-order")
-        messages = [e["message"] for e in ctx.tail_logs("scope.take-order")]
+        started = ctx.tail_logs("scope.take-order")[1]
+        (record,) = published(ctx, "scope.take-order")
 
-    started = next(m for m in messages if m.startswith("execute() started"))
-    call = started.split("[call=")[1][:8]
-    assert f"notified orders.received [parent={call}]" in messages
+    assert started["state"] == "started"
+    assert record["parent"] == started["call"]
+    assert (record["subject"], record["record"]) == ("repository.orders", 7)

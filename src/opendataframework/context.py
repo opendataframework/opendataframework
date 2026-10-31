@@ -874,15 +874,15 @@ class Context:
             Defaults to all of the built-in ones listed above.
         config: Configuration dict, pre-seeded as ``Config`` into the
             container.
-        log_dir: Directory to write per-component ``<namespace>.<name>.log``
-            files under.
+        log_dir: Directory to write per-component ``<namespace>.<name>.jsonl``
+            files (``.log`` in the ``text`` format) under.
             ``None`` (the default) disables file logging entirely — see
             ``opendataframework.logger.LogManager``. ``Project.from_config``/``from_dict``
             opt in to a real directory.
-        log_levels: Level thresholds, shaped like ``[project.logging]`` —
-            see ``opendataframework.logger.LogManager``. ``None`` keeps
-            ``INFO`` and up. Names of namespaces and components in it are
-            checked by ``open()``.
+        log_config: Log format and level thresholds, shaped like
+            ``[project.logging]`` — see ``opendataframework.logger.LogManager``.
+            ``None`` writes JSON Lines and keeps ``INFO`` and up. Names of
+            namespaces and components in it are checked by ``open()``.
 
     Attributes:
         instances: Class-to-instance mapping, populated after ``open()`` returns.
@@ -926,11 +926,11 @@ class Context:
         namespaces: Iterable[type[Namespace]] | None = None,
         config: dict | None = None,
         log_dir: str | Path | None = None,
-        log_levels: Mapping[str, object] | None = None,
+        log_config: Mapping[str, object] | None = None,
     ) -> None:
         """See class docstring for ``Args``."""
         extra = {Config: Config(config)} if config is not None else {}
-        self._log_manager = LogManager(log_dir, log_levels)
+        self._log_manager = LogManager(log_dir, log_config)
         self._events = Events(self._log_manager)
         self._notifications = Notifications(self._log_manager, key_of=self.key)
         self._resolver = Resolver(
@@ -1061,7 +1061,7 @@ class Context:
         Raises:
             ValueError: If a circular dependency is detected, a gathered
                 object would not have exactly one key (see
-                ``Resolver._index``), or ``log_levels`` names a namespace or
+                ``Resolver._index``), or ``log_config`` names a namespace or
                 component that does not exist (see ``LogManager.validate``).
             TypeError: If a registered function, or a method the ``Context``
                 calls, is async — see ``_require_sync``.
@@ -1323,7 +1323,9 @@ class Context:
             lines: Maximum number of most-recent entries to return.
 
         Returns:
-            A list of ``{"ts", "level", "message"}`` dicts, oldest first.
+            Log records, oldest first, each with at least ``"ts"``,
+            ``"level"`` and ``"message"``; in the default ``json`` format,
+            the full record (``key``, ``source``, ``call``, ``fields``, ...).
             Empty if file logging is disabled or nothing was logged.
 
         Raises:

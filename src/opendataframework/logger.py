@@ -1,4 +1,4 @@
-"""Per-component file logging.
+"""Per-component structured logging.
 
 ``LogManager`` owns one log file per ``<namespace>.<name>`` key (see
 ``opendataframework.namespace.qualified``), scoped to a single
@@ -6,7 +6,17 @@
 the same process never share log files or file handles (see
 ``docs/context.md`` / ``CLAUDE.md``'s "no global mutable state" constraint).
 
-Three ways log lines get written:
+Each line is a record. By default a file is JSON Lines, ``<key>.jsonl``,
+one JSON object per line::
+
+    {"ts": "2026-10-31T10:00:00.123+01:00", "level": "INFO",
+     "key": "task.load", "namespace": "task", "name": "load", "source": null,
+     "message": "order taken", "fields": {"order_id": 7}}
+
+With ``[project.logging] format = "text"`` it is ``<key>.log`` instead, each
+record turned into a readable line by ``render``.
+
+Three ways records get written:
 
 * Automatically, by ``Events`` — every protocol call the framework makes
   (``setup``/``run``/``stop``, ``execute()``, a ``@Function`` call, ...) is
@@ -19,10 +29,11 @@ Three ways log lines get written:
   a ``Logger`` already bound to its own key, so ``self.logger.info(x)``
   needs no name argument and still lands in that component's own file.
 
-Which lines are kept is set by level thresholds — ``[project.logging]`` in
+Which records are kept is set by level thresholds — ``[project.logging]`` in
 the project config; see ``LogManager``.
 """
 
+import json
 import re
 import threading
 from collections.abc import Iterable, Mapping
@@ -32,12 +43,16 @@ from pathlib import Path
 from opendataframework.utils import kebab
 
 _LINE_RE = re.compile(r"^(\S+ \S+) (\S+)\s+(.*)$")
+_ESCAPED_RE = re.compile(r"\\(\\|n)")
 
 LEVELS: dict[str, int] = {"DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40}
 """Level names, in increasing severity."""
 
 SOURCES = ("events", "notifications")
-"""Framework sources a line can come from, each settable on its own."""
+"""Framework sources a record can come from, each settable on its own."""
+
+FORMATS = {"json": ".jsonl", "text": ".log"}
+"""Log file formats, and the file extension each is written with."""
 
 _DEFAULT_LEVEL = "INFO"
 
@@ -50,44 +65,51 @@ class LogManager:
     framework's default (and its test suite) free of stray files, while
     ``Project.from_config``/``from_dict`` opt in to a real ``log_dir``.
 
-    A line is written only if its level is at or above the threshold for its
-    component and source. ``levels`` mirrors ``[project.logging]``::
+    ``config`` mirrors ``[project.logging]``::
 
-        level = "INFO"            # default for every line
-        events = "WARNING"        # lines Events writes
-        notifications = "INFO"    # lines Notifications writes
+        format = "json"           # "json" (the default) or "text"
+        level = "INFO"            # default for every record
+        events = "WARNING"        # records Events writes
+        notifications = "INFO"    # records Notifications writes
 
         [task]                    # a namespace
         level = "INFO"            # every task, every source
         take-orders = "DEBUG"     # one component, every source
 
-    The most specific setting wins: ``task.take-orders``, then
-    ``task.level``, then the line's source (``events``/``notifications``),
-    then ``level``, then ``INFO``. Level names are ``DEBUG``, ``INFO``,
-    ``WARNING`` and ``ERROR``, in any casing.
+    A record is written only if its level is at or above the threshold for
+    its component and source. The most specific setting wins:
+    ``task.take-orders``, then ``task.level``, then the record's source
+    (``events``/``notifications``), then ``level``, then ``INFO``. Level
+    names are ``DEBUG``, ``INFO``, ``WARNING`` and ``ERROR``, in any casing.
 
     Args:
-        log_dir: Directory to write ``<namespace>.<name>.log`` files under, or
-            ``None`` to disable file logging entirely.
-        levels: Level thresholds, as above. ``None`` keeps ``INFO`` and up.
+        log_dir: Directory to write ``<namespace>.<name>.jsonl`` (or
+            ``.log``) files under, or ``None`` to disable file logging
+            entirely.
+        config: Format and level thresholds, as above. ``None`` writes JSON
+            Lines and keeps ``INFO`` and up.
 
     Raises:
-        ValueError: If ``levels`` has an unknown level name, or a value
-            that is neither a level name nor, for a namespace, a table of them.
+        ValueError: If ``config`` has an unknown format or level name, or a
+            value that is neither a level name nor, for a namespace, a table
+            of them.
     """
 
     def __init__(
-        self, log_dir: str | Path | None = None, levels: Mapping[str, object] | None = None
+        self, log_dir: str | Path | None = None, config: Mapping[str, object] | None = None
     ) -> None:
-        """Set the log directory (or ``None`` to disable file logging) and thresholds."""
+        """Set the log directory (or ``None`` to disable file logging), format and thresholds."""
         self._dir = Path(log_dir) if log_dir is not None else None
         self._lock = threading.Lock()
         self._files: dict[str, object] = {}
+        self._format = "json"
         self._default = LEVELS[_DEFAULT_LEVEL]
         self._sources: dict[str, int] = {}
         self._namespaces: dict[str, dict[str, int]] = {}
-        for key, value in (levels or {}).items():
-            if key == "level":
+        for key, value in (config or {}).items():
+            if key == "format":
+                self._format = _format(value)
+            elif key == "level":
                 self._default = _level(value, key)
             elif key in SOURCES:
                 self._sources[key] = _level(value, key)
@@ -102,12 +124,12 @@ class LogManager:
                 )
 
     def threshold(self, component: str, source: str | None = None) -> int:
-        """Return the lowest level written for ``component``'s lines from ``source``.
+        """Return the lowest level written for ``component``'s records from ``source``.
 
         Args:
             component: A ``<namespace>.<name>`` key.
             source: ``"events"``, ``"notifications"``, or ``None`` for any
-                other line (a ``Logger`` call, a resolution line, ...).
+                other record (a ``Logger`` call, a resolution line, ...).
         """
         namespace, _, name = component.partition(".")
         table = self._namespaces.get(namespace, {})
@@ -120,7 +142,7 @@ class LogManager:
         return self._default
 
     def validate(self, namespaces: Iterable[str], keys: Iterable[str]) -> None:
-        """Check every namespace and component ``levels`` names exists.
+        """Check every namespace and component the config names exists.
 
         Called by ``Context.open()`` once it has resolved, so a typo fails
         loudly instead of silently setting nothing.
@@ -130,7 +152,7 @@ class LogManager:
             keys: Every resolved ``<namespace>.<name>`` key.
 
         Raises:
-            ValueError: If ``levels`` names a namespace or component that
+            ValueError: If the config names a namespace or component that
                 does not exist.
         """
         namespaces = set(namespaces)
@@ -140,7 +162,7 @@ class LogManager:
             names.setdefault(namespace, set()).add(name)
         for namespace, table in self._namespaces.items():
             if namespace not in namespaces:
-                valid = ", ".join(["level", *SOURCES, *sorted(namespaces)])
+                valid = ", ".join(["format", "level", *SOURCES, *sorted(namespaces)])
                 raise ValueError(
                     f"[project.logging] has unknown key {namespace!r}; expected one of: {valid}"
                 )
@@ -152,41 +174,81 @@ class LogManager:
                         f"expected one of: {valid}"
                     )
 
-    def write(self, component: str, level: str, message: str, source: str | None = None) -> None:
-        """Append one log line for ``component``, if ``level`` passes its threshold.
+    def write(
+        self,
+        component: str,
+        level: str,
+        message: str,
+        *,
+        source: str | None = None,
+        extra: Mapping[str, object] | None = None,
+        fields: Mapping[str, object] | None = None,
+    ) -> None:
+        """Append one record for ``component``, if ``level`` passes its threshold.
 
-        No-op if logging is disabled. ``source`` is ``"events"`` or
-        ``"notifications"`` for the lines those write, ``None`` otherwise.
+        No-op if logging is disabled.
+
+        Args:
+            component: The ``<namespace>.<name>`` key the record is about.
+            level: ``"DEBUG"``, ``"INFO"``, ``"WARNING"`` or ``"ERROR"``.
+            message: Human-readable text.
+            source: ``"events"`` or ``"notifications"`` for the records those
+                write, ``None`` otherwise.
+            extra: Framework fields, written at the top level of the record —
+                an event's ``call``/``parent``/..., a notification's
+                ``topic``/....
+            fields: User fields, written nested under ``"fields"``; omitted
+                when empty.
         """
         if self._dir is None or LEVELS[level] < self.threshold(component, source):
             return
-        name = kebab(component)
-        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        line = f"{ts} {level:<8} {message}\n"
+        namespace, _, name = component.partition(".")
+        record: dict[str, object] = {
+            "ts": datetime.now().astimezone().isoformat(timespec="milliseconds"),
+            "level": level,
+            "key": component,
+            "namespace": namespace,
+            "name": name,
+            "source": source,
+            "message": message,
+            **(extra or {}),
+        }
+        if fields:
+            record["fields"] = dict(fields)
+        if self._format == "json":
+            line = json.dumps(record, default=str, ensure_ascii=False)
+        else:
+            line = render(record)
+        file_name = kebab(component)
         with self._lock:
-            f = self._files.get(name)
+            f = self._files.get(file_name)
             if f is None:
                 self._dir.mkdir(parents=True, exist_ok=True)
-                f = open(self._dir / f"{name}.log", "a", buffering=1)
-                self._files[name] = f
-            f.write(line)
+                f = open(self._path(component), "a", buffering=1)
+                self._files[file_name] = f
+            f.write(line + "\n")
 
     def tail(self, component: str, lines: int = 300) -> list[dict]:
-        """Return the last ``lines`` entries for ``component`` as parsed dicts.
+        """Return the last ``lines`` records for ``component``, oldest first.
 
         Returns:
-            A list of ``{"ts": str | None, "level": str, "message": str}``,
-            oldest first. Empty if logging is disabled or nothing was ever
-            written for this component.
+            Record dicts, each with at least ``"ts"``, ``"level"`` and
+            ``"message"``. In the ``json`` format they are the full records
+            (``key``, ``source``, ``call``, ``fields``, ...); in the ``text``
+            format only those three, parsed back from each line. A line that
+            can't be parsed comes back as ``{"ts": None, "level": "INFO",
+            "message": <the raw line>}``. Empty if logging is disabled or
+            nothing was ever written for this component.
         """
         if self._dir is None:
             return []
-        path = self._dir / f"{kebab(component)}.log"
+        path = self._path(component)
         if not path.exists():
             return []
         with self._lock:
             raw = path.read_text().splitlines()
-        return [_parse_line(line) for line in raw[-lines:]]
+        parse = _parse_json if self._format == "json" else _parse_line
+        return [parse(line) for line in raw[-lines:]]
 
     def logger_for(self, component: str) -> Logger:
         """Return a ``Logger`` bound to ``component``'s own log file."""
@@ -198,6 +260,10 @@ class LogManager:
             for f in self._files.values():
                 f.close()
             self._files.clear()
+
+    def _path(self, component: str) -> Path:
+        """Return ``component``'s log file, with the extension of the format."""
+        return self._dir / f"{kebab(component)}{FORMATS[self._format]}"
 
 
 class Logger:
@@ -215,8 +281,11 @@ class Logger:
                 self.logger = logger
 
             def execute(self) -> None:
-                self.logger.info("export starting")
+                self.logger.info("export starting", users=len(self.users.all()))
                 ...
+
+    Keyword arguments become the record's ``fields``. ``message`` is
+    positional-only, so a field may itself be called ``message``.
     """
 
     def __init__(self, manager: LogManager, component: str) -> None:
@@ -224,30 +293,77 @@ class Logger:
         self._manager = manager
         self._component = component
 
-    def debug(self, message: str) -> None:
-        """Log a DEBUG-level message for this component."""
-        self._manager.write(self._component, "DEBUG", message)
+    def debug(self, message: str, /, **fields: object) -> None:
+        """Log a DEBUG-level message for this component, with optional ``fields``."""
+        self._manager.write(self._component, "DEBUG", message, fields=fields)
 
-    def info(self, message: str) -> None:
-        """Log an INFO-level message for this component."""
-        self._manager.write(self._component, "INFO", message)
+    def info(self, message: str, /, **fields: object) -> None:
+        """Log an INFO-level message for this component, with optional ``fields``."""
+        self._manager.write(self._component, "INFO", message, fields=fields)
 
-    def warning(self, message: str) -> None:
-        """Log a WARNING-level message for this component."""
-        self._manager.write(self._component, "WARNING", message)
+    def warning(self, message: str, /, **fields: object) -> None:
+        """Log a WARNING-level message for this component, with optional ``fields``."""
+        self._manager.write(self._component, "WARNING", message, fields=fields)
 
-    def error(self, message: str) -> None:
-        """Log an ERROR-level message for this component."""
-        self._manager.write(self._component, "ERROR", message)
+    def error(self, message: str, /, **fields: object) -> None:
+        """Log an ERROR-level message for this component, with optional ``fields``."""
+        self._manager.write(self._component, "ERROR", message, fields=fields)
+
+
+def render(record: Mapping[str, object]) -> str:
+    """Return ``record`` as one readable text line, the way the ``text`` format writes it.
+
+    An event's line ends with its ids shortened to 8 characters —
+    ``[call=b71d04aa parent=3f9a1c2e]``, ``parent=-`` for a top-level call —
+    and a notification's with ``[parent=...]``. User fields follow as
+    ``name=value`` pairs. A backslash or newline is escaped, so the result
+    is always a single line.
+
+    Example:
+        >>> render({"ts": "2026-10-31T10:00:00.123+01:00", "level": "INFO",
+        ...         "message": "order taken", "fields": {"order_id": 7}})
+        '2026-10-31 10:00:00.123 INFO     order taken order_id=7'
+    """
+    ts = str(record.get("ts") or "-")[:23].replace("T", " ")
+    line = f"{ts} {record.get('level', 'INFO'):<8} {record.get('message', '')}"
+    if "call" in record:
+        line += f" [call={_short(record['call'])} parent={_short(record.get('parent'))}]"
+    elif "parent" in record:
+        line += f" [parent={_short(record['parent'])}]"
+    fields = record.get("fields") or {}
+    if fields:
+        line += " " + " ".join(f"{name}={value!r}" for name, value in fields.items())
+    return line.replace("\\", "\\\\").replace("\n", "\\n")
+
+
+def _short(call_id: object) -> str:
+    """Return a call id shortened to its first 8 characters, or ``-`` for none."""
+    return str(call_id)[:8] if call_id else "-"
+
+
+def _parse_json(line: str) -> dict:
+    """Parse one ``json``-format log line back into its record."""
+    try:
+        record = json.loads(line)
+    except ValueError:
+        record = None
+    if not isinstance(record, dict):
+        return {"ts": None, "level": "INFO", "message": line}
+    return record
 
 
 def _parse_line(line: str) -> dict:
-    """Parse one ``tail()`` log line into ``{"ts", "level", "message"}``."""
+    """Parse one ``text``-format log line into ``{"ts", "level", "message"}``."""
     m = _LINE_RE.match(line)
     if not m:
-        return {"ts": None, "level": "INFO", "message": line}
+        return {"ts": None, "level": "INFO", "message": _unescape(line)}
     ts, level, message = m.groups()
-    return {"ts": ts, "level": level, "message": message}
+    return {"ts": ts, "level": level, "message": _unescape(message)}
+
+
+def _unescape(text: str) -> str:
+    """Undo ``render``'s escaping of backslashes and newlines."""
+    return _ESCAPED_RE.sub(lambda m: "\n" if m[1] == "n" else "\\", text)
 
 
 def _level(value: object, key: str) -> int:
@@ -258,3 +374,13 @@ def _level(value: object, key: str) -> int:
             f"[project.logging] {key} = {value!r}: expected one of {', '.join(LEVELS)}"
         )
     return LEVELS[name]
+
+
+def _format(value: object) -> str:
+    """Return the log format ``value`` names, for ``[project.logging] format``."""
+    name = value.lower() if isinstance(value, str) else None
+    if name not in FORMATS:
+        raise ValueError(
+            f"[project.logging] format = {value!r}: expected one of {', '.join(FORMATS)}"
+        )
+    return name

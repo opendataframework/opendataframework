@@ -205,7 +205,7 @@ chained `.get()`/attribute access (e.g. `config.get("outer").get("inner")`)
 if a project's config genuinely needs them. Using the key
 consistently makes config files predictable and easy to navigate, and means
 a class has one name everywhere: `[service.postgres]` in config,
-`Context.start("service.postgres")`, `logs/service.postgres.log`. The section
+`Context.start("service.postgres")`, `logs/service.postgres.jsonl`. The section
 moves with the namespace — changing `@Component` to `@Service` moves
 `[component.postgres]` to `[service.postgres]`. It is independent
 of [Layer](layer.md), which is an organisational grouping and has no bearing
@@ -232,7 +232,8 @@ exactly as shown, not normalized like the accessors above:
 log-dir = "logs"   # see Logger
 app = "app"        # see Project — imports the app package
 
-[project.logging]  # see Logger — log level thresholds
+[project.logging]  # see Logger — log format and level thresholds
+format = "json"
 level = "INFO"
 ```
 

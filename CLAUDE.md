@@ -118,8 +118,9 @@ Different environments → different config paths. No environment flag.
 - **Don't execute pipelines/tasks inside `on_start()`.** It blocks the entire startup sequence.
 - **Framework-driven protocol calls emit events.** Every lifecycle or execution
   protocol method the `Context` calls is wrapped in `Events.notify()`, and
-  nothing else emits. `Events.notify()` also writes the call's log lines
-  (with call and parent ids), so never hand-write protocol-call log lines.
+  nothing else emits. `Events.notify()` also writes the call's log records
+  (with call and parent ids as fields), so never hand-write protocol-call
+  log records.
   A new call site for one of those protocols must be wrapped too, and
   `docs/events.md`'s coverage table updated.
 - **Zero third-party dependencies, and it needs to stay that way.** If a

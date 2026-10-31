@@ -16,34 +16,46 @@
   `subscribe(listener, topic=...)` takes an exact topic or a `"orders.*"` prefix and
   returns an unsubscribe function. Delivery is synchronous, listeners run with no current
   call, and a listener's exception is logged and never reaches the publisher. Each
-  publish is logged as `notified <topic>: <summary>`. Notifications are separate from
+  publish is logged as `notified <topic>: <summary>`, at the level matching the
+  notification's own. Notifications are separate from
   `Events`: the framework never publishes one, and neither hub delivers the other's type.
   See [Notifications](notifications.md).
+- **Logger**: logs are now structured. Each line is a record, and by default a file is
+  JSON Lines, `logs/<namespace>.<name>.jsonl`, one JSON object per line. Every record has
+  `ts` (ISO 8601 with milliseconds), `level`, `key`, `namespace`, `name`, `source` and
+  `message`. Records Events writes add the event's `call`, `parent`, `protocol`, `method`,
+  `state`, `elapsed_ms` and `error`, so a pipeline's steps, which log to their own files,
+  can be traced back to the pipeline by `parent`. Notification records add `topic`,
+  `notification_level`, `subject`, `record` and `parent`. `Logger` calls take keyword
+  arguments as structured fields: `logger.info("order taken", order_id=7)` writes
+  `"fields": {"order_id": 7}`. `tail_logs()` returns the full records. See
+  [Logger](logger.md#log-format).
+- **Logger**: `[project.logging] format = "text"` writes readable `.log` files instead,
+  one line per record, with ids shortened to 8 characters (`[call=3f9a1c2e parent=-]`)
+  and fields appended as `name=value`. `opendataframework.logger.render(record)` turns
+  a JSON record into that line. See [Logger](logger.md#text-format).
 - **Logger**: log levels can now be set in config, under `[project.logging]`: a default
-  `level`, one for `events` (protocol-call lines) and one for `notifications`, and one per
-  namespace (`[project.logging.task] level = ...`) or per component
+  `level`, one for `events` (protocol-call records) and one for `notifications`, and one
+  per namespace (`[project.logging.task] level = ...`) or per component
   (`[project.logging.task] take-orders = "DEBUG"`). The most specific setting wins. Level
-  names are checked when the project is created, and namespace and component names when
-  it starts, so a typo raises instead of silently doing nothing. `Context` takes the same
-  mapping as `log_levels=`. See [Logger](logger.md#levels).
-- **Logger**: every protocol-call line now ends with the call's id and its parent's
-  (`[call=3f9a1c2e parent=-]`), and every notification's line with the call it was
-  published during. A pipeline's steps, which log to their own files, can now be traced
-  back to the pipeline with a single `grep`. See
-  [Logger](logger.md#tracing-a-call-across-files).
+  and format names are checked when the project is created, and namespace and component
+  names when it starts, so a typo raises instead of silently doing nothing. `Context`
+  takes the same mapping as `log_config=`. See [Logger](logger.md#levels).
 
 ### Changed
 
-- **Logger**: the default threshold is now `INFO`, so `logger.debug()` lines are dropped
-  unless enabled, e.g. with `[project.logging] level = "DEBUG"`.
-- **Logger**: protocol-call lines are now written by `Events`, with one wording for every
-  call: `<method>() started`, `<method>() completed in 1.2ms`, and
-  `<method>() failed in 1.2ms: <error>` at `ERROR` (`call ...` for a `@Function`), each
-  followed by its ids. They replace `setup() starting`/`setup() complete`,
-  `on_start() called`/`on_start() complete`, `stop() called`, `run() returned`, and
-  `... raised ...`. Code matching the old wording in `tail_logs()` output needs updating.
-- **Notifications**: a notification's log line is now written at the level matching its
-  own (`warning` as `WARNING`, `error` as `ERROR`) instead of always `INFO`.
+- **Logger**: log files are now JSON Lines (`.jsonl`) by default instead of text (`.log`),
+  and `ts` is ISO 8601 with milliseconds and the UTC offset. Set
+  `[project.logging] format = "text"` to keep readable text files. `tail_logs()` still
+  returns `ts`, `level` and `message` in every record, plus the other fields.
+- **Logger**: the default threshold is now `INFO`, so `logger.debug()` records are
+  dropped unless enabled, e.g. with `[project.logging] level = "DEBUG"`.
+- **Logger**: protocol-call records are now written by `Events`, with one wording for
+  every call: `<method>() started`, `<method>() completed in 1.2ms`, and
+  `<method>() failed in 1.2ms: <error>` at `ERROR` (`call ...` for a `@Function`). They
+  replace `setup() starting`/`setup() complete`, `on_start() called`/`on_start() complete`,
+  `stop() called`, `run() returned`, and `... raised ...`. Code matching the old wording in
+  `tail_logs()` output needs updating.
 
 ## 0.4.0
 
