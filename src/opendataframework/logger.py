@@ -37,10 +37,43 @@ import json
 import re
 import threading
 from collections.abc import Iterable, Iterator, Mapping
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime
 from pathlib import Path
 
 from opendataframework.utils import kebab
+
+# The ``call_id`` of the protocol call in progress in this thread (or task).
+# A ``ContextVar`` holds a separate value per thread, so it is not shared state.
+# It lives here, not in ``events``, because ``LogManager.write()`` reads it
+# and ``events`` already imports this module.
+_current_call: ContextVar[str | None] = ContextVar("opendataframework_call", default=None)
+
+
+def _current_call_id() -> str | None:
+    """Return the ``call_id`` of the protocol call in progress in this thread, if any.
+
+    Set by ``Events.notify()``. Read by ``LogManager.write()``, which records
+    it as a record's ``parent``, and by ``opendataframework.notifications``,
+    which records it as a notification's.
+    """
+    return _current_call.get()
+
+
+@contextmanager
+def _no_current_call() -> Iterator[None]:
+    """Run the block with no current call, so a call made inside it is top-level.
+
+    Used while listeners run — ``Events``' and ``Notifications``' alike — so a
+    call a listener makes is not a child of the call that triggered it.
+    """
+    token = _current_call.set(None)
+    try:
+        yield
+    finally:
+        _current_call.reset(token)
+
 
 _LINE_RE = re.compile(r"^(\S+ \S+) (\S+)\s+(.*)$")
 _ESCAPED_RE = re.compile(r"\\(\\|n)")
@@ -186,7 +219,10 @@ class LogManager:
     ) -> None:
         """Append one record for ``component``, if ``level`` passes its threshold.
 
-        No-op if logging is disabled.
+        No-op if logging is disabled. While a protocol call is in progress,
+        a record whose ``extra`` doesn't name a ``parent`` gets the call's id
+        as its ``parent`` — so a ``logger.info()`` inside ``execute()`` says
+        which call wrote it. Records written outside any call get none.
 
         Args:
             component: The ``<namespace>.<name>`` key the record is about.
@@ -213,6 +249,13 @@ class LogManager:
             "message": message,
             **(extra or {}),
         }
+        # Key presence, not truthiness: a top-level event sets parent=None on
+        # purpose, and its "completed" record is written while its own call
+        # is still current.
+        if "parent" not in record:
+            parent = _current_call.get()
+            if parent is not None:
+                record["parent"] = parent
         if fields:
             record["fields"] = dict(fields)
         if self._format == "json":
@@ -276,6 +319,24 @@ class LogManager:
                 record = _parse_json(line)
                 if record.get("ts") is not None:
                     yield record
+
+    def for_call(self, call_id: str) -> list[dict]:
+        """Return every record written by or during one protocol call, across files.
+
+        That is the call's own event records (``call`` equal to
+        ``call_id``) and every record written while it was the current call
+        (``parent`` equal to ``call_id``): its log lines, the notifications
+        it published, and the start and end of the calls made directly
+        inside it. Records are grouped file by file, oldest first in each.
+
+        Raises:
+            ValueError: As ``records()`` does.
+        """
+        return [
+            record
+            for record in self.records()
+            if record.get("call") == call_id or record.get("parent") == call_id
+        ]
 
     def logger_for(self, component: str) -> Logger:
         """Return a ``Logger`` bound to ``component``'s own log file."""

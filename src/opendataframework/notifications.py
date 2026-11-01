@@ -28,8 +28,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Literal, get_args
 
-from opendataframework.events import _current_call_id, _no_current_call
-from opendataframework.logger import LogManager
+from opendataframework.logger import LogManager, _current_call_id, _no_current_call
 
 Level = Literal["info", "success", "warning", "error"]
 _LEVELS: tuple[str, ...] = get_args(Level)

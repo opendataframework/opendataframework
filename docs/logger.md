@@ -106,6 +106,7 @@ one JSON object per line:
 | `call`, `parent`, `protocol`, `method`, `state`, `elapsed_ms`, `error` | protocol-call records | The [Event](events.md#the-event)'s fields, with full ids |
 | `topic`, `notification_level`, `subject`, `record`, `parent` | notification records | The [Notification](notifications.md#the-notification)'s fields, without its `payload` |
 | `fields` | records with user fields | The keyword arguments of a `Logger` call |
+| `parent` | records written during a protocol call | The `call` of the call in progress when a `Logger` line (or any other record) was written. Absent outside any call, e.g. in `__init__` |
 
 The field names are fixed. A namespace never becomes a field name of its own,
 so the schema is the same for every component, custom namespaces included.
@@ -128,6 +129,8 @@ trace = project.context.trace(run["call"])
  "protocol": "PipelineProtocol", "method": "execute", "state": "failed",
  "started": "2026-10-31T10:00:00.120+01:00", "ended": "2026-10-31T10:00:00.124+01:00",
  "elapsed_ms": 4.1, "error": "ValueError('courier unavailable')",
+ "logs": [{"ts": "2026-10-31T10:00:00.121+01:00", "level": "INFO",
+           "message": "shipping", "fields": {"orders": 3}}],
  "notifications": [],
  "children": [
      {"call": "7ceee7cb…", "key": "task.price-orders", "state": "completed", ...,
@@ -139,7 +142,9 @@ trace = project.context.trace(run["call"])
 Each node merges a call's `started` and `completed`/`failed` records, and
 children are ordered by when they started. A call that hasn't ended shows as
 `"running"`. A notification is attached to the call it was published
-during, under `notifications`. The tree is plain, JSON-ready data, so a UI
+during, under `notifications`, and a component's own log lines to the call
+they were written in, under `logs` (each with `ts`, `level`, `message` and
+`fields`). The tree is plain, JSON-ready data, so a UI
 (such as the sibling [`odf`](https://opendataframework.github.io/odf/)
 package's) can draw it as-is.
 
@@ -158,6 +163,30 @@ configured format, never what happens to be on disk:
 It can only show records that were kept: with `events = "WARNING"`, only
 failed calls appear, so a failure can still be traced back to its root but
 successful steps are missing.
+
+### One call's records
+
+A `Logger` line written inside a protocol call carries that call's id as
+its `parent` — the same field an event record uses for its caller, and a
+notification record for the call it was published during:
+
+```python
+@Task
+class ShipOrders:
+    def __init__(self, logger: Logger) -> None:
+        self.logger = logger
+        logger.info("ready")  # no parent: not inside a call
+
+    def execute(self) -> None:
+        self.logger.info("shipping", orders=3)  # parent = this execute() call
+```
+
+A line written by a function the task calls belongs to the function's call,
+not the task's. `context.logs(call_id)` returns every record of one call
+across files — its own `started`/`completed`, its log lines, its
+notifications, and the start and end of the calls made directly inside it —
+so a logs view can show one run, even while other runs of the same
+component overlap with it. Unlike `trace()`, it doesn't follow nested calls.
 
 To build the same tree from live [Events](events.md) instead, as they
 arrive, use `opendataframework.events.build_trace(events, call_id)`. It takes
@@ -196,11 +225,12 @@ appended as `name=value`:
 2026-10-31 10:00:00.120 INFO     execute() started [call=3f9a1c2e51b04d7c9e8f2a6b3c1d5e70 parent=-]
 2026-10-31 10:00:00.123 INFO     execute() started [call=b71d04aa9c2e4f1d8a3b6c5d7e9f0a1b parent=3f9a1c2e51b04d7c9e8f2a6b3c1d5e70]
 2026-10-31 10:00:00.124 ERROR    execute() failed in 0.2ms: ValueError('courier unavailable') [call=b71d04aa9c2e4f1d8a3b6c5d7e9f0a1b parent=3f9a1c2e51b04d7c9e8f2a6b3c1d5e70]
-2026-10-31 10:00:00.130 INFO     order taken order_id=7 customer='Le Petit'
+2026-10-31 10:00:00.130 INFO     order taken [parent=7ceee7cbd1a04f2e9b8c6d5a4e3f2a10] order_id=7 customer='Le Petit'
 ```
 
-`grep 3f9a1c2e51b04d7c9e8f2a6b3c1d5e70 logs/*.log` then finds a call and everything made directly
-inside it. The text format keeps only `ts`, `level` and `message` when read
+A `Logger` line written inside a call ends with `[parent=<id>]`, before
+its fields. `grep 3f9a1c2e51b04d7c9e8f2a6b3c1d5e70 logs/*.log` then finds a call and
+everything written directly inside it. The text format keeps only `ts`, `level` and `message` when read
 back, and `context.trace()` isn't available. For structure, keep the default.
 
 `opendataframework.logger.render(record)` turns a JSON record into that same

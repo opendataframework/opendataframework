@@ -25,40 +25,12 @@ import threading
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager
-from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import uuid4
 
 from opendataframework.function import FunctionProtocol
-from opendataframework.logger import LogManager
-
-# The ``call_id`` of the protocol call in progress in this thread (or task).
-# A ``ContextVar`` holds a separate value per thread, so it is not shared state.
-_current_call: ContextVar[str | None] = ContextVar("opendataframework_call", default=None)
-
-
-def _current_call_id() -> str | None:
-    """Return the ``call_id`` of the protocol call in progress in this thread, if any.
-
-    Shared with ``opendataframework.notifications``, which records it as a
-    notification's ``parent``.
-    """
-    return _current_call.get()
-
-
-@contextmanager
-def _no_current_call() -> Iterator[None]:
-    """Run the block with no current call, so a call made inside it is top-level.
-
-    Used while listeners run — ``Events``' and ``Notifications``' alike — so a
-    call a listener makes is not a child of the call that triggered it.
-    """
-    token = _current_call.set(None)
-    try:
-        yield
-    finally:
-        _current_call.reset(token)
+from opendataframework.logger import LogManager, _current_call, _no_current_call
 
 
 @dataclass(frozen=True)
@@ -256,11 +228,14 @@ def build_trace(items: Iterable[Event | Mapping[str, object]], call_id: str) -> 
     log records, as ``LogManager.records()`` reads them back, in any order
     and mixed. A call's ``started`` and ``completed``/``failed`` are merged
     into one node; a call with no end yet is ``"running"``. Notification
-    records attach to the call they were published during, by ``parent``.
+    records attach to the call they were published during, by ``parent``,
+    and so do component log lines — a ``logger.info()`` written inside the
+    call.
 
     Args:
-        items: Events and/or log records. Records that are neither an
-            event's nor a notification's are ignored.
+        items: Events and/or log records. Records that are not an event's,
+            a notification's, or a log line written inside a call are
+            ignored.
         call_id: The root call's id — ``Event.call_id``, or a record's
             ``call``.
 
@@ -268,7 +243,8 @@ def build_trace(items: Iterable[Event | Mapping[str, object]], call_id: str) -> 
         A JSON-ready tree. Each node has ``call``, ``parent``, ``key``,
         ``protocol`` (its name), ``method``, ``state``, ``started`` and
         ``ended`` (ISO 8601, or ``None`` when that record isn't there),
-        ``elapsed_ms``, ``error``, ``notifications`` (each with ``key``,
+        ``elapsed_ms``, ``error``, ``logs`` (each with ``ts``, ``level``,
+        ``message`` and ``fields``, oldest first), ``notifications`` (each with ``key``,
         ``topic``, ``level``, ``message``, ``subject``, ``record``, ``ts``)
         and ``children``, ordered by when they started.
 
@@ -284,8 +260,19 @@ def build_trace(items: Iterable[Event | Mapping[str, object]], call_id: str) -> 
     """
     calls: dict[str, dict] = {}
     notifications: dict[str, list[dict]] = {}
+    logs: dict[str, list[dict]] = {}
     for item in items:
         record = _as_record(item) if isinstance(item, Event) else item
+        if record.get("source") is None and record.get("parent") and not record.get("call"):
+            logs.setdefault(str(record["parent"]), []).append(
+                {
+                    "ts": record.get("ts"),
+                    "level": record.get("level"),
+                    "message": record.get("message"),
+                    "fields": dict(record.get("fields") or {}),
+                }
+            )
+            continue
         if record.get("source") == "notifications" and record.get("parent"):
             notifications.setdefault(str(record["parent"]), []).append(
                 {
@@ -337,6 +324,7 @@ def build_trace(items: Iterable[Event | Mapping[str, object]], call_id: str) -> 
         kids = sorted(children.get(node["call"], []), key=lambda n: str(n["started"] or n["ended"]))
         return {
             **node,
+            "logs": sorted(logs.get(node["call"], []), key=lambda r: str(r["ts"])),
             "notifications": notifications.get(node["call"], []),
             "children": [tree(kid) for kid in kids],
         }

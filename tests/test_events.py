@@ -10,6 +10,7 @@ from opendataframework.component import Component, OnStartProtocol, OnStopProtoc
 from opendataframework.context import Context
 from opendataframework.events import Event, Events, build_trace
 from opendataframework.function import Function, FunctionProtocol
+from opendataframework.logger import Logger
 from opendataframework.namespace import Namespace
 from opendataframework.notifications import Notifications
 from opendataframework.pipeline import Pipeline, PipelineProtocol
@@ -911,6 +912,118 @@ def test_trace_attaches_notifications_to_the_publishing_call(tmp_path):
     assert notification["topic"] == "orders.received"
     assert notification["level"] == "warning"
     assert notification["message"] == "notified orders.received: 2 x baguette"
+
+
+def logging_chain(NS):
+    """Register a task that logs in ``__init__`` and ``execute()``, and calls a logging function."""
+
+    @NS
+    @Function
+    def quote(logger: Logger) -> int:
+        logger.info("priced", total=12)
+        return 12
+
+    @NS
+    @Task
+    class Checkout:
+        def __init__(self, quote: Annotated[Callable[..., int], quote], logger: Logger) -> None:
+            self.quote = quote
+            self.logger = logger
+            logger.info("ready")
+
+        def execute(self) -> int:
+            self.logger.info("checking out", basket=3)
+            return self.quote()
+
+    return Checkout
+
+
+def user_lines(ctx: Context, key: str) -> list[dict]:
+    """Return the records in ``key``'s log that no framework source wrote."""
+    return [r for r in ctx.tail_logs(key) if r.get("source") is None]
+
+
+def test_log_lines_carry_the_call_they_were_written_in(tmp_path):
+    NS = make_ns()
+    logging_chain(NS)
+    ctx = Context(namespaces={NS}, log_dir=tmp_path)
+    events = collect(ctx)
+    with ctx:
+        ctx.execute("scope.checkout")
+        checkout = user_lines(ctx, "scope.checkout")
+        quote = user_lines(ctx, "scope.quote")
+
+    task = next(e for e in events if e.key == "scope.checkout")
+    function = next(e for e in events if e.key == "scope.quote")
+    ready = next(r for r in checkout if r["message"] == "ready")
+    assert "parent" not in ready
+    assert next(r for r in checkout if r["message"] == "checking out")["parent"] == task.call_id
+    (priced,) = (r for r in quote if r["message"] == "priced")
+    assert priced["parent"] == function.call_id
+
+
+def test_a_top_level_events_parent_stays_none(tmp_path):
+    NS = make_ns()
+    logging_chain(NS)
+    with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
+        ctx.execute("scope.checkout")
+        started, completed = records(ctx, "scope.checkout")
+    assert started["parent"] is None and completed["parent"] is None
+
+
+def test_text_format_renders_the_parent_of_a_log_line(tmp_path):
+    NS = make_ns()
+    logging_chain(NS)
+    ctx = Context(namespaces={NS}, log_dir=tmp_path, log_config={"format": "text"})
+    events = collect(ctx)
+    with ctx:
+        ctx.execute("scope.checkout")
+        lines = [r["message"] for r in ctx.tail_logs("scope.checkout")]
+    task = next(e for e in events if e.key == "scope.checkout")
+    assert f"checking out [parent={task.call_id}] basket=3" in lines
+    assert "ready" in lines
+
+
+def test_trace_nodes_carry_their_log_lines(tmp_path):
+    NS = make_ns()
+    logging_chain(NS)
+    with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
+        ctx.execute("scope.checkout")
+        (started, _) = records(ctx, "scope.checkout")
+        trace = ctx.trace(started["call"])
+
+    (line,) = trace["logs"]
+    assert (line["level"], line["message"], line["fields"]) == (
+        "INFO",
+        "checking out",
+        {"basket": 3},
+    )
+    assert line["ts"] is not None
+    (function,) = trace["children"]
+    assert [r["message"] for r in function["logs"]] == ["priced"]
+    assert function["logs"][0]["fields"] == {"total": 12}
+
+
+def test_context_logs_returns_one_calls_records_across_files(tmp_path):
+    NS = make_ns()
+    logging_chain(NS)
+    with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
+        ctx.execute("scope.checkout")
+        (started, _) = records(ctx, "scope.checkout")
+        logged = ctx.logs(started["call"])
+
+    by_key: dict[str, list[str]] = {}
+    for record in logged:
+        by_key.setdefault(record["key"], []).append(record["message"])
+    assert by_key["scope.checkout"][0] == "execute() started"
+    assert by_key["scope.checkout"][1] == "checking out"
+    assert by_key["scope.checkout"][2].startswith("execute() completed in ")
+    # the function's own start and end are children of the task's call; its
+    # log line belongs to the function's call, not the task's
+    assert by_key["scope.quote"][0] == "call started"
+    assert by_key["scope.quote"][1].startswith("call completed in ")
+    assert "priced" not in by_key["scope.quote"]
+    assert "ready" not in by_key["scope.checkout"]
 
 
 def test_build_trace_from_live_events_and_running_calls():

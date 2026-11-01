@@ -2,6 +2,19 @@
 
 ## 0.6.0
 
+### Added
+
+- **Logger**: a record written while a protocol call is in progress — a `logger.info()`
+  inside `execute()`, say — carries that call's id as `parent`, so every log line says
+  which call wrote it. A line written by a function belongs to the function's call, not
+  its caller's. Records written outside any call (in `__init__`, during resolution) have
+  no `parent`. The text format renders it as `[parent=<id>]`.
+- **Context**: `context.trace()` nodes gain `logs`, the component log lines written inside
+  each call (`ts`, `level`, `message`, `fields`).
+- **Context**: `context.logs(call_id)` (and `LogManager.for_call()`) returns every record
+  written by or during one call, across files, so a logs view can filter one run even
+  when runs of the same component overlap.
+
 ### Changed (breaking)
 
 - **Notifications**: a payload is now read-only all the way down, not just at the top

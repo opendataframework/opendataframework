@@ -1343,6 +1343,29 @@ class Context:
         """
         return build_trace(self._log_manager.records(), call_id)
 
+    def logs(self, call_id: str) -> list[dict]:
+        """Return every log record written by or during one protocol call, across files.
+
+        The call's own event records, and every record written while it was
+        the current call: its components' log lines, the notifications it
+        published, and the start and end of the calls made directly inside
+        it — see ``LogManager.for_call``. Unlike ``trace()``, it doesn't
+        follow nested calls; it is what a logs view filters one run by.
+
+        Args:
+            call_id: The call's id — ``Event.call_id``, or a record's
+                ``call``.
+
+        Raises:
+            ValueError: If file logging is off, or the configured log format
+                is ``text``.
+
+        Example:
+            >>> [r["message"] for r in context.logs(call_id)]
+            ['execute() started', 'order taken', 'execute() completed in 2.1ms']
+        """
+        return self._log_manager.for_call(call_id)
+
     def tail_logs(self, key: str, lines: int = 300) -> list[dict]:
         """Return the last ``lines`` log entries for a resolved class or function.
 
