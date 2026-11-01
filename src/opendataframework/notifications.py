@@ -51,7 +51,8 @@ class Notification:
             ``Context.key()`` returns it.
         topic: Dotted name of what happened — ``"orders.received"``,
             ``"margins.below-cost"``.
-        payload: Data for subscribers, read-only; ``{}`` when none was given.
+        payload: Data for subscribers, read-only all the way down (nested
+            lists arrive as tuples); ``{}`` when none was given.
             Keep it JSON-serialisable, so a UI can show it.
         summary: One human-readable line, or ``None``. A UI shows only
             notifications that have one.
@@ -155,7 +156,9 @@ class Notifications:
 
         Args:
             topic: Dotted name of what happened. Non-empty, with no ``*``.
-            payload: Data for subscribers; copied, and delivered read-only.
+            payload: Data for subscribers. Its containers are copied and
+                delivered read-only all the way down — nested lists arrive
+                as tuples, sets as frozensets; see ``_freeze``.
             summary: One human-readable line, for a UI to show.
             level: ``"info"`` (the default), ``"success"``, ``"warning"``, or
                 ``"error"``.
@@ -187,7 +190,7 @@ class Notifications:
         notification = Notification(
             key,
             topic,
-            MappingProxyType(dict(payload or {})),
+            _freeze(payload or {}),
             summary,
             level,
             self._subject_key(subject),
@@ -293,6 +296,23 @@ class Notifications:
                         "WARNING",
                         f"listener of {notification.topic} raised {exc!r}",
                     )
+
+
+def _freeze(value: Any) -> Any:
+    """Return ``value`` with every container rebuilt read-only, recursively.
+
+    A mapping becomes a ``MappingProxyType`` over a new ``dict``, a list or
+    tuple a tuple, a set a ``frozenset``. Every container is rebuilt, so the
+    result shares none with ``value``. Anything else is returned as is,
+    never copied — it may not be copyable.
+    """
+    if isinstance(value, Mapping):
+        return MappingProxyType({k: _freeze(v) for k, v in value.items()})
+    if isinstance(value, list | tuple):
+        return tuple(_freeze(v) for v in value)
+    if isinstance(value, set | frozenset):
+        return frozenset(_freeze(v) for v in value)
+    return value
 
 
 def _matches(pattern: str | None, topic: str) -> bool:

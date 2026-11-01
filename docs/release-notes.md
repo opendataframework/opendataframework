@@ -2,6 +2,14 @@
 
 ## 0.6.0
 
+### Changed (breaking)
+
+- **Notifications**: a payload is now read-only all the way down, not just at the top
+  level. Nested mappings arrive as read-only mappings, lists and tuples as tuples, and
+  sets as frozensets, all rebuilt so nothing is shared with the publisher or between
+  subscribers. Other values are passed as they are. Code that mutated a nested value, or
+  expected a nested list, needs updating.
+
 ## 0.5.0
 
 ### Added

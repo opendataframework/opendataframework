@@ -95,6 +95,32 @@ def test_payload_is_a_read_only_copy():
         notification.payload["id"] = 9  # type: ignore[index]
 
 
+def test_payload_is_read_only_all_the_way_down():
+    ctx = Context(namespaces={make_ns()})
+    items = [{"sku": "baguette", "tags": {"fresh"}}]
+    payload = {"order": {"items": items}, "ids": (1, [2, 3])}
+    notification = ctx.notifications.publish("orders.received", payload, key="scope.x")
+    frozen = notification.payload
+    assert frozen["order"]["items"] == ({"sku": "baguette", "tags": frozenset({"fresh"})},)
+    assert frozen["ids"] == (1, (2, 3))
+    with pytest.raises(TypeError):
+        frozen["order"]["items"][0]["sku"] = "croissant"  # type: ignore[index]
+    with pytest.raises(AttributeError):
+        frozen["order"]["items"].append({})  # type: ignore[attr-defined]
+    items[0]["sku"] = "croissant"
+    items.append({})
+    assert frozen["order"]["items"] == ({"sku": "baguette", "tags": frozenset({"fresh"})},)
+
+
+def test_payload_leaves_are_not_copied():
+    class Handle: ...
+
+    handle = Handle()
+    ctx = Context(namespaces={make_ns()})
+    notification = ctx.notifications.publish("files.opened", {"h": [handle]}, key="scope.x")
+    assert notification.payload["h"][0] is handle
+
+
 def test_unbound_hub_needs_a_key():
     ctx = Context(namespaces={make_ns()})
     with pytest.raises(TypeError, match="key="):

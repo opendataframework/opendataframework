@@ -83,7 +83,7 @@ choose which are kept (see [Levels](logger.md#levels)).
 | Argument | Meaning |
 |---|---|
 | `topic` | Dotted name of what happened, e.g. `"orders.received"`. Non-empty, with no `*`. |
-| `payload` | Data for subscribers. Keep it JSON-serialisable, so a UI can show it. Copied, and delivered read-only. |
+| `payload` | Data for subscribers. Keep it JSON-serialisable, so a UI can show it. Its containers are copied and delivered read-only all the way down: nested mappings arrive as read-only mappings, lists and tuples as tuples, sets as frozensets. Other values are passed as they are, never copied. |
 | `summary` | One human-readable line. A UI shows only notifications that have one. |
 | `level` | `"info"` (the default), `"success"`, `"warning"`, or `"error"`. Anything else raises `ValueError`. |
 | `subject` | The component it's about: a class or function, resolved to its key, or a key string such as `"repository.orders"`. |
@@ -155,7 +155,7 @@ built around this.
 |---|---|
 | `key` | The publisher's `<namespace>.<name>` key, e.g. `"task.take-orders"`. |
 | `topic` | e.g. `"orders.received"`. |
-| `payload` | Read-only mapping; `{}` when none was given. |
+| `payload` | Read-only mapping, frozen recursively (nested lists arrive as tuples); `{}` when none was given. |
 | `summary` | One human-readable line, or `None`. |
 | `level` | `"info"`, `"success"`, `"warning"`, or `"error"`. |
 | `subject` | Key of the component it's about, or `None`. |
