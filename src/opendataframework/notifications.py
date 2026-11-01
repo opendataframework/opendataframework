@@ -24,9 +24,10 @@ import copy
 import threading
 import time
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Literal, get_args
+from uuid import uuid4
 
 from opendataframework.logger import LogManager, _current_call_id, _no_current_call
 
@@ -63,6 +64,11 @@ class Notification:
             publisher's thread — see ``Event.call_id`` — or ``None`` when
             published outside one.
         ts: ``time.time()`` when published.
+        id: Identifies the notification — ``uuid4().hex``, unique per
+            publish. A call its listeners make records it as its ``cause``
+            (see ``Event.cause``), and its log record carries it as
+            ``notification``, so it can be referred to: deduplicated,
+            acknowledged, or followed in a trace.
     """
 
     key: str
@@ -74,6 +80,7 @@ class Notification:
     record: object | None
     parent: str | None
     ts: float
+    id: str = field(default_factory=lambda: uuid4().hex)
 
 
 class Notifications:
@@ -204,6 +211,7 @@ class Notifications:
             message,
             source="notifications",
             extra={
+                "notification": notification.id,
                 "topic": topic,
                 "notification_level": level,
                 "subject": notification.subject,
@@ -272,10 +280,11 @@ class Notifications:
         """Call every listener whose topic filter matches, isolating their failures.
 
         Listeners run with no current call, so a call one of them makes is a
-        top-level call rather than a child of the publisher's. An exception
-        from a listener is logged on the subscriber's key — the publisher's,
-        for a listener subscribed through the unbound hub — and never
-        reaches the publisher.
+        top-level call rather than a child of the publisher's — linked to
+        the notification instead, through its ``cause``. An exception from a
+        listener is logged on the subscriber's key — the publisher's, for a
+        listener subscribed through the unbound hub — and never reaches the
+        publisher.
         """
         with self._lock:
             listeners = [
@@ -285,7 +294,7 @@ class Notifications:
             ]
         if not listeners:
             return
-        with _no_current_call():
+        with _no_current_call(cause=notification.id):
             for listener, subscriber in listeners:
                 try:
                     listener(notification)

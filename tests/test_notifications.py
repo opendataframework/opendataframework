@@ -5,7 +5,7 @@ import pytest
 
 from opendataframework.component import Component
 from opendataframework.context import Context
-from opendataframework.events import Event
+from opendataframework.events import Event, build_trace
 from opendataframework.function import Function, FunctionProtocol
 from opendataframework.namespace import Namespace
 from opendataframework.notifications import Notification, Notifications
@@ -358,6 +358,142 @@ def test_call_made_by_a_listener_is_top_level():
     cook_started = next(e for e in events if e.key == "scope.cook-order" and e.state == "started")
     assert cook_started.parent is None
     assert received[0].parent is not None
+
+
+# --- ids and causes ----------------------------------------------------------
+
+
+def reacting(NS):
+    """Register a line cook that reacts to ``orders.*`` by cooking, which calls ``plate``."""
+
+    @NS
+    @Function
+    def plate(order_id: int) -> None: ...
+
+    @NS
+    @Function
+    def cook_dish(order_id: int, plate: Annotated[Callable[..., None], plate]) -> None:
+        plate(order_id=order_id)
+
+    @NS
+    @Component
+    class LineCook:
+        def __init__(
+            self, notifications: Notifications, cook: Annotated[Callable[..., None], cook_dish]
+        ) -> None:
+            notifications.subscribe(lambda n: cook(order_id=n.payload["id"]), "orders.*")
+
+
+def test_notification_ids_are_unique_and_logged(tmp_path):
+    ctx = Context(namespaces={make_ns()}, log_dir=tmp_path)
+    first = ctx.notifications.publish("orders.received", key="scope.x")
+    second = ctx.notifications.publish("orders.received", key="scope.x")
+    assert first.id != second.id
+    assert len(first.id) == 32
+    logged = [r["notification"] for r in ctx.tail_logs("scope.x")]
+    assert logged == [first.id, second.id]
+
+
+def test_a_call_made_by_a_listener_records_the_notification_as_its_cause():
+    NS = make_ns()
+    reacting(NS)
+    publishing_task(NS)
+    ctx = Context(namespaces={NS})
+    events: list[Event] = []
+    ctx.events.subscribe(events.append)
+    received = collect(ctx)
+    with ctx:
+        ctx.execute("scope.take-order")
+
+    (notification,) = received
+    cook = [e for e in events if e.key == "scope.cook-dish"]
+    assert {(e.cause, e.parent) for e in cook} == {(notification.id, None)}
+    plate = [e for e in events if e.key == "scope.plate"]
+    assert {e.cause for e in plate} == {None}
+    assert {e.parent for e in plate} == {cook[0].call_id}
+    take = [e for e in events if e.key == "scope.take-order"]
+    assert {e.cause for e in take} == {None}
+
+
+def test_a_call_made_after_the_listener_returns_has_no_cause():
+    NS = make_ns()
+
+    @NS
+    @Function
+    def later() -> None: ...
+
+    ctx = Context(namespaces={NS})
+    events: list[Event] = []
+    ctx.events.subscribe(events.append)
+    with ctx:
+        ctx.notifications.publish("orders.received", key="scope.x")
+        ctx.call("scope.later")
+    assert {e.cause for e in events if e.key == "scope.later"} == {None}
+
+
+def test_an_events_listener_never_inherits_a_cause():
+    NS = make_ns()
+
+    @NS
+    @Function
+    def audit() -> None: ...
+
+    reacting(NS)
+    publishing_task(NS)
+    ctx = Context(namespaces={NS})
+    events: list[Event] = []
+
+    def on_event(event: Event) -> None:
+        if event.key == "scope.cook-dish" and event.state == "started":
+            ctx.call("scope.audit")
+
+    ctx.events.subscribe(on_event)
+    ctx.events.subscribe(events.append)
+    with ctx:
+        ctx.execute("scope.take-order")
+    audited = [e for e in events if e.key == "scope.audit"]
+    assert audited and {(e.cause, e.parent) for e in audited} == {(None, None)}
+
+
+def test_cause_is_written_to_the_event_records(tmp_path):
+    NS = make_ns()
+    reacting(NS)
+    publishing_task(NS)
+    ctx = Context(namespaces={NS}, log_dir=tmp_path)
+    received = collect(ctx)
+    with ctx:
+        ctx.execute("scope.take-order")
+        cook = [r for r in ctx.tail_logs("scope.cook-dish") if r.get("source") == "events"]
+        plate = [r for r in ctx.tail_logs("scope.plate") if r.get("source") == "events"]
+    assert {r["cause"] for r in cook} == {received[0].id}
+    assert all("cause" not in r for r in plate)
+
+
+def test_trace_follows_a_notification_into_what_it_triggered(tmp_path):
+    NS = make_ns()
+    reacting(NS)
+    publishing_task(NS)
+    ctx = Context(namespaces={NS}, log_dir=tmp_path)
+    events: list[Event] = []
+    ctx.events.subscribe(events.append)
+    received = collect(ctx)
+    with ctx:
+        ctx.execute("scope.take-order")
+        take = next(e for e in events if e.key == "scope.take-order")
+        trace = ctx.trace(take.call_id)
+
+    (notification,) = trace["notifications"]
+    assert notification["id"] == received[0].id
+    (cook,) = notification["triggered"]
+    assert (cook["key"], cook["cause"], cook["parent"]) == ("scope.cook-dish", received[0].id, None)
+    assert [child["key"] for child in cook["children"]] == ["scope.plate"]
+    assert trace["children"] == []
+
+    # the same tree from live events plus the notification's record
+    (record,) = (r for r in ctx.tail_logs("scope.take-order") if r.get("source") == "notifications")
+    live = build_trace([*events, record], take.call_id)
+    assert live["notifications"][0]["triggered"][0]["call"] == cook["call"]
+    assert live["notifications"][0]["triggered"][0]["children"][0]["key"] == "scope.plate"
 
 
 def test_listener_may_publish():

@@ -14,6 +14,14 @@
 - **Context**: `context.logs(call_id)` (and `LogManager.for_call()`) returns every record
   written by or during one call, across files, so a logs view can filter one run even
   when runs of the same component overlap.
+- **Notifications**: `Notification.id`, unique per publish and logged as the record's
+  `notification`, so a notification can be deduplicated, acknowledged, or followed.
+- **Events**: `Event.cause`. A top-level call made by a notification listener records the
+  notification's `id` as its `cause` (also on its log records), and keeps
+  `parent=None`. Calls nested inside it have a `parent` instead. In `context.trace()`,
+  each notification gains `id` and `triggered`, the subtrees of the calls it caused, so a
+  trace follows a reaction from the publishing call to what its listeners did, across
+  files.
 
 ### Changed (breaking)
 

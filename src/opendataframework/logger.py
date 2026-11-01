@@ -61,18 +61,32 @@ def _current_call_id() -> str | None:
     return _current_call.get()
 
 
+# The ``id`` of the notification whose listener is running in this thread, if
+# any. A top-level protocol call that starts while it is set records it as its
+# ``cause`` — see ``Events.notify()``.
+_current_cause: ContextVar[str | None] = ContextVar("opendataframework_cause", default=None)
+
+
 @contextmanager
-def _no_current_call() -> Iterator[None]:
+def _no_current_call(cause: str | None = None) -> Iterator[None]:
     """Run the block with no current call, so a call made inside it is top-level.
 
     Used while listeners run — ``Events``' and ``Notifications``' alike — so a
     call a listener makes is not a child of the call that triggered it.
+
+    Args:
+        cause: The id of the notification being delivered, so a call the
+            listener makes records it as its ``cause``. ``None`` (for an
+            ``Events`` listener) clears any cause in effect, so one never
+            leaks from a notification's listener into an event's.
     """
-    token = _current_call.set(None)
+    call_token = _current_call.set(None)
+    cause_token = _current_cause.set(cause)
     try:
         yield
     finally:
-        _current_call.reset(token)
+        _current_cause.reset(cause_token)
+        _current_call.reset(call_token)
 
 
 _LINE_RE = re.compile(r"^(\S+ \S+) (\S+)\s+(.*)$")

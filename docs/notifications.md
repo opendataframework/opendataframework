@@ -162,6 +162,7 @@ built around this.
 | `record` | Id of the record it's about, or `None`. |
 | `parent` | `call_id` of the protocol call in progress when it was published (see [How `parent` Nests](events.md#how-parent-nests)), or `None`. |
 | `ts` | `time.time()` when it was published. |
+| `id` | Unique per publish (`uuid4().hex`). Logged as the record's `notification`; see [Ids and Causes](#ids-and-causes). |
 
 ---
 
@@ -184,10 +185,40 @@ Delivery follows the same contract as [Events](events.md#listeners-run-inline):
 * **Listeners run with no current call.** A call a listener makes, like
   `Kitchen`'s `schedule()` above, is top-level (`parent=None`), not a child of
   the publisher's call. The reaction is linked to what caused it through
-  the notification's own `parent`, not through nesting.
+  its `cause`, the notification's `id` — see [Ids and Causes](#ids-and-causes).
 * **A listener may publish.** That publish is delivered right away, before
   the outer `publish()` moves on to its next listener. Don't have a listener
   publish a topic it subscribes to.
+
+---
+
+## Ids and Causes
+
+Every notification has an `id`, so it can be referred to: a UI can
+deduplicate a stream after reconnecting, and a trace can follow it.
+
+While a listener runs, the notification is its *cause*. The first protocol
+call the listener makes — a `@Function`, an agent's `invoke()`, a task's
+`execute()` — records the notification's `id` as its
+[`cause`](events.md#the-event), with `parent=None`. Calls nested inside it
+have a `parent` as usual, so the cause marks the top of the reaction only.
+
+`context.trace()` follows that link. A notification in a node's
+`notifications` lists, under `triggered`, the subtrees of the calls whose
+`cause` is its `id` — so the trace of the call that published "a message
+arrived" reaches "an agent drafted an order change", across files:
+
+```python
+{"key": "task.take-orders", ...,
+ "notifications": [
+     {"id": "9b1f…", "topic": "orders.received", ...,
+      "triggered": [{"key": "function.schedule", "cause": "9b1f…", "parent": None,
+                     "children": [...], ...}]}],
+ "children": []}
+```
+
+A notification published inside a reaction has that reaction's call as its
+`parent`, so chains continue: message, draft, notification, reply.
 
 ---
 

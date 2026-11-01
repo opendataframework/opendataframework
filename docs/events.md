@@ -81,6 +81,7 @@ have an `execute()`, but `protocol=TaskProtocol` receives only task calls.
 | `ts` | `time.time()` when the event was emitted. |
 | `elapsed_ms` | Duration, on `completed`/`failed` only. |
 | `error` | `repr()` of the exception, on `failed` only. |
+| `cause` | `id` of the [Notification](notifications.md#ids-and-causes) whose listener made this call, on a top-level call started inside a notification listener; `None` otherwise. Written to the record only when set. |
 
 To react to one kind of call, subscribe with `protocol=` and check the rest:
 
@@ -182,6 +183,11 @@ started:
 * A call a listener makes is top-level too, because nothing called it. A
   cleanup task a listener starts when it sees a failure isn't a child of the
   call that failed.
+* A call a [notification](notifications.md#ids-and-causes) listener makes
+  is top-level too, but records the notification's `id` as its `cause`.
+  Only the top of the reaction does: a call nested inside it has a `parent`
+  instead. Causation is a separate link, not a fake parent. An Events
+  listener's calls never get a `cause`.
 
 ---
 
