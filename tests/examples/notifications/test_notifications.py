@@ -3,8 +3,7 @@ from app.repositories import Orders
 from app.subscribers import Kitchen, OrderCounter
 from app.tasks import TakeOrders
 
-from opendataframework import Events, Notifications, TaskProtocol
-from opendataframework.notifications import publications_of, subscription_of
+from opendataframework import Events, Notifications, Publisher, Subscriber, TaskProtocol
 
 # Deliberately drives a bare Notifications hub directly rather than going
 # through Project/Context — same reason as the other examples' tests (see
@@ -17,7 +16,7 @@ def take_orders(hub: Notifications) -> tuple[TakeOrders, Orders]:
     inbox = Inbox()
     inbox.on_start()
     orders = Orders()
-    view = hub.bound_to("task.take-orders", publications_of(TakeOrders))
+    view = hub.bound_to("task.take-orders", Publisher.of(TakeOrders))
     task = TakeOrders(inbox, orders, view)
     return task, orders
 
@@ -45,8 +44,8 @@ def test_take_orders_publishes_received_and_large():
 
 
 def test_the_declarations():
-    assert publications_of(TakeOrders) == ("orders.received", "orders.large")
-    kitchen, counter = subscription_of(Kitchen), subscription_of(OrderCounter)
+    assert Publisher.of(TakeOrders) == ("orders.received", "orders.large")
+    kitchen, counter = Subscriber.of(Kitchen), Subscriber.of(OrderCounter)
     assert (kitchen.topics, kitchen.deliver) == (("orders.received",), "sync")
     assert (counter.topics, counter.deliver) == (("orders.*",), "background")
 

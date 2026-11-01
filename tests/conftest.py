@@ -9,7 +9,7 @@ name (e.g. `class Postgres: ...` via `@Service`) as a throwaway fixture would
 collide with the next test doing the same, since both register into the same
 process-wide dict within one pytest session. This snapshots each registry
 before every test and restores it after, so no test's registrations leak into
-another's.
+another's — along with what `Subscriber` and `Publisher` record per target.
 """
 
 import pytest
@@ -28,10 +28,24 @@ def _namespace_classes() -> list[type]:
     return seen
 
 
+def _declarations(cls: type) -> dict | None:
+    """Return the per-target declarations a namespace keeps (``Subscriber``,
+    ``Publisher``), or ``None`` if it keeps none of its own."""
+    return cls.__dict__.get("_declared")
+
+
 @pytest.fixture(autouse=True)
 def _reset_namespaces():
     snapshot = {cls: dict(cls._namespace) for cls in _namespace_classes()}
+    declared = {
+        cls: dict(_declarations(cls))
+        for cls in _namespace_classes()
+        if _declarations(cls) is not None
+    }
     yield
     for cls in _namespace_classes():
         cls._namespace.clear()
         cls._namespace.update(snapshot.get(cls, {}))
+        if (declarations := _declarations(cls)) is not None:
+            declarations.clear()
+            declarations.update(declared.get(cls, {}))

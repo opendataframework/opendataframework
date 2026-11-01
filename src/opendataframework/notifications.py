@@ -29,12 +29,12 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from queue import Empty, Full, Queue
 from types import MappingProxyType
-from typing import Any, Literal, Protocol, get_args, runtime_checkable
+from typing import Any, Literal, Protocol, get_args, overload, runtime_checkable
 from uuid import uuid4
 
 from opendataframework.function import Function
 from opendataframework.logger import LogManager, _current_call_id, _no_current_call
-from opendataframework.namespace import ExecutionType, describe
+from opendataframework.namespace import C, ClassNamespace, ExecutionType, F, Namespace, describe
 
 Level = Literal["info", "success", "warning", "error"]
 _LEVELS: tuple[str, ...] = get_args(Level)
@@ -47,9 +47,6 @@ _LOG_LEVELS: dict[str, str] = {
 }
 Delivery = Literal["sync", "background"]
 _DELIVERIES: tuple[str, ...] = get_args(Delivery)
-# Attributes the decorators below set on what they mark.
-_SUBSCRIBER = "__odf_subscriber__"
-_PUBLISHER = "__odf_publisher__"
 # A subscription: (listener, topic filter(s) — None for every topic —,
 # subscriber key, whether a @Subscriber declared it).
 type _Entry = tuple[Callable[[Any], None], str | tuple[str, ...] | None, str | None, bool]
@@ -607,8 +604,13 @@ def _registered_as(target: object) -> type | None:
 
 
 @dataclass(frozen=True)
-class _Subscription:
-    """What a ``@Subscriber`` declares, stored on its class."""
+class Subscription:
+    """What a ``@Subscriber`` declares about its class — see ``Subscriber.of``.
+
+    Attributes:
+        topics: The topic filters it reacts to.
+        deliver: ``"sync"`` or ``"background"``.
+    """
 
     topics: tuple[str, ...]
     deliver: Delivery
@@ -630,18 +632,23 @@ class SubscriberProtocol(Protocol):
         ...
 
 
-def Subscriber(*topics: str, deliver: Delivery = "sync") -> Callable[[type], type]:
-    """Declare that a component reacts to notifications of ``topics``.
+class Subscriber(ClassNamespace):
+    """Decorator declaring that a component reacts to notifications of ``topics``.
 
-    Goes on top of the class's execution type, like a layer. The ``Context``
-    subscribes the class's ``on_notification()`` (see ``SubscriberProtocol``)
-    right after the component starts — after its ``on_start()``, or its
-    ``setup()`` for a ``Service`` — and unsubscribes it right before it
-    stops, so a component never receives a notification it isn't running
-    for. Each delivery is an instrumented protocol call: it emits Events,
-    writes call records, and records the notification as its ``cause``. A
-    failure is logged as that call's ``failed`` record and never reaches the
-    publisher.
+    A namespace used like a layer: it goes on top of the class's execution
+    type and tags what is already registered, so ``Subscriber.items()``
+    lists every subscriber. What each one declares is kept here, keyed by
+    its exact class — never written onto the class, and not inherited by a
+    subclass — and read back with ``Subscriber.of(cls)``.
+
+    The ``Context`` subscribes the class's ``on_notification()`` (see
+    ``SubscriberProtocol``) right after the component starts — after its
+    ``on_start()``, or its ``setup()`` for a ``Service`` — and unsubscribes
+    it right before it stops, so a component never receives a notification
+    it isn't running for. Each delivery is an instrumented protocol call: it
+    emits Events, writes call records, and records the notification as its
+    ``cause``. A failure is logged as that call's ``failed`` record and
+    never reaches the publisher.
 
     Keep one reaction per component; put what reactions share in a plain
     component they both depend on.
@@ -655,12 +662,15 @@ def Subscriber(*topics: str, deliver: Delivery = "sync") -> Callable[[type], typ
             ``"background"`` queues the delivery for a worker thread of the
             component's own — for a slow reaction, such as an agent calling
             a model.
+        name: The name to register the class under in this namespace.
+            Defaults to its kebab-case class name; pass one when two
+            subscribers of different execution types share a class name.
 
     Raises:
         TypeError: If the decorated class isn't registered under an
             execution type yet, or has no ``on_notification()``.
-        ValueError: If no topic is given, a topic filter is invalid, or
-            ``deliver`` is unknown.
+        ValueError: If no topic is given, a topic filter is invalid,
+            ``deliver`` is unknown, or the name is already registered here.
 
     Example:
         >>> @Subscriber("messages.received", deliver="background")
@@ -671,44 +681,83 @@ def Subscriber(*topics: str, deliver: Delivery = "sync") -> Callable[[type], typ
         ...
         ...     def on_notification(self, notification: Notification) -> None:
         ...         self.desk.draft_change(notification.record)
+        >>> Subscriber.of(Drafting)
+        Subscription(topics=('messages.received',), deliver='background')
     """
-    if not topics:
-        raise ValueError("@Subscriber needs at least one topic")
-    checked = tuple(_check_filter(topic) for topic in topics)
-    if deliver not in _DELIVERIES:
-        raise ValueError(
-            f"invalid deliver {deliver!r}: must be one of {', '.join(map(repr, _DELIVERIES))}"
-        )
 
-    def decorate(cls: type) -> type:
-        """Mark ``cls`` as a subscriber of ``topics``."""
-        namespace = _registered_as(cls)
-        if not isinstance(cls, type) or namespace is None or namespace is Function:
+    _declared: dict[type, Subscription] = {}
+
+    def __new__(cls, *topics: str, deliver: Delivery = "sync", name: str | None = None):
+        """Always return a ``Subscriber`` instance: its arguments are topics, never the class.
+
+        Raises:
+            TypeError: If applied bare (``@Subscriber`` with no topics).
+            ValueError: If no topic is given, a topic filter is invalid, or
+                ``deliver`` is unknown.
+        """
+        if topics and isinstance(topics[0], type):
+            raise TypeError(
+                f"@Subscriber needs the topics it reacts to — write "
+                f"@Subscriber('some.topic') on {topics[0].__name__}"
+            )
+        _check_topics(cls, topics)
+        if deliver not in _DELIVERIES:
+            raise ValueError(
+                f"invalid deliver {deliver!r}: must be one of {', '.join(map(repr, _DELIVERIES))}"
+            )
+        return object.__new__(cls)
+
+    def __init__(self, *topics: str, deliver: Delivery = "sync", name: str | None = None) -> None:
+        """Store the declaration, applied when the instance decorates a class."""
+        super().__init__(name=name)
+        self._subscription = Subscription(tuple(topics), deliver)
+
+    def __call__(self, wrapped: type[C]) -> type[C]:
+        """Register ``wrapped`` as a subscriber and record what it declares."""
+        super().__call__(wrapped)
+        type(self)._declared[wrapped] = self._subscription
+        return wrapped
+
+    @classmethod
+    def _require(cls, wrapped: object) -> None:
+        """Raise ``TypeError`` unless ``wrapped`` is a registered class with ``on_notification``."""
+        namespace = _registered_as(wrapped)
+        if not isinstance(wrapped, type) or namespace is None or namespace is Function:
             raise TypeError(
                 f"@Subscriber can only declare a class already registered under an "
-                f"execution type, got {describe(cls)} — put @Component, @Service, "
+                f"execution type, got {describe(wrapped)} — put @Component, @Service, "
                 f"@Agent, ... under it, with @Subscriber on top"
             )
-        if not callable(getattr(cls, "on_notification", None)):
+        if not callable(getattr(wrapped, "on_notification", None)):
             raise TypeError(
-                f"{cls.__name__} is a @Subscriber, so it must define "
+                f"{wrapped.__name__} is a @Subscriber, so it must define "
                 "on_notification(self, notification)"
             )
-        setattr(cls, _SUBSCRIBER, _Subscription(checked, deliver))
-        return cls
 
-    return decorate
+    @classmethod
+    def of(cls, target: object) -> Subscription | None:
+        """Return what ``target``'s ``@Subscriber`` declares, or ``None`` if it isn't one.
+
+        Matches the exact class: a subclass of a subscriber is not one.
+        """
+        return cls._declared.get(target) if isinstance(target, type) else None
 
 
-def Publisher[T](*topics: str) -> Callable[[T], T]:
-    """Declare the topics a component (or ``@Function``) publishes.
+class Publisher(Namespace):
+    """Decorator declaring the topics a component (or ``@Function``) publishes.
 
-    Goes on top of the class's execution type, or on top of ``@Function``,
-    like a layer. Only a ``@Publisher`` may publish through its injected
+    A namespace used like a layer: it goes on top of the class's execution
+    type, or on top of ``@Function``, and tags what is already registered,
+    so ``Publisher.items()`` lists every publisher. The declared topics are
+    kept here, keyed by the exact class or function — never written onto it,
+    and not inherited by a subclass — and read back with
+    ``Publisher.of(target)``.
+
+    Only a ``@Publisher`` may publish through its injected
     ``notifications``, and only the topics it declares — see
     ``Notifications.publish()``. ``Context.publishers()`` lists every
-    declaration, so tooling can draw who publishes what before anything
-    has been published.
+    declaration, so tooling can draw who publishes what before anything has
+    been published.
 
     There is no protocol method: publishing is started by the component's
     own code, at moments only it knows, so the framework has nothing to
@@ -717,10 +766,14 @@ def Publisher[T](*topics: str) -> Callable[[T], T]:
     Args:
         *topics: One or more topic filters: an exact topic, or ``"x.*"`` to
             allow every topic under ``x``.
+        name: The name to register it under in this namespace. Defaults to
+            its kebab-case class name, or its function name; pass one when a
+            publishing class and function share a name.
 
     Raises:
         TypeError: If the decorated class or function isn't registered yet.
-        ValueError: If no topic is given, or a topic filter is invalid.
+        ValueError: If no topic is given, a topic filter is invalid, or the
+            name is already registered here.
 
     Example:
         >>> @Publisher("orders.received")
@@ -731,30 +784,68 @@ def Publisher[T](*topics: str) -> Callable[[T], T]:
         ...
         ...     def execute(self) -> None:
         ...         self.notifications.publish("orders.received", {"id": 7})
+        >>> Publisher.of(TakeOrder)
+        ('orders.received',)
     """
-    if not topics:
-        raise ValueError("@Publisher needs at least one topic")
-    checked = tuple(_check_filter(topic) for topic in topics)
 
-    def decorate(target: T) -> T:
-        """Mark ``target`` as a publisher of ``topics``."""
-        if _registered_as(target) is None:
+    _declared: dict[type | Callable[..., object], tuple[str, ...]] = {}
+
+    def __new__(cls, *topics: str, name: str | None = None):
+        """Always return a ``Publisher`` instance: its arguments are topics, never the target.
+
+        Raises:
+            TypeError: If applied bare (``@Publisher`` with no topics).
+            ValueError: If no topic is given, or a topic filter is invalid.
+        """
+        if topics and callable(topics[0]):
+            raise TypeError(
+                f"@Publisher needs the topics it publishes — write "
+                f"@Publisher('some.topic') on {getattr(topics[0], '__name__', topics[0])!r}"
+            )
+        _check_topics(cls, topics)
+        return object.__new__(cls)
+
+    def __init__(self, *topics: str, name: str | None = None) -> None:
+        """Store the declared topics, applied when the instance decorates its target."""
+        super().__init__(name=name)
+        self._topics = tuple(topics)
+
+    @overload
+    def __call__(self, wrapped: type[C]) -> type[C]: ...
+    @overload
+    def __call__(self, wrapped: F) -> F: ...
+    def __call__(self, wrapped):
+        """Register ``wrapped`` as a publisher and record its topics."""
+        super().__call__(wrapped)
+        type(self)._declared[wrapped] = self._topics
+        return wrapped
+
+    @classmethod
+    def _require(cls, wrapped: object) -> None:
+        """Raise ``TypeError`` unless ``wrapped`` is a registered class or function."""
+        if _registered_as(wrapped) is None:
             raise TypeError(
                 f"@Publisher can only declare a registered class or function, got "
-                f"{describe(target)} — put an execution type (@Component, @Task, ...) or "
+                f"{describe(wrapped)} — put an execution type (@Component, @Task, ...) or "
                 "@Function under it, with @Publisher on top"
             )
-        setattr(target, _PUBLISHER, checked)
-        return target
 
-    return decorate
+    @classmethod
+    def of(cls, target: object) -> tuple[str, ...] | None:
+        """Return the topic filters ``target``'s ``@Publisher`` declares, or ``None``.
+
+        Matches the exact class or function: a subclass of a publisher is
+        not one.
+        """
+        try:
+            return cls._declared.get(target)  # type: ignore[arg-type]
+        except TypeError:  # unhashable
+            return None
 
 
-def subscription_of(target: object) -> _Subscription | None:
-    """Return what ``target``'s ``@Subscriber`` declares, or ``None``."""
-    return getattr(target, _SUBSCRIBER, None) if isinstance(target, type) else None
-
-
-def publications_of(target: object) -> tuple[str, ...] | None:
-    """Return the topic filters ``target``'s ``@Publisher`` declares, or ``None``."""
-    return getattr(target, _PUBLISHER, None)
+def _check_topics(decorator: type, topics: tuple[object, ...]) -> None:
+    """Raise ``ValueError`` unless ``topics`` is one or more valid topic filters."""
+    if not topics:
+        raise ValueError(f"@{decorator.__name__} needs at least one topic")
+    for topic in topics:
+        _check_filter(topic)

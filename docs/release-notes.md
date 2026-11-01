@@ -36,7 +36,8 @@
   and each delivery is an instrumented `SubscriberProtocol` call: it emits Events, is
   logged, records the notification as its `cause`, and a failure is its `failed` record,
   never the publisher's problem. `context.subscribers()` lists them. Goes on top of the
-  execution type, like a layer.
+  execution type, like a layer: it is a namespace too, so `Subscriber.items()` lists every
+  subscriber and `Subscriber.of(cls)` returns its `Subscription`.
 - **Notifications**: `@Subscriber(..., deliver="background")` runs a slow reaction off the
   publisher's thread: each background subscriber gets its own worker thread and bounded
   queue, keeping publish order. A full queue blocks `publish()` (one `WARNING` per
@@ -45,7 +46,8 @@
   and `drain-timeout` (seconds, default 10).
 - **Notifications**: `@Publisher(*topics)` declares the topics a component or `@Function`
   publishes; `context.publishers()` lists them, so a UI can draw who publishes what before
-  anything has been published.
+  anything has been published. A namespace like `Subscriber`: `Publisher.items()`,
+  `Publisher.of(target)`.
 - **Docs**: [One Call per Inbound Item](service.md#one-call-per-inbound-item) — route
   each item a long-running service receives through an injected `@Function`, so it gets
   its own call id, log lines, notifications and trace instead of joining `run()`'s.

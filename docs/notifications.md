@@ -132,6 +132,13 @@ context.publishers()
 # [{"key": "task.take-orders", "topics": ["orders.received"]}]
 ```
 
+`Publisher` is a [namespace](namespace.md), like a [layer](layer.md):
+`Publisher.items()` lists every publisher by name, and `Publisher.of(target)`
+returns what one declares (or `None`). Nothing is written onto your class or
+function, and a subclass of a publisher isn't one. It registers by name, so
+a publishing class and a publishing function with the same name clash —
+give one a name: `@Publisher("orders.priced", name="price-function")`.
+
 Code that holds the `Context` (a script, a test, the sibling
 [`odf`](https://opendataframework.github.io/odf/) package's UI server) uses the
 unbound hub, `context.notifications`, and passes the key itself. The unbound
@@ -196,6 +203,11 @@ several is delivered once. A class without `on_notification()`, or with an
   context.subscribers()
   # [{"key": "component.kitchen", "topics": ["orders.received"], "deliver": "sync"}]
   ```
+
+  Like `Publisher`, `Subscriber` is a namespace: `Subscriber.items()` lists
+  every subscriber class, and `Subscriber.of(Kitchen)` returns its
+  `Subscription(topics, deliver)`. The declaration is kept by the namespace,
+  not written onto the class, so a subclass of a subscriber isn't one.
 
 Keep **one reaction per component**. Two reactions to different topics are
 two subscribers, each with its own node in a topology, its own delivery

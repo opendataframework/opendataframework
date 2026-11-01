@@ -1126,3 +1126,87 @@ def test_a_background_subscribers_worker_stops_with_its_service():
 def test_invalid_notifications_config_raises(config, message):
     with pytest.raises(ValueError, match=message):
         Context(namespaces={make_ns()}, notifications_config=config)
+
+
+# --- Subscriber and Publisher are namespaces ----------------------------------
+
+
+def test_subscriber_and_publisher_list_and_look_up_what_they_declare():
+    NS = make_ns()
+
+    @Publisher("drafts.created")
+    @Subscriber("messages.received", deliver="background")
+    @NS
+    @Component
+    class Drafting:
+        def on_notification(self, notification: Notification) -> None: ...
+
+    @Publisher("orders.priced")
+    @NS
+    @Function
+    def quote_order() -> None: ...
+
+    assert Subscriber.get("drafting") is Drafting
+    assert Publisher.get("quote-order") is quote_order
+    assert Subscriber.of(Drafting).topics == ("messages.received",)
+    assert Subscriber.of(Drafting).deliver == "background"
+    assert Publisher.of(Drafting) == ("drafts.created",)
+    assert Publisher.of(quote_order) == ("orders.priced",)
+    assert Subscriber.of(quote_order) is None and Publisher.of(object()) is None
+
+
+def test_declarations_are_not_written_onto_the_class_or_inherited():
+    NS = make_ns()
+
+    @Publisher("drafts.created")
+    @Subscriber("messages.received")
+    @NS
+    @Component
+    class Drafting:
+        def on_notification(self, notification: Notification) -> None: ...
+
+    class Plain:
+        def on_notification(self, notification: Notification) -> None: ...
+
+    assert set(vars(Drafting)) == set(vars(Plain))
+
+    @NS
+    @Component
+    class SpecialDrafting(Drafting): ...
+
+    assert Subscriber.of(SpecialDrafting) is None
+    assert Publisher.of(SpecialDrafting) is None
+
+
+def test_bare_decorators_raise():
+    NS = make_ns()
+
+    @NS
+    @Component
+    class Drafting:
+        def on_notification(self, notification: Notification) -> None: ...
+
+    with pytest.raises(TypeError, match="needs the topics"):
+        Subscriber(Drafting)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="needs the topics"):
+        Publisher(Drafting)  # type: ignore[arg-type]
+
+
+def test_a_name_resolves_a_clash_between_two_publishers():
+    NS, Other = make_ns(), make_ns()
+
+    @Publisher("orders.priced")
+    @NS
+    @Task
+    class PriceList:
+        def execute(self) -> None: ...
+
+    @Other
+    @Function
+    def price_list() -> None: ...
+
+    with pytest.raises(ValueError, match="Duplicate registration for 'price-list' in Publisher"):
+        Publisher("orders.priced")(price_list)
+    assert Publisher("orders.priced", name="price-list-function")(price_list) is price_list
+    assert Publisher.get("price-list-function") is price_list
+    assert Publisher.of(price_list) == Publisher.of(PriceList) == ("orders.priced",)

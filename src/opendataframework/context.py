@@ -31,9 +31,9 @@ from opendataframework.logger import Logger, LogManager
 from opendataframework.namespace import Namespace, parse, qualified
 from opendataframework.notifications import (
     Notifications,
+    Publisher,
+    Subscriber,
     SubscriberProtocol,
-    publications_of,
-    subscription_of,
 )
 from opendataframework.pipeline import Pipeline, PipelineProtocol
 from opendataframework.repository import (
@@ -518,7 +518,7 @@ class Resolver:
                 supplied[name] = self._events
             elif dep is Notifications:
                 supplied[name] = self._notifications.bound_to(
-                    self._keys[target], publications_of(target)
+                    self._keys[target], Publisher.of(target)
                 )
             elif dep in self._instances:
                 supplied[name] = self._instances[dep]
@@ -704,7 +704,7 @@ class Lifecycle:
         notification before then. ``on_notification`` is the instrumented
         wrapper ``Context._instrument`` set on the instance.
         """
-        subscription = subscription_of(cls)
+        subscription = Subscriber.of(cls)
         if subscription is None or cls in self._detach:
             return
         handler = self._instances[cls].on_notification
@@ -1370,7 +1370,7 @@ class Context:
         """
         found = []
         for cls in self._resolver.instances:
-            subscription = subscription_of(cls)
+            subscription = Subscriber.of(cls)
             if subscription is not None:
                 found.append(
                     {
@@ -1391,7 +1391,7 @@ class Context:
         """
         found = []
         for target in [*self._resolver.instances, *self._resolver.functions]:
-            topics = publications_of(target)
+            topics = Publisher.of(target)
             if topics is not None and target in self._resolver.keys:
                 found.append({"key": self._resolver.keys[target], "topics": list(topics)})
         return sorted(found, key=lambda p: p["key"])
@@ -1514,7 +1514,7 @@ class Context:
                 methods.append("invoke")
             if cls in repositories:
                 methods.extend(_STREAM_METHODS)
-            if subscription_of(cls) is not None:
+            if Subscriber.of(cls) is not None:
                 methods.append("on_notification")
             found.extend(
                 f"{cls.__name__}.{method}()"
@@ -1563,7 +1563,7 @@ class Context:
                     AgentProtocol,
                     "invoke",
                 )
-            if subscription_of(cls) is not None:
+            if Subscriber.of(cls) is not None:
                 instance.on_notification = _notified_call(
                     instance.on_notification,
                     keys[cls],
