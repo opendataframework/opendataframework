@@ -10,7 +10,8 @@ class TakeOrders:
     def __init__(self, inbox: Inbox, orders: Orders, notifications: Notifications) -> None:
         self.inbox = inbox
         self.orders = orders
-        # Bound to this task's key, so publish() needs no key.
+        # Bound to this task's key, so publish() needs no key, and allowed
+        # to publish only the topics @Publisher declares.
         self.notifications = notifications
 
     def execute(self) -> int:

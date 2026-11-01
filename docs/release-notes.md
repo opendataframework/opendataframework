@@ -46,6 +46,11 @@
 - **Notifications**: `@Publisher(*topics)` declares the topics a component or `@Function`
   publishes; `context.publishers()` lists them, so a UI can draw who publishes what before
   anything has been published.
+- **Docs**: [One Call per Inbound Item](service.md#one-call-per-inbound-item) — route
+  each item a long-running service receives through an injected `@Function`, so it gets
+  its own call id, log lines, notifications and trace instead of joining `run()`'s.
+- **Examples**: `examples/11-notifications/` uses `@Publisher` and `@Subscriber` (one
+  sync, one background) and prints the trace from the publishing call to every reaction.
 
 ### Changed (breaking)
 
@@ -59,7 +64,6 @@
 - **Notifications**: a `subscribe()` listener that published through its injected view
   now raises, since a listener runs outside any call. Turn it into a `@Subscriber` that is
   also a `@Publisher`, or publish through `context.notifications`.
-
 - **Notifications**: a payload is now read-only all the way down, not just at the top
   level. Nested mappings arrive as read-only mappings, lists and tuples as tuples, and
   sets as frozensets, all rebuilt so nothing is shared with the publisher or between

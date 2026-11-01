@@ -197,6 +197,61 @@ class Postgres:
 
 ---
 
+## One Call per Inbound Item
+
+Everything a service does inside `run()` happens inside one long protocol
+call. A mailbox poller or a webhook receiver that saves and publishes inline
+makes every log line and every notification a child of that one `run()`
+call, so they can't be told apart, and `context.trace()` of `run()` grows
+for as long as the service runs.
+
+Route each inbound item through an injected [`@Function`](function.md) (or
+an [`@Agent`](agent.md)) instead. Each call gets its own call id, its own
+log lines (their `parent`), its own notifications and its own trace:
+
+```python
+import threading
+from collections.abc import Callable
+from typing import Annotated
+
+from opendataframework import Function, Notifications, Publisher, Service
+
+
+@Publisher("messages.received")
+@Function
+def ingest(messages: Messages, notifications: Notifications, item: dict) -> None:
+    message = messages.save(Message.from_mail(item))
+    notifications.publish(
+        "messages.received", summary=message.subject, subject=Messages, record=message.id
+    )
+
+
+@Service
+class Mailbox:
+    def __init__(self, ingest: Annotated[Callable[..., None], ingest]) -> None:
+        self.ingest = ingest
+        self._stop = threading.Event()
+
+    def setup(self) -> None: ...
+
+    def run(self) -> None:
+        while not self._stop.wait(60):
+            for item in fetch_new_mail():
+                self.ingest(item=item)  # one traced call per message
+
+    def stop(self) -> None:
+        self._stop.set()
+```
+
+Each `ingest()` call is still a child of `run()` (its `parent` is the `run`
+call), so `run()`'s own trace stays unbounded. What's bounded is each
+item's: `context.trace()` of one `ingest()` call shows that message's save,
+its notification, and every [`@Subscriber`](notifications.md#subscriber)
+reaction the notification triggered — and nothing from the other messages.
+The `@Publisher` goes on the function, since it is what publishes.
+
+---
+
 ## Full Examples
 
 ### API server

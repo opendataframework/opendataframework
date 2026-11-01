@@ -374,6 +374,11 @@ arrived" reaches "an agent drafted an order change", across files:
 A notification published inside a reaction has that reaction's call as its
 `parent`, so chains continue: message, draft, notification, reply.
 
+For a long-running [Service](service.md) — a mailbox poller, a webhook
+receiver — publish from a `@Function` called once per inbound item, not
+inline in `run()`, so each item gets a trace of its own: see
+[One Call per Inbound Item](service.md#one-call-per-inbound-item).
+
 ---
 
 ## When Not to Use It
