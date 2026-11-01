@@ -22,8 +22,30 @@
   each notification gains `id` and `triggered`, the subtrees of the calls it caused, so a
   trace follows a reaction from the publishing call to what its listeners did, across
   files.
+- **Notifications**: `@Subscriber(*topics, deliver="sync")` declares that a component
+  reacts to notifications, through its `on_notification(notification)`
+  (`SubscriberProtocol`). The `Context` subscribes it right after the component starts
+  and unsubscribes it right before it stops (including `context.stop(key)` on a service),
+  and each delivery is an instrumented `SubscriberProtocol` call: it emits Events, is
+  logged, records the notification as its `cause`, and a failure is its `failed` record,
+  never the publisher's problem. `context.subscribers()` lists them. Goes on top of the
+  execution type, like a layer.
+- **Notifications**: `@Publisher(*topics)` declares the topics a component or `@Function`
+  publishes; `context.publishers()` lists them, so a UI can draw who publishes what before
+  anything has been published.
 
 ### Changed (breaking)
+
+- **Notifications**: publishing through an injected `notifications: Notifications` now
+  follows three rules: the component or function must be a `@Publisher`
+  (else `TypeError`), the topic must be one it declares (else `ValueError`), and a
+  protocol call must be in progress, never `__init__` or a thread of your own
+  (else `RuntimeError`), so every notification has a `parent` and can be traced. Add
+  `@Publisher("your.topic", ...)` on top of each publisher's execution type. The unbound
+  `context.notifications` is unaffected.
+- **Notifications**: a `subscribe()` listener that published through its injected view
+  now raises, since a listener runs outside any call. Turn it into a `@Subscriber` that is
+  also a `@Publisher`, or publish through `context.notifications`.
 
 - **Notifications**: a payload is now read-only all the way down, not just at the top
   level. Nested mappings arrive as read-only mappings, lists and tuples as tuples, and

@@ -1,9 +1,10 @@
 from app.components import Inbox
 from app.entities import Order
 from app.repositories import Orders
-from opendataframework import Notifications, Task
+from opendataframework import Notifications, Publisher, Task
 
 
+@Publisher("orders.received", "orders.large")
 @Task
 class TakeOrders:
     def __init__(self, inbox: Inbox, orders: Orders, notifications: Notifications) -> None:

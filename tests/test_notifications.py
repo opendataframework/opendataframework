@@ -7,8 +7,16 @@ from opendataframework.component import Component
 from opendataframework.context import Context
 from opendataframework.events import Event, build_trace
 from opendataframework.function import Function, FunctionProtocol
+from opendataframework.layer import Messaging
 from opendataframework.namespace import Namespace
-from opendataframework.notifications import Notification, Notifications
+from opendataframework.notifications import (
+    Notification,
+    Notifications,
+    Publisher,
+    Subscriber,
+    SubscriberProtocol,
+)
+from opendataframework.service import Service
 from opendataframework.task import Task, TaskProtocol
 
 # --- helpers -----------------------------------------------------------------
@@ -32,6 +40,7 @@ def collect(ctx: Context, topic: str | None = None) -> list[Notification]:
 def publishing_task(NS, topic="orders.received", **kwargs):
     """Register a task that publishes ``topic`` from ``execute()``."""
 
+    @Publisher(topic)
     @NS
     @Task
     class TakeOrder:
@@ -212,6 +221,7 @@ def test_parent_is_the_protocol_call_in_progress():
 def test_function_parameter_receives_a_view_bound_to_the_function():
     NS = make_ns()
 
+    @Publisher("orders.priced")
     @NS
     @Function
     def quote(notifications: Notifications, order_id: int) -> float:
@@ -572,3 +582,369 @@ def test_publish_record_carries_subject_record_and_the_publishing_call(tmp_path)
     assert started["state"] == "started"
     assert record["parent"] == started["call"]
     assert (record["subject"], record["record"]) == ("repository.orders", 7)
+
+
+# --- @Subscriber ---------------------------------------------------------------
+
+
+def subscriber(NS, *topics, received=None, fail=False, name="Drafting"):
+    """Register a @Subscriber component that appends what it receives to ``received``."""
+    received = received if received is not None else []
+
+    def on_notification(self, notification: Notification) -> None:
+        received.append(notification)
+        if fail:
+            raise RuntimeError("draft failed")
+
+    cls = type(name, (), {"on_notification": on_notification})
+    return Subscriber(*topics)(NS(Component(cls))), received
+
+
+def test_subscriber_receives_matching_topics_only():
+    NS = make_ns()
+    _, received = subscriber(NS, "orders.received", "messages.*")
+    ctx = Context(namespaces={NS})
+    with ctx:
+        for topic in ("orders.received", "orders.large", "messages.in.email", "messages"):
+            ctx.notifications.publish(topic, key="scope.x")
+    assert [n.topic for n in received] == ["orders.received", "messages.in.email"]
+
+
+def test_a_notification_matching_several_topics_is_delivered_once():
+    NS = make_ns()
+    _, received = subscriber(NS, "orders.received", "orders.*")
+    with Context(namespaces={NS}) as ctx:
+        ctx.notifications.publish("orders.received", key="scope.x")
+    assert len(received) == 1
+
+
+def test_subscriber_is_subscribed_only_while_its_component_runs():
+    NS = make_ns()
+    _, received = subscriber(NS, "orders.received")
+    ctx = Context(namespaces={NS})
+    ctx.notifications.publish("orders.received", key="scope.x")
+    ctx.open()
+    ctx.notifications.publish("orders.received", key="scope.x")
+    ctx.close()
+    ctx.notifications.publish("orders.received", key="scope.x")
+    assert len(received) == 1
+
+
+def test_subscriber_starts_receiving_after_its_own_on_start():
+    NS = make_ns()
+    seen: list[str] = []
+
+    @Publisher("orders.received")
+    @NS
+    @Component
+    class Till:
+        def __init__(self, notifications: Notifications) -> None:
+            self.notifications = notifications
+
+        def on_start(self) -> None:
+            self.notifications.publish("orders.received")
+
+    @Subscriber("orders.received")
+    @NS
+    @Component
+    class Oven:
+        def __init__(self, till: Till) -> None: ...
+
+        def on_start(self) -> None:
+            seen.append("started")
+
+        def on_notification(self, notification: Notification) -> None:
+            seen.append(notification.topic)
+
+        def on_stop(self) -> None:
+            seen.append("stopped")
+
+    with Context(namespaces={NS}) as ctx:
+        # The till published during its own on_start(), before the oven
+        # (which depends on it) had started, so the oven missed it.
+        assert seen == ["started"]
+        ctx.notifications.publish("orders.received", key="scope.x")
+    ctx.notifications.publish("orders.received", key="scope.x")
+    assert seen == ["started", "orders.received", "stopped"]
+
+
+def test_a_stopped_service_receives_nothing_until_it_starts_again():
+    NS = make_ns()
+    received: list[Notification] = []
+
+    @Subscriber("orders.received")
+    @NS
+    @Service
+    class Mailbox:
+        def setup(self) -> None: ...
+
+        def run(self) -> None: ...
+
+        def stop(self) -> None: ...
+
+        def on_notification(self, notification: Notification) -> None:
+            received.append(notification)
+
+    with Context(namespaces={NS}) as ctx:
+        ctx.notifications.publish("orders.received", key="scope.x")
+        ctx.stop("scope.mailbox")
+        ctx.notifications.publish("orders.received", key="scope.x")
+        ctx.start("scope.mailbox")
+        ctx.notifications.publish("orders.received", key="scope.x")
+    assert len(received) == 2
+
+
+def test_each_delivery_is_an_instrumented_call_caused_by_the_notification():
+    NS = make_ns()
+    subscriber(NS, "orders.received")
+    ctx = Context(namespaces={NS})
+    events: list[Event] = []
+    ctx.events.subscribe(events.append)
+    with ctx:
+        notification = ctx.notifications.publish("orders.received", key="scope.x")
+    calls = [e for e in events if e.key == "scope.drafting"]
+    assert [e.state for e in calls] == ["started", "completed"]
+    assert {(e.protocol, e.method) for e in calls} == {(SubscriberProtocol, "on_notification")}
+    assert {(e.cause, e.parent) for e in calls} == {(notification.id, None)}
+
+
+def test_a_failing_subscriber_logs_one_failed_call_and_the_publisher_continues(tmp_path):
+    NS = make_ns()
+    subscriber(NS, "orders.received", fail=True)
+    _, others = subscriber(NS, "orders.received", name="Counter")
+    with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
+        ctx.notifications.publish("orders.received", key="scope.x")
+        logged = ctx.tail_logs("scope.drafting")
+    assert len(others) == 1
+    failed = [r for r in logged if r.get("state") == "failed"]
+    assert len(failed) == 1 and failed[0]["error"] == "RuntimeError('draft failed')"
+    assert not any("listener of" in r["message"] for r in logged)
+
+
+def test_subscribers_lists_every_declared_subscriber():
+    NS = make_ns()
+    subscriber(NS, "orders.received", "messages.*")
+
+    @Subscriber("invoices.*", deliver="background")
+    @NS
+    @Component
+    class Filing:
+        def on_notification(self, notification: Notification) -> None: ...
+
+    with Context(namespaces={NS}) as ctx:
+        assert ctx.subscribers() == [
+            {
+                "key": "scope.drafting",
+                "topics": ["orders.received", "messages.*"],
+                "deliver": "sync",
+            },
+            {"key": "scope.filing", "topics": ["invoices.*"], "deliver": "background"},
+        ]
+
+
+def test_subscriber_works_under_a_layer():
+    NS = make_ns()
+    received: list[Notification] = []
+
+    @Messaging
+    @Subscriber("orders.received")
+    @NS
+    @Component
+    class Bell:
+        def on_notification(self, notification: Notification) -> None:
+            received.append(notification)
+
+    with Context(namespaces={NS}) as ctx:
+        ctx.notifications.publish("orders.received", key="scope.x")
+    assert len(received) == 1
+
+
+@pytest.mark.parametrize("topics", [(), ("",), ("orders*",), ("*.received",)])
+def test_subscriber_needs_valid_topics(topics):
+    with pytest.raises(ValueError):
+        Subscriber(*topics)
+
+
+def test_subscriber_needs_a_known_delivery():
+    with pytest.raises(ValueError, match="invalid deliver"):
+        Subscriber("orders.received", deliver="later")  # type: ignore[arg-type]
+
+
+def test_subscriber_needs_a_registered_class_with_on_notification():
+    NS = make_ns()
+
+    class Bare:
+        def on_notification(self, notification: Notification) -> None: ...
+
+    with pytest.raises(TypeError, match="execution type"):
+        Subscriber("orders.received")(Bare)
+
+    @NS
+    @Function
+    def react(notification: Notification) -> None: ...
+
+    with pytest.raises(TypeError, match="execution type"):
+        Subscriber("orders.received")(react)  # type: ignore[arg-type]
+
+    @NS
+    @Component
+    class Deaf: ...
+
+    with pytest.raises(TypeError, match="on_notification"):
+        Subscriber("orders.received")(Deaf)
+
+
+def test_async_on_notification_raises_at_open():
+    NS = make_ns()
+
+    @Subscriber("orders.received")
+    @NS
+    @Component
+    class Slow:
+        async def on_notification(self, notification: Notification) -> None: ...
+
+    with pytest.raises(TypeError, match=r"Slow.on_notification\(\) is async"):
+        Context(namespaces={NS}).open()
+
+
+def test_plain_subscribe_is_unaffected_by_subscribers():
+    NS = make_ns()
+    _, declared = subscriber(NS, "orders.received")
+    ctx = Context(namespaces={NS})
+    plain = collect(ctx, "orders.received")
+    with ctx:
+        ctx.notifications.publish("orders.received", key="scope.x")
+    assert len(plain) == len(declared) == 1
+
+
+# --- @Publisher ----------------------------------------------------------------
+
+
+def test_publishing_needs_a_publisher_declaration():
+    NS = make_ns()
+
+    @NS
+    @Task
+    class Shout:
+        def __init__(self, notifications: Notifications) -> None:
+            self.notifications = notifications
+
+        def execute(self) -> None:
+            self.notifications.publish("orders.received")
+
+    with Context(namespaces={NS}) as ctx:
+        with pytest.raises(TypeError, match=r"not a @Publisher"):
+            ctx.execute("scope.shout")
+
+
+def test_publishing_an_undeclared_topic_raises_and_wildcards_allow_a_prefix():
+    NS = make_ns()
+
+    @Publisher("orders.*", "invoices.filed")
+    @NS
+    @Task
+    class Till:
+        def __init__(self, notifications: Notifications) -> None:
+            self.notifications = notifications
+            self.topic = "orders.received"
+
+        def execute(self) -> Notification:
+            return self.notifications.publish(self.topic)
+
+    with Context(namespaces={NS}) as ctx:
+        till = ctx.get(Till)
+        for topic in ("orders.received", "orders.received.late", "invoices.filed"):
+            till.topic = topic
+            assert ctx.execute("scope.till").topic == topic
+        for topic in ("orders", "invoices.paid"):
+            till.topic = topic
+            with pytest.raises(ValueError, match="doesn't declare"):
+                ctx.execute("scope.till")
+
+
+def test_publishing_outside_a_protocol_call_raises():
+    NS = make_ns()
+
+    @Publisher("orders.received")
+    @NS
+    @Component
+    class Till:
+        def __init__(self, notifications: Notifications) -> None:
+            self.notifications = notifications
+
+    with Context(namespaces={NS}) as ctx:
+        with pytest.raises(RuntimeError, match="outside any protocol call"):
+            ctx.get(Till).notifications.publish("orders.received")
+
+
+def test_publishing_in_init_raises():
+    NS = make_ns()
+
+    @Publisher("orders.received")
+    @NS
+    @Component
+    class Eager:
+        def __init__(self, notifications: Notifications) -> None:
+            notifications.publish("orders.received")
+
+    with pytest.raises(RuntimeError, match="outside any protocol call"):
+        Context(namespaces={NS}).open()
+
+
+def test_a_subscriber_may_publish_what_it_declares():
+    NS = make_ns()
+
+    @Publisher("drafts.created")
+    @Subscriber("messages.received")
+    @NS
+    @Component
+    class Drafting:
+        def __init__(self, notifications: Notifications) -> None:
+            self.notifications = notifications
+
+        def on_notification(self, notification: Notification) -> None:
+            self.notifications.publish("drafts.created")
+
+    ctx = Context(namespaces={NS})
+    drafts = collect(ctx, "drafts.created")
+    events: list[Event] = []
+    ctx.events.subscribe(events.append)
+    with ctx:
+        ctx.notifications.publish("messages.received", key="scope.inbox")
+    (draft,) = drafts
+    reaction = next(e for e in events if e.key == "scope.drafting")
+    assert draft.parent == reaction.call_id
+
+
+def test_the_unbound_hub_is_unrestricted():
+    ctx = Context(namespaces={make_ns()})
+    assert ctx.notifications.publish("anything.goes", key="scope.x").topic == "anything.goes"
+
+
+def test_publishers_lists_classes_and_functions():
+    NS = make_ns()
+    publishing_task(NS)
+
+    @Publisher("orders.priced")
+    @NS
+    @Function
+    def quote_price(notifications: Notifications) -> None:
+        notifications.publish("orders.priced")
+
+    with Context(namespaces={NS}) as ctx:
+        assert ctx.publishers() == [
+            {"key": "scope.quote-price", "topics": ["orders.priced"]},
+            {"key": "scope.take-order", "topics": ["orders.received"]},
+        ]
+        assert ctx.call("scope.quote-price") is None
+
+
+def test_publisher_needs_a_registered_target_and_valid_topics():
+    class Bare: ...
+
+    with pytest.raises(TypeError, match="registered"):
+        Publisher("orders.received")(Bare)
+    with pytest.raises(ValueError):
+        Publisher()
+    with pytest.raises(ValueError):
+        Publisher("orders*")

@@ -12,7 +12,7 @@ from opendataframework.events import Event, Events, build_trace
 from opendataframework.function import Function, FunctionProtocol
 from opendataframework.logger import Logger
 from opendataframework.namespace import Namespace
-from opendataframework.notifications import Notifications
+from opendataframework.notifications import Notifications, Publisher
 from opendataframework.pipeline import Pipeline, PipelineProtocol
 from opendataframework.repository import (
     CloseStreamProtocol,
@@ -894,6 +894,7 @@ def test_trace_keeps_failures_when_only_failures_are_logged(tmp_path):
 def test_trace_attaches_notifications_to_the_publishing_call(tmp_path):
     NS = make_ns()
 
+    @Publisher("orders.received")
     @NS
     @Task
     class Announce:

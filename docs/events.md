@@ -17,6 +17,16 @@ It is the classic Observer pattern. `Events` is the subject, one per
 `Context`; a listener is any callable that takes an `Event`; listeners
 `subscribe`, and the framework notifies them around each protocol call.
 
+!!! note "Events are for observing the framework"
+    Events are a tooling API: what a UI, a monitor or a test uses to watch
+    how your code runs. They aren't how your components react to each
+    other. An Events listener isn't a protocol call, so it is never traced:
+    it has no call id, its log lines have no `parent`, the calls it makes are
+    unlinked top-level calls, and it can't publish through an injected
+    `notifications` (that needs a call in progress). To react to something
+    in your domain, publish a [notification](notifications.md) from a
+    `@Publisher` and react to it in a `@Subscriber`.
+
 ---
 
 ## Declaring it
@@ -111,6 +121,7 @@ emits events. Nothing else does.**
 | [`TaskProtocol`](task.md) | `execute` | Yes |
 | [`PipelineProtocol`](pipeline.md) | `execute` | Yes |
 | [`AgentProtocol`](agent.md) | `invoke` | Yes |
+| [`SubscriberProtocol`](notifications.md#subscriber) | `on_notification` | Yes, once per delivery to a `@Subscriber`, with the notification's `id` as its `cause` |
 | [`FunctionProtocol`](function.md) | `__call__` | Yes, for calls made through the `Context` (see below) |
 | `OpenStreamProtocol` / `StreamableProtocol` / `CloseStreamProtocol` | `open_stream` / `stream` / `close_stream` | Yes, once per stream start (never per item) |
 | `WritableProtocol` | `save`, `delete` | Not yet, and still undecided. Writes change state and may be worth reacting to, but the framework never calls them itself. |

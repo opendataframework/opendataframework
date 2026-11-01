@@ -7,8 +7,22 @@ component might draft an order change, and a UI might show a toast. Each
 message is a `Notification`: a topic, a payload, and an optional
 human-readable summary.
 
-`Notifications` is the hub, one per `Context`. A component publishes; any
-callable that takes a `Notification` can subscribe.
+`Notifications` is the hub, one per `Context`. A component declared a
+`@Publisher` publishes; a component declared a `@Subscriber` reacts, and
+the framework subscribes it while it runs and traces every reaction back to
+the notification that caused it.
+
+```python
+@Publisher("messages.received")
+@Service
+class Mailbox: ...  # publishes, from run()
+
+
+@Subscriber("messages.received", deliver="background")
+@Component
+class Drafting:
+    def on_notification(self, notification: Notification) -> None: ...
+```
 
 ---
 
@@ -42,15 +56,17 @@ its `parent`, so a consumer can relate the two. For example, "published during
 
 ## Publishing
 
-Declare `notifications: Notifications` in a constructor, or in a
-[Function](function.md)'s signature. Like [Logger](logger.md), it is
+Declare the class a `@Publisher` of the topics it publishes, and
+`notifications: Notifications` in its constructor (or in a
+[Function](function.md)'s signature). Like [Logger](logger.md), it is
 special-cased: each consumer receives a view **bound to its own key**, so
 `publish()` needs no key:
 
 ```python
-from opendataframework import Notifications, Task
+from opendataframework import Notifications, Publisher, Task
 
 
+@Publisher("orders.received")
 @Task
 class TakeOrders:
     def __init__(self, inbox: Inbox, orders: Orders, notifications: Notifications) -> None:
@@ -90,9 +106,36 @@ choose which are kept (see [Levels](logger.md#levels)).
 | `record` | Id of the record it's about, within `subject`. |
 | `key` | The publisher's key. Filled in by an injected view; required on `context.notifications`. |
 
+### `@Publisher` and the Publishing Rules
+
+`@Publisher(*topics)` goes on top of the class's execution type
+(`@Component`, `@Service`, `@Task`, `@Agent`, ...) or on top of
+`@Function`, the way a [layer](layer.md) does. Each topic is exact, or
+`"x.*"` to allow every topic under `x`. It has no protocol method: publishing
+is started by your own code, at moments only it knows, so the framework has
+nothing to call. What it does is make three rules hold for an injected view:
+
+1. **Only a `@Publisher` publishes.** Publishing without one raises
+   `TypeError`, so the framework knows every publisher: `context.publishers()`
+   lists them, and a UI can draw who publishes what before anything has been
+   published.
+2. **Only declared topics.** Publishing a topic the `@Publisher` doesn't
+   declare raises `ValueError`.
+3. **Only inside a protocol call.** Publishing with no call in progress raises
+   `RuntimeError`, because the notification would have no `parent` and
+   couldn't be traced. Publish from `execute()`, `run()`, `on_start()`,
+   `on_notification()`, `invoke()`, a `@Function` call, ... never from
+   `__init__` or from a thread you started yourself.
+
+```python
+context.publishers()
+# [{"key": "task.take-orders", "topics": ["orders.received"]}]
+```
+
 Code that holds the `Context` (a script, a test, the sibling
 [`odf`](https://opendataframework.github.io/odf/) package's UI server) uses the
-unbound hub, `context.notifications`, and passes the key itself:
+unbound hub, `context.notifications`, and passes the key itself. The unbound
+hub is exempt from all three rules:
 
 ```python
 project.context.notifications.publish("orders.imported", key="task.import-orders")
@@ -107,6 +150,90 @@ string instead.
 
 ## Subscribing
 
+### `@Subscriber`
+
+A component reacts to notifications by declaring itself a `@Subscriber`
+and defining `on_notification()` (`SubscriberProtocol`):
+
+```python
+from opendataframework import Component, Notification, Subscriber
+
+
+@Subscriber("orders.received")
+@Component
+class Kitchen:
+    def __init__(self, bakery: Bakery) -> None:
+        self.bakery = bakery
+
+    def on_notification(self, notification: Notification) -> None:
+        self.bakery.schedule(order_id=notification.record)
+```
+
+`@Subscriber(*topics, deliver="sync")` goes on top of the execution type,
+like `@Publisher`. Topics are filters, as below; a notification matching
+several is delivered once. A class without `on_notification()`, or with an
+`async` one, raises `TypeError`.
+
+* **Managed.** The `Context` subscribes `on_notification()` right after the
+  component starts (after its `on_start()`, or a service's `setup()`) and
+  unsubscribes it right before it stops. A component never receives a
+  notification before it started or after it stopped, and a service stopped
+  with `context.stop(key)` receives nothing until it starts again. The flip
+  side: what was published before the component started — during an
+  earlier component's `on_start()`, say — it doesn't see.
+* **Instrumented.** Each delivery is a protocol call, reported to
+  [Events](events.md) as `SubscriberProtocol` / `on_notification`, written to
+  the component's log, and linked to the notification by its `cause` (see
+  [Ids and Causes](#ids-and-causes)). If it raises, the call's `failed`
+  record says so; the exception never reaches the publisher.
+* **Visible.** `context.subscribers()` lists every subscriber:
+
+  ```python
+  context.subscribers()
+  # [{"key": "component.kitchen", "topics": ["orders.received"], "deliver": "sync"}]
+  ```
+
+Keep **one reaction per component**. Two reactions to different topics are
+two subscribers, each with its own node in a topology, its own delivery
+mode and its own trace. What they share (state, a model client, an order
+desk) belongs in a plain component they both depend on, not in a
+subscriber that branches on `notification.topic`:
+
+```python
+@Component
+class OrderDesk:
+    def draft_change(self, message_id: str) -> None: ...
+    def file_invoice(self, invoice_id: str) -> None: ...
+
+
+@Subscriber("messages.received")
+@Component
+class MessageDrafter:
+    def __init__(self, desk: OrderDesk) -> None:
+        self.desk = desk
+
+    def on_notification(self, notification: Notification) -> None:
+        self.desk.draft_change(notification.record)
+
+
+@Subscriber("invoices.*")
+@Component
+class InvoiceFiler:
+    def __init__(self, desk: OrderDesk) -> None:
+        self.desk = desk
+
+    def on_notification(self, notification: Notification) -> None:
+        self.desk.file_invoice(notification.record)
+```
+
+A subscriber that also publishes is a `@Publisher` too; it publishes from
+`on_notification()`, which is a protocol call, so the new notification's
+`parent` is the reaction and chains continue.
+
+### `subscribe()`
+
+For code outside components, and for dynamic cases, subscribe directly:
+
 ```python
 unsubscribe = notifications.subscribe(listener)  # every notification
 unsubscribe = notifications.subscribe(listener, topic="orders.received")  # exactly this topic
@@ -117,32 +244,10 @@ unsubscribe()  # stop; safe to call twice
 `"orders.*"` matches `orders.received` and `orders.received.late`, but not
 `orders` itself. A `*` anywhere other than a trailing `.*` raises `ValueError`.
 
-A component subscribes in its constructor, through the same injected view,
-and unsubscribes in `on_stop()`:
-
-```python
-from collections.abc import Callable
-from typing import Annotated
-
-from opendataframework import Component, Notification, Notifications
-
-
-@Component
-class Kitchen:
-    def __init__(
-        self,
-        notifications: Notifications,
-        schedule: Annotated[Callable[..., str], schedule_bake],
-    ) -> None:
-        self.schedule = schedule
-        self._unsubscribe = notifications.subscribe(self.on_order, topic="orders.received")
-
-    def on_order(self, notification: Notification) -> None:
-        self.schedule(order_id=notification.record)
-
-    def on_stop(self) -> None:
-        self._unsubscribe()
-```
+A listener subscribed this way isn't managed or instrumented: you
+unsubscribe it yourself, and its own run emits no events (the calls it makes
+still record the notification as their `cause`). Prefer `@Subscriber` in a
+component.
 
 See [`examples/11-notifications/`](examples.md) for a full runnable project
 built around this.
@@ -177,18 +282,23 @@ Delivery follows the same contract as [Events](events.md#listeners-run-inline):
 * **Thread-safe listeners.** Publishers can be on several threads (a
   service's `run()`, a stream), so listeners can be called from several
   threads.
-* **Exceptions are contained.** If a listener raises, the exception is logged
-  as a `WARNING` (`listener of <topic> raised ...`) and never reaches the
-  publisher or other listeners. It is logged on the subscriber's key when the
-  listener subscribed through an injected view, and on the publisher's key
-  when it subscribed through `context.notifications`.
-* **Listeners run with no current call.** A call a listener makes, like
-  `Kitchen`'s `schedule()` above, is top-level (`parent=None`), not a child of
-  the publisher's call. The reaction is linked to what caused it through
-  its `cause`, the notification's `id` — see [Ids and Causes](#ids-and-causes).
-* **A listener may publish.** That publish is delivered right away, before
-  the outer `publish()` moves on to its next listener. Don't have a listener
-  publish a topic it subscribes to.
+* **Exceptions are contained.** If a listener raises, the exception never
+  reaches the publisher or other listeners. A `@Subscriber`'s failure is its
+  `on_notification()` call's `failed` record. A `subscribe()` listener's is
+  logged as a `WARNING` (`listener of <topic> raised ...`), on the
+  subscriber's key when it subscribed through an injected view, and on the
+  publisher's key when it subscribed through `context.notifications`.
+* **Listeners run with no current call.** A `@Subscriber`'s
+  `on_notification()`, or the first call a `subscribe()` listener makes, is
+  top-level (`parent=None`), not a child of the publisher's call. The
+  reaction is linked to what caused it through its `cause`, the
+  notification's `id` — see [Ids and Causes](#ids-and-causes).
+* **A reaction may publish.** A `@Subscriber` that is also a `@Publisher`
+  publishes from `on_notification()`. That publish is delivered right away,
+  before the outer `publish()` moves on to its next listener. A
+  `subscribe()` listener isn't inside a call, so it can publish only
+  through the unbound `context.notifications`. Don't publish a topic you
+  subscribe to.
 
 ---
 

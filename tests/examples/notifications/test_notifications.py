@@ -3,7 +3,8 @@ from app.listeners import Kitchen, OrderCounter
 from app.repositories import Orders
 from app.tasks import TakeOrders
 
-from opendataframework import Notifications
+from opendataframework import Events, Notifications, TaskProtocol
+from opendataframework.notifications import publications_of
 
 # Deliberately drives a bare Notifications hub directly rather than going
 # through Project/Context — same reason as the other examples' tests (see
@@ -15,8 +16,15 @@ def take_orders(hub: Notifications) -> tuple[TakeOrders, Orders]:
     inbox = Inbox()
     inbox.on_start()
     orders = Orders()
-    task = TakeOrders(inbox, orders, hub.bound_to("task.take-orders"))
+    view = hub.bound_to("task.take-orders", publications_of(TakeOrders))
+    task = TakeOrders(inbox, orders, view)
     return task, orders
+
+
+def execute(task: TakeOrders) -> int:
+    """Run ``task.execute()`` inside a protocol call, as the Context would."""
+    with Events().notify("task.take-orders", TaskProtocol, "execute"):
+        return task.execute()
 
 
 def test_take_orders_publishes_received_and_large():
@@ -25,7 +33,7 @@ def test_take_orders_publishes_received_and_large():
     hub.subscribe(received.append)
     task, _ = take_orders(hub)
 
-    assert task.execute() == 2
+    assert execute(task) == 2
     assert [(n.key, n.topic, n.level, n.record) for n in received] == [
         ("task.take-orders", "orders.received", "info", 1),
         ("task.take-orders", "orders.received", "info", 2),
@@ -43,7 +51,7 @@ def test_kitchen_schedules_a_bake_per_received_order():
         lambda order_id: f"bake {orders.get(order_id).item}",
     )
 
-    task.execute()
+    execute(task)
 
     assert [bake for _, bake in kitchen.bakes] == ["bake baguette", "bake sourdough"]
 
@@ -53,7 +61,7 @@ def test_order_counter_counts_by_prefix_and_stops_after_on_stop():
     counter = OrderCounter(hub.bound_to("component.order-counter"))
     task, _ = take_orders(hub)
 
-    task.execute()
+    execute(task)
     counter.on_stop()
     hub.publish("orders.received", key="task.take-orders")
 

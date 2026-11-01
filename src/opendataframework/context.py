@@ -28,7 +28,12 @@ from opendataframework.events import Events, build_trace
 from opendataframework.function import Function, FunctionProtocol, bind, string_hint
 from opendataframework.logger import Logger, LogManager
 from opendataframework.namespace import Namespace, parse, qualified
-from opendataframework.notifications import Notifications
+from opendataframework.notifications import (
+    Notifications,
+    SubscriberProtocol,
+    publications_of,
+    subscription_of,
+)
 from opendataframework.pipeline import Pipeline, PipelineProtocol
 from opendataframework.repository import (
     CloseStreamProtocol,
@@ -498,7 +503,8 @@ class Resolver:
         key (see ``opendataframework.logger.LogManager.logger_for``). One
         annotated exactly as ``Events`` receives the ``Context``'s ``Events``,
         and one annotated exactly as ``Notifications`` a view of the hub bound
-        to ``target``'s key (see ``Notifications.bound_to``). A class is
+        to ``target``'s key and to the topics its ``@Publisher`` declares (see
+        ``Notifications.bound_to``). A class is
         supplied only if already present in ``self._instances``, and a
         function only if already bound — unregistered ones in the signature
         are silently ignored.
@@ -510,7 +516,9 @@ class Resolver:
             elif dep is Events:
                 supplied[name] = self._events
             elif dep is Notifications:
-                supplied[name] = self._notifications.bound_to(self._keys[target])
+                supplied[name] = self._notifications.bound_to(
+                    self._keys[target], publications_of(target)
+                )
             elif dep in self._instances:
                 supplied[name] = self._instances[dep]
             elif dep in self._functions:
@@ -539,6 +547,9 @@ class Lifecycle:
             ``LogManager`` (writes become no-ops) when omitted.
         events: Receives an event for every protocol call. Defaults to an
             ``Events`` with no listeners when omitted.
+        notifications: The hub each ``@Subscriber``'s ``on_notification()``
+            is subscribed to while its component runs. Defaults to a
+            ``Notifications`` with no listeners when omitted.
 
     Example:
         >>> lifecycle = Lifecycle(instances={...}, order=[...], keys={...})
@@ -553,6 +564,7 @@ class Lifecycle:
         keys: dict[type, str],
         log_manager: LogManager | None = None,
         events: Events | None = None,
+        notifications: Notifications | None = None,
     ) -> None:
         """See class docstring for ``Args``."""
         self._instances = instances
@@ -560,8 +572,12 @@ class Lifecycle:
         self._keys = keys
         self._log_manager = log_manager if log_manager is not None else LogManager()
         self._events = events if events is not None else Events(self._log_manager)
+        self._notifications = (
+            notifications if notifications is not None else Notifications(self._log_manager)
+        )
         self._threads: list[threading.Thread] = []
         self._running: dict[type, bool] = {}
+        self._detach: dict[type, Callable[[], None]] = {}
 
     def on_start(self) -> None:
         """Activate all instances in dependency order.
@@ -572,7 +588,8 @@ class Lifecycle:
         opting into the lightweight hook documented in ``docs/repository.md``
         — has it called directly (blocking; expected to return quickly, per
         ``docs/project.md``). Instances with neither are skipped — they have
-        no lifecycle contract.
+        no lifecycle contract. A ``@Subscriber`` is subscribed right after
+        its own start, whatever its kind — see ``_attach``.
 
         Example:
             >>> lifecycle.on_start()
@@ -583,8 +600,10 @@ class Lifecycle:
             instance = self._instances[cls]
             if isinstance(instance, ServiceProtocol):
                 self.start_one(cls)
-            elif isinstance(instance, OnStartProtocol):
+                continue
+            if isinstance(instance, OnStartProtocol):
                 self._activate_one(cls, instance)
+            self._attach(cls)
 
     def _activate_one(self, cls: type, instance: object) -> None:
         """Call a non-``Service`` instance's ``on_start()`` hook."""
@@ -617,6 +636,7 @@ class Lifecycle:
         t.start()
         self._threads.append(t)
         self._running[cls] = True
+        self._attach(cls)
 
     def stop_one(self, cls: type) -> None:
         """Stop a single running ``ServiceProtocol`` instance. No-op if not running.
@@ -631,6 +651,7 @@ class Lifecycle:
         """
         if not self._running.get(cls):
             return
+        self._detach_one(cls)
         instance = self._instances[cls]
         name = self._keys[cls]
         with self._events.notify(name, ServiceProtocol, "stop"):
@@ -653,7 +674,7 @@ class Lifecycle:
         instance that defines an ``on_stop()`` method has it called directly
         (blocking; expected to return quickly). Dependents are stopped
         before their dependencies, ensuring nothing is torn down while still
-        in use.
+        in use. A ``@Subscriber`` is unsubscribed right before its own stop.
 
         Example:
             >>> lifecycle.on_stop()
@@ -664,7 +685,9 @@ class Lifecycle:
             instance = self._instances[cls]
             if isinstance(instance, ServiceProtocol):
                 self.stop_one(cls)
-            elif isinstance(instance, OnStopProtocol):
+                continue
+            self._detach_one(cls)
+            if isinstance(instance, OnStopProtocol):
                 self._deactivate_one(cls, instance)
 
     def _deactivate_one(self, cls: type, instance: object) -> None:
@@ -672,6 +695,27 @@ class Lifecycle:
         name = self._keys[cls]
         with self._events.notify(name, OnStopProtocol, "on_stop"):
             instance.on_stop()
+
+    def _attach(self, cls: type) -> None:
+        """Subscribe ``cls``'s ``on_notification()`` if it is a ``@Subscriber``.
+
+        Called right after the component started, so it never receives a
+        notification before then. ``on_notification`` is the instrumented
+        wrapper ``Context._instrument`` set on the instance.
+        """
+        subscription = subscription_of(cls)
+        if subscription is None or cls in self._detach:
+            return
+        handler = self._instances[cls].on_notification
+        self._detach[cls] = self._notifications._attach(
+            self._keys[cls], handler, subscription.topics
+        )
+
+    def _detach_one(self, cls: type) -> None:
+        """Unsubscribe ``cls``'s ``on_notification()``, if subscribed."""
+        detach = self._detach.pop(cls, None)
+        if detach is not None:
+            detach()
 
 
 def _publish_latest(q: Queue, item: object) -> None:
@@ -1077,7 +1121,12 @@ class Context:
         self._functions = self._resolver.functions
         self._stream_manager = StreamManager(keys, self._log_manager, self._events)
         self._lifecycle = Lifecycle(
-            self._resolver.instances, self._resolver.order, keys, self._log_manager, self._events
+            self._resolver.instances,
+            self._resolver.order,
+            keys,
+            self._log_manager,
+            self._events,
+            self._notifications,
         )
         self._lifecycle.on_start()
 
@@ -1301,6 +1350,45 @@ class Context:
             if name not in injected
         }
 
+    def subscribers(self) -> list[dict]:
+        """Return every resolved ``@Subscriber``: what it reacts to, and how.
+
+        Returns:
+            One ``{"key", "topics", "deliver"}`` per subscriber, sorted by
+            key — enough for a UI to draw topic → subscriber links.
+
+        Example:
+            >>> context.subscribers()
+            [{'key': 'component.drafting', 'topics': ['messages.received'], 'deliver': 'sync'}]
+        """
+        found = []
+        for cls in self._resolver.instances:
+            subscription = subscription_of(cls)
+            if subscription is not None:
+                found.append(
+                    {
+                        "key": self._resolver.keys[cls],
+                        "topics": list(subscription.topics),
+                        "deliver": subscription.deliver,
+                    }
+                )
+        return sorted(found, key=lambda s: s["key"])
+
+    def publishers(self) -> list[dict]:
+        """Return every resolved ``@Publisher``, class or function, and its topics.
+
+        Returns:
+            One ``{"key", "topics"}`` per publisher, sorted by key — with
+            ``subscribers()``, enough for a UI to draw publisher → topic →
+            subscriber before anything has been published.
+        """
+        found = []
+        for target in [*self._resolver.instances, *self._resolver.functions]:
+            topics = publications_of(target)
+            if topics is not None and target in self._resolver.keys:
+                found.append({"key": self._resolver.keys[target], "topics": list(topics)})
+        return sorted(found, key=lambda p: p["key"])
+
     def _resolved(self, key: str) -> tuple[type, object]:
         """Look up a resolved ``(cls, instance)`` pair by ``<namespace>.<name>`` key.
 
@@ -1415,6 +1503,8 @@ class Context:
                 methods.append("invoke")
             if cls in repositories:
                 methods.extend(_STREAM_METHODS)
+            if subscription_of(cls) is not None:
+                methods.append("on_notification")
             found.extend(
                 f"{cls.__name__}.{method}()"
                 for method in methods
@@ -1428,7 +1518,10 @@ class Context:
             )
 
     def _instrument(self, keys: dict[type, str]) -> None:
-        """Wrap every resolved ``Task``/``Pipeline``'s ``execute()`` and ``Agent``'s ``invoke()``.
+        """Wrap every ``Task``/``Pipeline``'s ``execute()``, ``Agent``'s ``invoke()``, and more.
+
+        Also every ``@Subscriber``'s ``on_notification()``, reported as a
+        ``SubscriberProtocol`` call.
 
         Logs start, completion (with duration), and any exception to that
         component's own log file — with no code changes required in the
@@ -1458,6 +1551,14 @@ class Context:
                     self._events,
                     AgentProtocol,
                     "invoke",
+                )
+            if subscription_of(cls) is not None:
+                instance.on_notification = _notified_call(
+                    instance.on_notification,
+                    keys[cls],
+                    self._events,
+                    SubscriberProtocol,
+                    "on_notification",
                 )
 
     def __enter__(self) -> Context:
