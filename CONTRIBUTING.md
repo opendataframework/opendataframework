@@ -73,17 +73,24 @@ make `git checkout`/`git push` ambiguous.
 
 ### Releasing (maintainers)
 
-1. Cut `release/X.Y.Z` from `main`. Merge PRs into it as they land.
-2. When ready, add a final commit on the release branch that bumps
-   `version` in `pyproject.toml` and adds the notes to
-   `docs/release-notes.md`.
-3. Run `poetry run pytest` on the release branch and confirm CI is green.
-4. Open a PR `release/X.Y.Z` → `main` and **merge it with a merge
+1. Cut `release/X.Y.Z` from `main`.
+2. Make the first commit on the release branch the version bump: set
+   `version` in `pyproject.toml` and `CITATION.cff` to `X.Y.Z`, and add
+   an empty `## X.Y.Z` section to the top of `docs/release-notes.md`.
+   Bumping first means everything built from the branch already reports
+   the version it will ship as, and PRs have a section to add their notes
+   to. Use a `:bookmark: chore(release): bump version to X.Y.Z` commit.
+3. Merge PRs into the release branch as they land, each adding its notes
+   under the `## X.Y.Z` section.
+4. When ready, finalize `docs/release-notes.md` in a last commit on the
+   release branch.
+5. Run `poetry run pytest` on the release branch and confirm CI is green.
+6. Open a PR `release/X.Y.Z` → `main` and **merge it with a merge
    commit** (not squash, not rebase).
-5. Tag the merge commit on `main` and push the tag:
+7. Tag the merge commit on `main` and push the tag:
    `git tag -a X.Y.Z -m "X.Y.Z" && git push origin X.Y.Z`.
    Tags are bare versions with no `v` prefix, matching existing tags.
-6. The tag push triggers the workflow that deploys the docs. The package
+8. The tag push triggers the workflow that deploys the docs. The package
    is then published to PyPI manually by the code owner — this will be
    automated by a workflow later.
 
