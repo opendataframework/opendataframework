@@ -186,6 +186,10 @@ several is delivered once. A class without `on_notification()`, or with an
   the component's log, and linked to the notification by its `cause` (see
   [Ids and Causes](#ids-and-causes)). If it raises, the call's `failed`
   record says so; the exception never reaches the publisher.
+* **Sync or background.** With `deliver="sync"` (the default),
+  `on_notification()` runs inside `publish()`, in the publisher's thread. With
+  `deliver="background"`, `publish()` only queues the delivery and returns;
+  see [Background Delivery](#background-delivery).
 * **Visible.** `context.subscribers()` lists every subscriber:
 
   ```python
@@ -275,10 +279,11 @@ built around this.
 
 Delivery follows the same contract as [Events](events.md#listeners-run-inline):
 
-* **Synchronous.** Every listener runs inside `publish()`, in the
-  publisher's thread, before `publish()` returns. A slow listener holds up
-  the publisher, so hand slow work to a queue drained by a
-  [Service](service.md).
+* **Synchronous, unless declared background.** Every `subscribe()` listener,
+  and every `@Subscriber` with the default `deliver="sync"`, runs inside
+  `publish()`, in the publisher's thread, before `publish()` returns. A slow
+  one holds up the publisher — a webhook handler, a mailbox poll — so declare
+  it `deliver="background"` (below).
 * **Thread-safe listeners.** Publishers can be on several threads (a
   service's `run()`, a stream), so listeners can be called from several
   threads.
@@ -299,6 +304,45 @@ Delivery follows the same contract as [Events](events.md#listeners-run-inline):
   `subscribe()` listener isn't inside a call, so it can publish only
   through the unbound `context.notifications`. Don't publish a topic you
   subscribe to.
+
+### Background Delivery
+
+A reaction that calls a model or an external API shouldn't block whatever
+published. Declare it background:
+
+```python
+@Subscriber("messages.received", deliver="background")
+@Component
+class Drafting:
+    def __init__(self, order_desk: OrderDesk) -> None:
+        self.order_desk = order_desk
+
+    def on_notification(self, notification: Notification) -> None:
+        self.order_desk.invoke(message_id=notification.record)  # tens of seconds
+```
+
+* Each background subscriber has **its own worker thread and queue**,
+  started when the component starts and stopped when it stops. `publish()`
+  queues the delivery and returns.
+* **Publish order is kept** per subscriber. A slow subscriber holds up only
+  itself: a burst of invoices for one never delays another's messages.
+* The delivery is the same instrumented `on_notification()` call, with the
+  same `cause`, so traces look the same as for a sync subscriber.
+* **The queue is bounded.** When it is full, `publish()` blocks until there
+  is room — backpressure, never a silent drop — and the subscriber logs one
+  `WARNING` per full episode.
+* **Stopping drains.** Before the component's `on_stop()` (or a service's
+  `stop()`), the `Context` stops queuing, waits for the queue to drain up to
+  `drain-timeout`, and logs a `WARNING` with how many deliveries it dropped
+  if it couldn't.
+
+Both are set under `[project.notifications]`:
+
+```toml
+[project.notifications]
+queue-size = 1000     # each background subscriber's queue bound
+drain-timeout = 10    # seconds stopping one waits for its queue to drain
+```
 
 ---
 

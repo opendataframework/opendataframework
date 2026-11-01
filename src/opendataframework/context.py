@@ -708,7 +708,7 @@ class Lifecycle:
             return
         handler = self._instances[cls].on_notification
         self._detach[cls] = self._notifications._attach(
-            self._keys[cls], handler, subscription.topics
+            self._keys[cls], handler, subscription.topics, subscription.deliver
         )
 
     def _detach_one(self, cls: type) -> None:
@@ -927,6 +927,9 @@ class Context:
             ``[project.logging]`` — see ``opendataframework.logger.LogManager``.
             ``None`` writes JSON Lines and keeps ``INFO`` and up. Names of
             namespaces and components in it are checked by ``open()``.
+        notifications_config: Background delivery settings, shaped like
+            ``[project.notifications]`` (``queue-size``, ``drain-timeout``) —
+            see ``opendataframework.notifications.Notifications``.
 
     Attributes:
         instances: Class-to-instance mapping, populated after ``open()`` returns.
@@ -971,12 +974,15 @@ class Context:
         config: dict | None = None,
         log_dir: str | Path | None = None,
         log_config: Mapping[str, object] | None = None,
+        notifications_config: Mapping[str, object] | None = None,
     ) -> None:
         """See class docstring for ``Args``."""
         extra = {Config: Config(config)} if config is not None else {}
         self._log_manager = LogManager(log_dir, log_config)
         self._events = Events(self._log_manager)
-        self._notifications = Notifications(self._log_manager, key_of=self.key)
+        self._notifications = Notifications(
+            self._log_manager, key_of=self.key, config=notifications_config
+        )
         self._resolver = Resolver(
             namespaces if namespaces is not None else _DEFAULT_NAMESPACES,
             extra_instances=extra,

@@ -235,11 +235,16 @@ app = "app"        # see Project — imports the app package
 [project.logging]  # see Logger — log format and level thresholds
 format = "json"
 level = "INFO"
+
+[project.notifications]  # see Notifications — background delivery
+queue-size = 1000
+drain-timeout = 10
 ```
 
-See [Project](project.md#pointing-at-the-app-package) and
-[Logger](logger.md) (including [Levels](logger.md#levels)) for what each
-key does.
+See [Project](project.md#pointing-at-the-app-package),
+[Logger](logger.md) (including [Levels](logger.md#levels)) and
+[Notifications](notifications.md#background-delivery) for what each key
+does.
 
 ---
 

@@ -30,6 +30,12 @@
   logged, records the notification as its `cause`, and a failure is its `failed` record,
   never the publisher's problem. `context.subscribers()` lists them. Goes on top of the
   execution type, like a layer.
+- **Notifications**: `@Subscriber(..., deliver="background")` runs a slow reaction off the
+  publisher's thread: each background subscriber gets its own worker thread and bounded
+  queue, keeping publish order. A full queue blocks `publish()` (one `WARNING` per
+  episode); stopping the component drains its queue first, up to a timeout, and logs any
+  dropped deliveries. Set under `[project.notifications]`: `queue-size` (default 1000)
+  and `drain-timeout` (seconds, default 10).
 - **Notifications**: `@Publisher(*topics)` declares the topics a component or `@Function`
   publishes; `context.publishers()` lists them, so a UI can draw who publishes what before
   anything has been published.

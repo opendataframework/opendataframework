@@ -20,11 +20,14 @@ Unrelated to ``Events.notify()``, which emits ``Event``\\ s around a protocol
 call.
 """
 
+import contextlib
+import contextvars
 import copy
 import threading
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from queue import Empty, Full, Queue
 from types import MappingProxyType
 from typing import Any, Literal, Protocol, get_args, runtime_checkable
 from uuid import uuid4
@@ -108,6 +111,13 @@ class Notifications:
             logged. Defaults to a disabled ``LogManager``.
         key_of: Returns the key of a class or function, for a ``subject``
             given as one. ``None`` accepts key strings only.
+        config: ``[project.notifications]``, for ``deliver="background"``
+            subscribers: ``queue-size`` (default 1000), each subscriber's
+            queue bound, and ``drain-timeout`` (seconds, default 10), how
+            long stopping one waits for its queue to drain.
+
+    Raises:
+        ValueError: If ``config`` has an unknown key or an invalid value.
 
     Example:
         >>> @Task
@@ -131,10 +141,12 @@ class Notifications:
         self,
         log_manager: LogManager | None = None,
         key_of: Callable[[Any], str] | None = None,
+        config: Mapping[str, object] | None = None,
     ) -> None:
         """See class docstring for ``Args``."""
         self._log_manager = log_manager if log_manager is not None else LogManager()
         self._key_of = key_of
+        self._queue_size, self._drain_timeout = _settings(config or {})
         self._listeners: list[_Entry] = []
         self._lock = threading.Lock()
         self._key: str | None = None
@@ -282,7 +294,11 @@ class Notifications:
         return self._add([(listener, topic, self._key, False)])
 
     def _attach(
-        self, key: str, handler: Callable[[Notification], None], topics: tuple[str, ...]
+        self,
+        key: str,
+        handler: Callable[[Notification], None],
+        topics: tuple[str, ...],
+        deliver: Delivery = "sync",
     ) -> Callable[[], None]:
         """Subscribe a ``@Subscriber``'s handler to each of ``topics``, as ``key``.
 
@@ -291,10 +307,26 @@ class Notifications:
         once. An exception from ``handler`` is not logged here: ``handler``
         is an instrumented call, whose ``failed`` record already says so.
 
+        With ``deliver="background"``, ``handler`` runs on a worker thread
+        of its own, in publish order, fed by a bounded queue — see
+        ``_Worker``.
+
         Returns:
-            A function that detaches ``handler``.
+            A function that detaches ``handler``; for a background one, it
+            also drains the queue (up to ``drain-timeout``) and stops the
+            worker before returning.
         """
-        return self._add([(handler, topics, key, True)])
+        if deliver == "sync":
+            return self._add([(handler, topics, key, True)])
+        worker = _Worker(key, handler, self._log_manager, self._queue_size, self._drain_timeout)
+        remove = self._add([(worker.put, topics, key, True)])
+
+        def detach() -> None:
+            """Stop enqueuing, then drain and stop the worker."""
+            remove()
+            worker.stop()
+
+        return detach
 
     def _add(self, entries: list[_Entry]) -> Callable[[], None]:
         """Add listener ``entries``; return a function that removes them, idempotently."""
@@ -392,6 +424,150 @@ def _freeze(value: Any) -> Any:
     if isinstance(value, set | frozenset):
         return frozenset(_freeze(v) for v in value)
     return value
+
+
+_STOP = object()
+
+
+class _Worker:
+    """Delivers notifications to one background ``@Subscriber``, on a thread of its own.
+
+    ``put()`` enqueues and returns; the worker calls the instrumented
+    handler with each notification in turn, so a subscriber sees them in
+    publish order, and a slow one holds up only itself. Each delivery runs
+    with the notification as the cause, as a synchronous one does.
+
+    The queue is bounded. When it is full, ``put()`` blocks the publisher
+    until there is room — backpressure, never a silent drop — and logs one
+    ``WARNING`` per full episode.
+
+    Args:
+        key: The subscriber's key; names the thread and its log records.
+        handler: The instrumented ``on_notification``.
+        log_manager: Where a full queue and dropped deliveries are logged.
+        queue_size: The queue's bound.
+        drain_timeout: How long ``stop()`` waits for the queue to drain.
+    """
+
+    def __init__(
+        self,
+        key: str,
+        handler: Callable[[Notification], None],
+        log_manager: LogManager,
+        queue_size: int,
+        drain_timeout: float,
+    ) -> None:
+        """See class docstring for ``Args``; starts the worker thread."""
+        self._key = key
+        self._handler = handler
+        self._log_manager = log_manager
+        self._queue: Queue[object] = Queue(maxsize=queue_size)
+        self._drain_timeout = drain_timeout
+        self._full = False
+        self._closed = False
+        self._abort = False
+        # An empty context, so a delivery never inherits the starter's call.
+        self._thread = threading.Thread(
+            target=self._loop,
+            name=f"odf-subscriber-{key}",
+            daemon=True,
+            context=contextvars.Context(),
+        )
+        self._thread.start()
+
+    def put(self, notification: Notification) -> None:
+        """Queue ``notification`` for delivery, blocking while the queue is full."""
+        if self._closed:
+            return
+        try:
+            self._queue.put_nowait(notification)
+            self._full = False
+            return
+        except Full:
+            pass
+        if not self._full:
+            self._full = True
+            self._log_manager.write(
+                self._key,
+                "WARNING",
+                f"background queue full ({self._queue.maxsize}): publish() of "
+                f"{notification.topic} blocks until on_notification() catches up",
+            )
+        self._queue.put(notification)
+
+    def stop(self) -> None:
+        """Stop accepting, drain the queue for up to ``drain_timeout``, and stop.
+
+        Deliveries still queued when the time is up are dropped, and how
+        many is logged as a ``WARNING``. A delivery already running is left
+        to finish on its own: it can't be interrupted.
+        """
+        self._closed = True
+        deadline = time.monotonic() + self._drain_timeout
+        try:
+            self._queue.put(_STOP, timeout=self._drain_timeout)
+        except Full:
+            pass
+        self._thread.join(max(0.0, deadline - time.monotonic()))
+        if not self._thread.is_alive():
+            return
+        self._abort = True
+        dropped = 0
+        while True:
+            try:
+                item = self._queue.get_nowait()
+            except Empty:
+                break
+            if item is not _STOP:
+                dropped += 1
+        self._log_manager.write(
+            self._key,
+            "WARNING",
+            f"stopped with {dropped} background deliveries dropped: the queue didn't "
+            f"drain within {self._drain_timeout:g}s",
+        )
+
+    def _loop(self) -> None:
+        """Deliver queued notifications in order, until stopped."""
+        while True:
+            item = self._queue.get()
+            if not isinstance(item, Notification) or self._abort:
+                return  # _STOP, or stop() gave up on draining
+            # A failure is the instrumented call's own failed record.
+            with _no_current_call(cause=item.id), contextlib.suppress(Exception):
+                self._handler(item)
+
+
+def _settings(config: Mapping[str, object]) -> tuple[int, float]:
+    """Return ``(queue-size, drain-timeout)`` from ``[project.notifications]``.
+
+    Raises:
+        ValueError: If ``config`` has an unknown key, a ``queue-size`` that
+            isn't a positive integer, or a ``drain-timeout`` that isn't a
+            non-negative number.
+    """
+    queue_size: object = config.get("queue-size", 1000)
+    drain_timeout: object = config.get("drain-timeout", 10)
+    unknown = set(config) - {"queue-size", "drain-timeout"}
+    if unknown:
+        raise ValueError(
+            f"[project.notifications] has unknown key {min(unknown)!r}; "
+            "expected one of: queue-size, drain-timeout"
+        )
+    if isinstance(queue_size, bool) or not isinstance(queue_size, int) or queue_size < 1:
+        raise ValueError(
+            f"[project.notifications] queue-size = {queue_size!r}: expected a positive integer"
+        )
+    if (
+        isinstance(drain_timeout, bool)
+        or not isinstance(drain_timeout, int | float)
+        or drain_timeout < 0
+    ):
+        raise ValueError(
+            f"[project.notifications] drain-timeout = {drain_timeout!r}: "
+            "expected a number of seconds, 0 or more"
+        )
+    return queue_size, float(drain_timeout)
 
 
 def _matches(pattern: str | tuple[str, ...] | None, topic: str) -> bool:

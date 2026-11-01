@@ -1,3 +1,5 @@
+import threading
+import time
 from collections.abc import Callable
 from typing import Annotated
 
@@ -948,3 +950,179 @@ def test_publisher_needs_a_registered_target_and_valid_topics():
         Publisher()
     with pytest.raises(ValueError):
         Publisher("orders*")
+
+
+# --- background delivery -------------------------------------------------------
+
+
+def background(NS, *topics, name="Drafting", gate=None, received=None, fail_on=None):
+    """Register a background @Subscriber that waits on ``gate`` before recording each delivery."""
+    received = received if received is not None else []
+
+    def on_notification(self, notification: Notification) -> None:
+        if gate is not None:
+            gate.wait(5)
+        if fail_on is not None and notification.payload.get("n") == fail_on:
+            raise RuntimeError("bad message")
+        received.append((notification, threading.current_thread().name))
+
+    cls = type(name, (), {"on_notification": on_notification})
+    Subscriber(*topics, deliver="background")(NS(Component(cls)))
+    return received
+
+
+def test_publish_returns_before_a_slow_background_subscriber_finishes():
+    NS = make_ns()
+    gate = threading.Event()
+    received = background(NS, "messages.received", gate=gate)
+    with Context(namespaces={NS}) as ctx:
+        ctx.notifications.publish("messages.received", key="scope.x")
+        assert received == []
+        gate.set()
+    # close() drained the queue before returning
+    ((notification, thread),) = received
+    assert thread == "odf-subscriber-scope.drafting"
+    assert thread != threading.current_thread().name
+
+
+def test_background_deliveries_keep_publish_order_and_survive_a_failure():
+    NS = make_ns()
+    received = background(NS, "messages.received", fail_on=3)
+    with Context(namespaces={NS}) as ctx:
+        for n in range(6):
+            ctx.notifications.publish("messages.received", {"n": n}, key="scope.x")
+    assert [notification.payload["n"] for notification, _ in received] == [0, 1, 2, 4, 5]
+
+
+def test_a_background_delivery_is_caused_by_its_notification():
+    NS = make_ns()
+    background(NS, "messages.received")
+    ctx = Context(namespaces={NS})
+    events: list[Event] = []
+    ctx.events.subscribe(events.append)
+    with ctx:
+        notification = ctx.notifications.publish("messages.received", key="scope.x")
+    calls = [e for e in events if e.key == "scope.drafting"]
+    assert [e.state for e in calls] == ["started", "completed"]
+    assert {(e.protocol, e.cause, e.parent) for e in calls} == {
+        (SubscriberProtocol, notification.id, None)
+    }
+
+
+def test_a_slow_background_subscriber_does_not_hold_up_another():
+    NS = make_ns()
+    gate = threading.Event()
+    slow = background(NS, "messages.received", name="Slow", gate=gate)
+    fast = background(NS, "messages.received", name="Fast")
+    with Context(namespaces={NS}) as ctx:
+        ctx.notifications.publish("messages.received", key="scope.x")
+        deadline = time.monotonic() + 5
+        while not fast and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert len(fast) == 1 and slow == []
+        gate.set()
+    assert len(slow) == 1
+
+
+def test_a_full_queue_blocks_the_publisher_and_warns_once_per_episode(tmp_path):
+    NS = make_ns()
+    gate = threading.Event()
+    received = background(NS, "messages.received", gate=gate)
+    config = {"queue-size": 1}
+    ctx = Context(namespaces={NS}, log_dir=tmp_path, notifications_config=config)
+    published = threading.Event()
+
+    def publish_three() -> None:
+        for n in range(3):
+            ctx.notifications.publish("messages.received", {"n": n}, key="scope.x")
+        published.set()
+
+    with ctx:
+        thread = threading.Thread(target=publish_three)
+        thread.start()
+        # one delivery is waiting on the gate, one is queued, the third blocks
+        assert not published.wait(0.3)
+        gate.set()
+        assert published.wait(5)
+        thread.join(5)
+        warnings = [r for r in ctx.tail_logs("scope.drafting") if r["level"] == "WARNING"]
+    assert [n.payload["n"] for n, _ in received] == [0, 1, 2]
+    assert len(warnings) == 1
+    assert warnings[0]["message"].startswith("background queue full (1)")
+
+
+def test_close_drops_what_does_not_drain_in_time_and_logs_it(tmp_path):
+    NS = make_ns()
+    gate = threading.Event()
+    received = background(NS, "messages.received", gate=gate)
+    config = {"drain-timeout": 0.2}
+    ctx = Context(namespaces={NS}, log_dir=tmp_path, notifications_config=config)
+    ctx.open()
+    for n in range(3):
+        ctx.notifications.publish("messages.received", {"n": n}, key="scope.x")
+    started = time.monotonic()
+    ctx._lifecycle.on_stop()  # keep the log files open to read the warning back
+    assert time.monotonic() - started < 3
+    logged = ctx.tail_logs("scope.drafting")
+    gate.set()
+    ctx.close()
+    dropped = [r for r in logged if "dropped" in r["message"]]
+    assert [r["message"] for r in dropped] == [
+        "stopped with 2 background deliveries dropped: the queue didn't drain within 0.2s"
+    ]
+    assert len(received) <= 1
+
+
+def test_no_worker_thread_without_background_subscribers():
+    NS = make_ns()
+    subscriber(NS, "orders.received")
+    before = {t.name for t in threading.enumerate()}
+    with Context(namespaces={NS}):
+        during = {t.name for t in threading.enumerate()}
+    assert not any(name.startswith("odf-subscriber-") for name in during - before)
+
+
+def test_a_background_subscribers_worker_stops_with_its_service():
+    NS = make_ns()
+    received: list[Notification] = []
+
+    @Subscriber("messages.received", deliver="background")
+    @NS
+    @Service
+    class Mailbox:
+        def setup(self) -> None: ...
+
+        def run(self) -> None: ...
+
+        def stop(self) -> None: ...
+
+        def on_notification(self, notification: Notification) -> None:
+            received.append(notification)
+
+    def workers() -> int:
+        return sum(t.name == "odf-subscriber-scope.mailbox" for t in threading.enumerate())
+
+    with Context(namespaces={NS}) as ctx:
+        assert workers() == 1
+        ctx.stop("scope.mailbox")
+        assert workers() == 0
+        ctx.notifications.publish("messages.received", key="scope.x")
+        ctx.start("scope.mailbox")
+        ctx.notifications.publish("messages.received", key="scope.x")
+    assert len(received) == 1 and workers() == 0
+
+
+@pytest.mark.parametrize(
+    "config, message",
+    [
+        ({"queue-size": 0}, "queue-size"),
+        ({"queue-size": True}, "queue-size"),
+        ({"queue-size": "10"}, "queue-size"),
+        ({"drain-timeout": -1}, "drain-timeout"),
+        ({"drain-timeout": "5s"}, "drain-timeout"),
+        ({"queue_size": 10}, "unknown key 'queue_size'"),
+    ],
+)
+def test_invalid_notifications_config_raises(config, message):
+    with pytest.raises(ValueError, match=message):
+        Context(namespaces={make_ns()}, notifications_config=config)
