@@ -17,6 +17,7 @@ import functools
 import inspect
 import threading
 from collections.abc import Callable, Hashable, Iterable, Iterator, Mapping
+from datetime import datetime
 from pathlib import Path
 from queue import Empty, Full, Queue
 from typing import Annotated, TypeAliasType, TypeVar, cast, get_origin, overload
@@ -1408,7 +1409,7 @@ class Context:
             raise KeyError(key)
         return cls, instances[cls]
 
-    def trace(self, call_id: str) -> dict:
+    def trace(self, call_id: str, since: float | datetime | None = None) -> dict:
         """Return the tree of a protocol call and every call made inside it, from the logs.
 
         Reads every ``.jsonl`` log file once and follows ``parent`` links,
@@ -1423,6 +1424,10 @@ class Context:
         Args:
             call_id: The call's id — ``Event.call_id``, or a record's
                 ``call``.
+            since: Skip log files last written before this time (a
+                ``time.time()`` value or a ``datetime``) — pass the call's
+                start, when known, so old rotated files aren't read. ``None``
+                reads every file.
 
         Raises:
             KeyError: If no call in the ``.jsonl`` logs has the id ``call_id``.
@@ -1435,7 +1440,7 @@ class Context:
             >>> context.trace(failed[-1]["parent"])["key"]
             'pipeline.nightly-orders'
         """
-        return build_trace(self._log_manager.records(), call_id)
+        return build_trace(self._log_manager.records(since), call_id)
 
     def logs(self, call_id: str) -> list[dict]:
         """Return every log record written by or during one protocol call, across files.

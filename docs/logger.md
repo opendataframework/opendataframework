@@ -326,6 +326,40 @@ project.context.tail_logs("service.postgres", lines=100)
 Every record has at least `ts`, `level` and `message`. In the text format
 those three are all that come back.
 
+`tail_logs()` reads backwards from the end of the file, and into rotated
+backups only if it needs more, so polling it stays cheap however large the
+file has grown.
+
+---
+
+## Rotation
+
+By default a log file grows without limit. Set `max-bytes` to rotate it:
+
+```toml
+[project.logging]
+max-bytes = 10_000_000   # off by default
+backups = 5              # the default
+```
+
+Before a record would grow `task.load.jsonl` past `max-bytes`, the file
+becomes `task.load.1.jsonl`, older backups shift up to `task.load.5.jsonl`,
+and the one beyond `backups` is deleted (`.log` files likewise, in the text
+format). A single record larger than `max-bytes` is still written whole.
+
+`tail_logs()`, `context.logs()` and `context.trace()` read the backups as
+well as the current file, so a trace still finds a call that was rotated
+out of the current file — until its backup is deleted. Records rotated
+away are gone: size `max-bytes` and `backups` for how far back you need to
+trace. `context.trace(call_id, since=...)` skips files last written before
+`since` (a `time.time()` value or a `datetime`), so passing a call's start
+time keeps tracing a recent call cheap with many backups.
+
+!!! warning "One process per log directory"
+    Rotation is coordinated within one process. Two processes writing the
+    same log directory, each rotating on its own, would clobber each other's
+    backups — give each its own `log-dir`.
+
 !!! tip "Seeing it in practice"
     The sibling [`odf`](https://opendataframework.github.io/odf/) package's
     UI's per-component log panel is backed by this same method, via

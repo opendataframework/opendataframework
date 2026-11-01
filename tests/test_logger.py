@@ -1,10 +1,12 @@
 import json
+import os
 import re
 from datetime import datetime
 from pathlib import Path
 
 import pytest
 
+from opendataframework import logger as logger_module
 from opendataframework.logger import Logger, LogManager, render
 
 # --- disabled by default -------------------------------------------------------
@@ -303,3 +305,155 @@ def test_render_writes_full_ids():
 def test_unknown_format_raises():
     with pytest.raises(ValueError, match="format = 'xml'"):
         LogManager(config={"format": "xml"})
+
+
+# --- rotation ------------------------------------------------------------------
+
+
+def record_size(manager: LogManager, message: str) -> int:
+    """Return how many bytes one record with ``message`` takes, by writing it to a scratch key."""
+    manager.write("scratch.size", "INFO", message)
+    path = manager._path("scratch.size")
+    size = path.stat().st_size
+    manager._files.pop("scratch.size").close()
+    path.unlink()
+    return size
+
+
+def test_no_rotation_by_default(tmp_path):
+    manager = LogManager(tmp_path)
+    for i in range(200):
+        manager.write("task.load", "INFO", f"line {i:03}")
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["task.load.jsonl"]
+
+
+def test_rotates_before_a_record_would_pass_max_bytes(tmp_path):
+    probe = LogManager(tmp_path / "probe")
+    size = record_size(probe, "line 000")
+    manager = LogManager(tmp_path / "logs", {"max-bytes": size * 3 + 1})
+    for i in range(7):
+        manager.write("task.load", "INFO", f"line {i:03}")
+
+    def messages(name: str) -> list[str]:
+        lines = (tmp_path / "logs" / name).read_text().splitlines()
+        return [json.loads(line)["message"] for line in lines]
+
+    assert messages("task.load.2.jsonl") == ["line 000", "line 001", "line 002"]
+    assert messages("task.load.1.jsonl") == ["line 003", "line 004", "line 005"]
+    assert messages("task.load.jsonl") == ["line 006"]
+
+
+def test_keeps_at_most_backups_files(tmp_path):
+    manager = LogManager(tmp_path, {"max-bytes": 1, "backups": 2})
+    for i in range(6):
+        manager.write("task.load", "INFO", f"line {i}")
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "task.load.1.jsonl",
+        "task.load.2.jsonl",
+        "task.load.jsonl",
+    ]
+    assert [e["message"] for e in manager.tail("task.load")] == ["line 3", "line 4", "line 5"]
+
+
+def test_a_record_larger_than_max_bytes_is_still_written_whole(tmp_path):
+    manager = LogManager(tmp_path, {"max-bytes": 10})
+    manager.write("task.load", "INFO", "x" * 100)
+    assert manager.tail("task.load")[0]["message"] == "x" * 100
+    assert not (tmp_path / "task.load.1.jsonl").exists()
+
+
+def test_rotation_carries_on_from_an_existing_file(tmp_path):
+    LogManager(tmp_path).write("task.load", "INFO", "x" * 50)
+    manager = LogManager(tmp_path, {"max-bytes": 60})
+    manager.write("task.load", "INFO", "after restart")
+    assert (tmp_path / "task.load.1.jsonl").exists()
+    assert [e["message"] for e in manager.tail("task.load")] == ["x" * 50, "after restart"]
+
+
+def test_tail_reads_across_a_rotation_boundary(tmp_path):
+    manager = LogManager(tmp_path, {"max-bytes": 1, "backups": 5})
+    for i in range(4):
+        manager.write("task.load", "INFO", f"line {i}")
+    assert [e["message"] for e in manager.tail("task.load", lines=3)] == [
+        "line 1",
+        "line 2",
+        "line 3",
+    ]
+    assert manager.tail("task.load", lines=0) == []
+
+
+def test_text_format_rotates_too(tmp_path):
+    manager = LogManager(tmp_path, {"format": "text", "max-bytes": 1})
+    manager.write("task.load", "INFO", "first")
+    manager.write("task.load", "INFO", "second")
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["task.load.1.log", "task.load.log"]
+    assert [e["message"] for e in manager.tail("task.load")] == ["first", "second"]
+
+
+def test_tail_of_a_large_file_reads_only_its_end(tmp_path, monkeypatch):
+    path = tmp_path / "task.load.jsonl"
+    with path.open("w") as f:
+        for i in range(20_000):
+            f.write(json.dumps({"ts": "t", "level": "INFO", "message": f"line {i}"}) + "\n")
+    read: list[int] = []
+    original = logger_module._read_block
+
+    def counting(f, start: int, size: int) -> bytes:
+        read.append(size)
+        return original(f, start, size)
+
+    monkeypatch.setattr(logger_module, "_read_block", counting)
+    entries = LogManager(tmp_path).tail("task.load", lines=3)
+    assert [e["message"] for e in entries] == ["line 19997", "line 19998", "line 19999"]
+    assert sum(read) <= logger_module._BLOCK_SIZE < path.stat().st_size
+
+
+def test_tail_handles_a_file_without_a_trailing_newline_and_short_files(tmp_path):
+    (tmp_path / "task.load.jsonl").write_text(
+        '{"ts": "t", "level": "INFO", "message": "a"}\n{"ts": "t", "level": "INFO", "message": "b"}'
+    )
+    assert [e["message"] for e in LogManager(tmp_path).tail("task.load", lines=5)] == ["a", "b"]
+
+
+def test_records_reads_backups_oldest_first_then_the_current_file(tmp_path):
+    manager = LogManager(tmp_path, {"max-bytes": 1, "backups": 12})
+    for i in range(12):
+        manager.write("task.load", "INFO", f"line {i}")
+    manager.write("task.other", "INFO", "other")
+    by_key: dict[str, list[str]] = {}
+    for record in manager.records():
+        by_key.setdefault(record["key"], []).append(record["message"])
+    assert by_key == {"task.load": [f"line {i}" for i in range(12)], "task.other": ["other"]}
+
+
+def test_records_since_skips_files_last_written_before_it(tmp_path):
+    manager = LogManager(tmp_path, {"max-bytes": 1})
+    manager.write("task.load", "INFO", "old")
+    manager.write("task.load", "INFO", "new")
+    old = tmp_path / "task.load.1.jsonl"
+    os.utime(old, (1_000_000, 1_000_000))
+    assert [r["message"] for r in manager.records(since=2_000_000)] == ["new"]
+    assert [r["message"] for r in manager.records(since=datetime.fromtimestamp(2_000_000))] == [
+        "new"
+    ]
+    assert [r["message"] for r in manager.records()] == ["old", "new"]
+
+
+@pytest.mark.parametrize(
+    "config, message",
+    [
+        ({"max-bytes": 0}, "max-bytes"),
+        ({"max-bytes": "10MB"}, "max-bytes"),
+        ({"max-bytes": True}, "max-bytes"),
+        ({"backups": 0}, "backups"),
+    ],
+)
+def test_rotation_keys_are_validated(config, message):
+    with pytest.raises(ValueError, match=message):
+        LogManager(config=config)
+
+
+def test_validate_lists_the_rotation_keys():
+    manager = LogManager(config={"tsak": {"level": "DEBUG"}})
+    with pytest.raises(ValueError, match="max-bytes, backups"):
+        manager.validate({"task"}, ["task.load"])

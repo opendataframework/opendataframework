@@ -1,3 +1,4 @@
+import os
 import threading
 import time
 from collections.abc import Callable
@@ -1056,6 +1057,19 @@ def test_build_trace_unknown_id():
     with pytest.raises(KeyError, match="no call 'fff'"):
         build_trace(items, "fff")
     assert build_trace(items, "abc1" + "0" * 28)["state"] == "running"
+
+
+def test_trace_since_skips_files_last_written_before_it(tmp_path):
+    NS = make_ns()
+    chain(NS)
+    with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
+        ctx.execute("scope.nightly")
+        (nightly, _) = records(ctx, "scope.nightly")
+    for path in tmp_path.glob("*.jsonl"):
+        os.utime(path, (1_000_000, 1_000_000))
+    assert ctx.trace(nightly["call"], since=999_999)["key"] == "scope.nightly"
+    with pytest.raises(KeyError):
+        ctx.trace(nightly["call"], since=2_000_000)
 
 
 def test_trace_needs_json_file_logs(tmp_path):

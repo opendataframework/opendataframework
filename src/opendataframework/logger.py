@@ -34,6 +34,7 @@ the project config; see ``LogManager``.
 """
 
 import json
+import os
 import re
 import threading
 from collections.abc import Iterable, Iterator, Mapping
@@ -102,6 +103,12 @@ FORMATS = {"json": ".jsonl", "text": ".log"}
 """Log file formats, and the file extension each is written with."""
 
 _DEFAULT_LEVEL = "INFO"
+_DEFAULT_BACKUPS = 5
+_ROTATION_KEYS = ("max-bytes", "backups")
+# How much tail() reads from the end of a file at a time.
+_BLOCK_SIZE = 64 * 1024
+# The stem of a rotated backup: ``<namespace>.<name>.<n>``.
+_BACKUP_RE = re.compile(r"^(?P<base>.+)\.(?P<n>\d+)$")
 
 
 class LogManager:
@@ -119,6 +126,9 @@ class LogManager:
         events = "WARNING"        # records Events writes
         notifications = "INFO"    # records Notifications writes
 
+        max-bytes = 10_000_000    # rotate a file before it grows past this; off by default
+        backups = 5               # rotated files kept per component
+
         [task]                    # a namespace
         level = "INFO"            # every task, every source
         take-orders = "DEBUG"     # one component, every source
@@ -129,6 +139,13 @@ class LogManager:
     (``events``/``notifications``), then ``level``, then ``INFO``. Level
     names are ``DEBUG``, ``INFO``, ``WARNING`` and ``ERROR``, in any casing.
 
+    With ``max-bytes`` set, a file that a record would grow past it is
+    rotated first: ``<key>.jsonl`` becomes ``<key>.1.jsonl``, older backups
+    shift up to ``<key>.<backups>.jsonl``, and the oldest beyond that is
+    deleted (``.log`` likewise, in the text format). Rotation is safe within
+    one process only: two processes writing the same log directory must not
+    both rotate.
+
     Args:
         log_dir: Directory to write ``<namespace>.<name>.jsonl`` (or
             ``.log``) files under, or ``None`` to disable file logging
@@ -137,7 +154,8 @@ class LogManager:
             Lines and keeps ``INFO`` and up.
 
     Raises:
-        ValueError: If ``config`` has an unknown format or level name, or a
+        ValueError: If ``config`` has an unknown format or level name, a
+            ``max-bytes`` or ``backups`` that isn't a positive integer, or a
             value that is neither a level name nor, for a namespace, a table
             of them.
     """
@@ -149,13 +167,20 @@ class LogManager:
         self._dir = Path(log_dir) if log_dir is not None else None
         self._lock = threading.Lock()
         self._files: dict[str, object] = {}
+        self._sizes: dict[str, int] = {}
         self._format = "json"
         self._default = LEVELS[_DEFAULT_LEVEL]
         self._sources: dict[str, int] = {}
         self._namespaces: dict[str, dict[str, int]] = {}
+        self._max_bytes: int | None = None
+        self._backups = _DEFAULT_BACKUPS
         for key, value in (config or {}).items():
             if key == "format":
                 self._format = _format(value)
+            elif key == "max-bytes":
+                self._max_bytes = _positive(value, key)
+            elif key == "backups":
+                self._backups = _positive(value, key)
             elif key == "level":
                 self._default = _level(value, key)
             elif key in SOURCES:
@@ -209,7 +234,9 @@ class LogManager:
             names.setdefault(namespace, set()).add(name)
         for namespace, table in self._namespaces.items():
             if namespace not in namespaces:
-                valid = ", ".join(["format", "level", *SOURCES, *sorted(namespaces)])
+                valid = ", ".join(
+                    ["format", "level", *SOURCES, *_ROTATION_KEYS, *sorted(namespaces)]
+                )
                 raise ValueError(
                     f"[project.logging] has unknown key {namespace!r}; expected one of: {valid}"
                 )
@@ -277,13 +304,19 @@ class LogManager:
         else:
             line = render(record)
         file_name = kebab(component)
+        size = len(line.encode()) + 1
         with self._lock:
             f = self._files.get(file_name)
             if f is None:
-                self._dir.mkdir(parents=True, exist_ok=True)
-                f = open(self._path(component), "a", buffering=1)
-                self._files[file_name] = f
+                f = self._open(component)
+            if (
+                self._max_bytes is not None
+                and self._sizes[file_name] > 0
+                and self._sizes[file_name] + size > self._max_bytes
+            ):
+                f = self._rotate(component)
             f.write(line + "\n")
+            self._sizes[file_name] += size
 
     def tail(self, component: str, lines: int = 300) -> list[dict]:
         """Return the last ``lines`` records for ``component``, oldest first.
@@ -296,24 +329,42 @@ class LogManager:
             can't be parsed comes back as ``{"ts": None, "level": "INFO",
             "message": <the raw line>}``. Empty if logging is disabled or
             nothing was ever written for this component.
+
+        Reads backwards from the end of the current file, and into its
+        rotated backups only if it needs more lines, so its cost follows
+        ``lines``, not the file's size.
         """
-        if self._dir is None:
+        if self._dir is None or lines <= 0:
             return []
-        path = self._path(component)
-        if not path.exists():
-            return []
+        raw: list[str] = []
         with self._lock:
-            raw = path.read_text().splitlines()
+            # Newest first: the current file, then .1, .2, ... only while short.
+            for n in range(self._backups + 1):
+                path = self._path(component, n)
+                if not path.exists():
+                    if n == 0:
+                        continue
+                    break
+                raw = _last_lines(path, lines - len(raw)) + raw
+                if len(raw) >= lines:
+                    break
         parse = _parse_json if self._format == "json" else _parse_line
-        return [parse(line) for line in raw[-lines:]]
+        return [parse(line) for line in raw]
 
-    def records(self) -> Iterator[dict]:
-        """Yield every record in every ``.jsonl`` file, file by file, oldest first in each.
+    def records(self, since: float | datetime | None = None) -> Iterator[dict]:
+        """Yield every record in every ``.jsonl`` file, component by component, oldest first.
 
-        Used by ``Context.trace()`` to follow a call across files. Only the
-        configured ``json`` format is read: ``.log`` files left from an
-        earlier ``text`` setup are ignored. Lines that can't be parsed are
-        skipped.
+        Used by ``Context.trace()`` to follow a call across files. A
+        component's rotated backups come first, oldest first, then its
+        current file. Only the configured ``json`` format is read: ``.log``
+        files left from an earlier ``text`` setup are ignored. Lines that
+        can't be parsed are skipped.
+
+        Args:
+            since: Skip files last written before this time — a
+                ``time.time()`` value or a ``datetime``. A trace of a call
+                that started at ``since`` needs nothing older. ``None`` (the
+                default) reads every file.
 
         Raises:
             ValueError: If file logging is off, or the configured format is
@@ -326,9 +377,12 @@ class LogManager:
             raise ValueError('records need the "json" log format; [project.logging] sets "text"')
         if not self._dir.exists():
             return
-        for path in sorted(self._dir.glob(f"*{FORMATS['json']}")):
+        cutoff = since.timestamp() if isinstance(since, datetime) else since
+        for path in self._files_oldest_first():
+            if cutoff is not None and path.stat().st_mtime < cutoff:
+                continue
             with self._lock:
-                raw = path.read_text().splitlines()
+                raw = path.read_text(encoding="utf-8").splitlines()
             for line in raw:
                 record = _parse_json(line)
                 if record.get("ts") is not None:
@@ -363,9 +417,46 @@ class LogManager:
                 f.close()
             self._files.clear()
 
-    def _path(self, component: str) -> Path:
-        """Return ``component``'s log file, with the extension of the format."""
-        return self._dir / f"{kebab(component)}{FORMATS[self._format]}"
+    def _path(self, component: str, backup: int = 0) -> Path:
+        """Return ``component``'s log file, or its ``backup``-th rotated one."""
+        suffix = f".{backup}" if backup else ""
+        return self._dir / f"{kebab(component)}{suffix}{FORMATS[self._format]}"
+
+    def _open(self, component: str) -> object:
+        """Open ``component``'s current file for appending, and note its size. Under the lock."""
+        self._dir.mkdir(parents=True, exist_ok=True)
+        path = self._path(component)
+        f = open(path, "a", buffering=1, encoding="utf-8")
+        self._files[kebab(component)] = f
+        self._sizes[kebab(component)] = path.stat().st_size
+        return f
+
+    def _rotate(self, component: str) -> object:
+        """Shift ``component``'s files up one backup and reopen an empty current one.
+
+        Under the lock. The backup beyond ``backups`` is overwritten, so at
+        most ``backups`` are kept.
+        """
+        self._files.pop(kebab(component)).close()
+        for n in range(self._backups - 1, 0, -1):
+            older = self._path(component, n)
+            if older.exists():
+                os.replace(older, self._path(component, n + 1))
+        os.replace(self._path(component), self._path(component, 1))
+        return self._open(component)
+
+    def _files_oldest_first(self) -> list[Path]:
+        """Return every ``.jsonl`` file: per component, backups oldest first, then current."""
+        ext = FORMATS["json"]
+        found: list[tuple[str, int, Path]] = []
+        for path in self._dir.glob(f"*{ext}"):
+            stem = path.name.removesuffix(ext)
+            backup = _BACKUP_RE.match(stem)
+            if backup:
+                found.append((backup["base"], -int(backup["n"]), path))
+            else:
+                found.append((stem, 0, path))
+        return [path for _, _, path in sorted(found)]
 
 
 class Logger:
@@ -438,6 +529,32 @@ def render(record: Mapping[str, object]) -> str:
     return line.replace("\\", "\\\\").replace("\n", "\\n")
 
 
+def _read_block(f, start: int, size: int) -> bytes:
+    """Read ``size`` bytes of ``f`` from ``start``."""
+    f.seek(start)
+    return f.read(size)
+
+
+def _last_lines(path: Path, count: int) -> list[str]:
+    """Return the last ``count`` lines of ``path``, reading backwards in blocks."""
+    if count <= 0:
+        return []
+    with open(path, "rb") as f:
+        end = f.seek(0, os.SEEK_END)
+        data = b""
+        # One newline more than lines wanted proves the first kept line whole.
+        while end > 0 and data.count(b"\n") <= count:
+            start = max(0, end - _BLOCK_SIZE)
+            data = _read_block(f, start, end - start) + data
+            end = start
+    lines = data.split(b"\n")
+    if lines and lines[-1] == b"":
+        lines.pop()
+    if end > 0:
+        lines = lines[1:]  # partial: it started before what was read
+    return [line.decode("utf-8", errors="replace") for line in lines[-count:]]
+
+
 def _parse_json(line: str) -> dict:
     """Parse one ``json``-format log line back into its record."""
     try:
@@ -471,6 +588,13 @@ def _level(value: object, key: str) -> int:
             f"[project.logging] {key} = {value!r}: expected one of {', '.join(LEVELS)}"
         )
     return LEVELS[name]
+
+
+def _positive(value: object, key: str) -> int:
+    """Return ``value`` if it is a positive integer, for the ``[project.logging]`` entry ``key``."""
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise ValueError(f"[project.logging] {key} = {value!r}: expected a positive integer")
+    return value
 
 
 def _format(value: object) -> str:

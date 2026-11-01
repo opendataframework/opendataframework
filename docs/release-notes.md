@@ -14,6 +14,13 @@
 - **Context**: `context.logs(call_id)` (and `LogManager.for_call()`) returns every record
   written by or during one call, across files, so a logs view can filter one run even
   when runs of the same component overlap.
+- **Logger**: log rotation, under `[project.logging]`: `max-bytes` (off by default) and
+  `backups` (default 5). A file that a record would grow past `max-bytes` rotates to
+  `<key>.1.jsonl` (`.log` in the text format), shifting older backups. `tail()` now reads
+  backwards from the end, and into backups only if needed, so its cost follows the lines
+  asked for rather than the file's size. `records()` reads each component's backups oldest
+  first, then its current file, and takes `since=` to skip files last written before a
+  time; `context.trace(call_id, since=...)` passes it through.
 - **Notifications**: `Notification.id`, unique per publish and logged as the record's
   `notification`, so a notification can be deduplicated, acknowledged, or followed.
 - **Events**: `Event.cause`. A top-level call made by a notification listener records the
