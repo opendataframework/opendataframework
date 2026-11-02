@@ -28,7 +28,9 @@
   `parent=None`. Calls nested inside it have a `parent` instead. In `context.trace()`,
   each notification gains `id` and `triggered`, the subtrees of the calls it caused, so a
   trace follows a reaction from the publishing call to what its listeners did, across
-  files.
+  files. `context.trace(call_id, root=True)` (and `build_trace(..., root=True)`) climbs
+  first, through `parent` links and across causes, and returns the whole story from its
+  top; it never climbs into a Service's `run()` or a Repository's `stream()`.
 - **Notifications**: `@Subscriber(*topics, deliver="sync")` declares that a component
   reacts to notifications, through its `on_notification(notification)`
   (`SubscriberProtocol`). The `Context` subscribes it right after the component starts
@@ -71,6 +73,11 @@
   sets as frozensets, all rebuilt so nothing is shared with the publisher or between
   subscribers. Other values are passed as they are. Code that mutated a nested value, or
   expected a nested list, needs updating.
+
+### Fixed
+
+- **Events**: `build_trace()` (and so `context.trace()`) no longer recurses forever on
+  cyclic `parent` links in a hand-written or corrupt log; the branch ends at the repeat.
 
 ## 0.5.0
 

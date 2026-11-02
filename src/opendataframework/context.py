@@ -1409,7 +1409,9 @@ class Context:
             raise KeyError(key)
         return cls, instances[cls]
 
-    def trace(self, call_id: str, since: float | datetime | None = None) -> dict:
+    def trace(
+        self, call_id: str, since: float | datetime | None = None, root: bool = False
+    ) -> dict:
         """Return the tree of a protocol call and every call made inside it, from the logs.
 
         Reads every ``.jsonl`` log file once and follows ``parent`` links,
@@ -1427,7 +1429,22 @@ class Context:
             since: Skip log files last written before this time (a
                 ``time.time()`` value or a ``datetime``) — pass the call's
                 start, when known, so old rotated files aren't read. ``None``
-                reads every file.
+                reads every file. With ``root=True`` the root may have
+                started well before ``call_id``: pass a bound early enough
+                for it, or ``None``. Too late a bound still gives a trace,
+                rooted lower.
+            root: Climb first to the call the story started from, and return
+                its tree. The climb follows ``parent`` links, and across a
+                reaction it goes from the call a listener made (its
+                ``cause``) to the call that published the notification. It
+                never climbs into a long-running call — a Service's
+                ``run()`` or a Repository's ``stream()`` — so a call made
+                inside one is the root, not the component's whole lifetime
+                (see "One Call per Inbound Item" in the Service docs). It
+                can't cross a call made from an ``Events`` listener (those
+                carry no ``cause``), a notification published directly in a
+                long-running call, or a notification record dropped by a
+                level threshold: the climb stops below each.
 
         Raises:
             KeyError: If no call in the ``.jsonl`` logs has the id ``call_id``.
@@ -1439,8 +1456,10 @@ class Context:
             >>> failed = [r for r in logged if r.get("state") == "failed"]
             >>> context.trace(failed[-1]["parent"])["key"]
             'pipeline.nightly-orders'
+            >>> context.trace(reaction_call, root=True)["key"]
+            'function.take-order'
         """
-        return build_trace(self._log_manager.records(since), call_id)
+        return build_trace(self._log_manager.records(since), call_id, root=root)
 
     def logs(self, call_id: str) -> list[dict]:
         """Return every log record written by or during one protocol call, across files.

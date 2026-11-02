@@ -245,7 +245,16 @@ class Events:
                     self._log_manager.write(event.key, "WARNING", f"listener raised {exc!r}")
 
 
-def build_trace(items: Iterable[Event | Mapping[str, object]], call_id: str) -> dict:
+# Calls that last as long as their component runs: a Service's run(), and the
+# loop StreamManager drives a Repository's stream() in. Their trees grow
+# without bound, so ``build_trace(..., root=True)`` never climbs into one —
+# the story starts at the per-item call below it.
+_LONG_RUNNING = frozenset({("ServiceProtocol", "run"), ("StreamableProtocol", "stream")})
+
+
+def build_trace(
+    items: Iterable[Event | Mapping[str, object]], call_id: str, root: bool = False
+) -> dict:
     """Return the call tree rooted at ``call_id``, built from events or log records.
 
     ``items`` may be live ``Event``\\ s — as a listener receives them — or
@@ -262,6 +271,18 @@ def build_trace(items: Iterable[Event | Mapping[str, object]], call_id: str) -> 
             ignored.
         call_id: The root call's id — ``Event.call_id``, or a record's
             ``call``.
+        root: Climb first from ``call_id`` to the call its story started
+            from, and root the tree there. The climb follows ``parent``
+            links, and crosses a reaction from the call a listener made (its
+            ``cause``) to the call that published the notification, found
+            through the notification's record. It never climbs into a
+            long-running call — a Service's ``run()`` or a Repository's
+            ``stream()`` — so a call made inside one is its own root. It also
+            stops at the highest call it finds when the next one isn't in
+            ``items`` (rotated away, filtered out, or dropped by a level
+            threshold). With live ``Event``\\ s alone only ``parent`` links
+            climb: crossing a ``cause`` needs the notification's record
+            mixed in.
 
     Returns:
         A JSON-ready tree. Each node has ``call``, ``parent``, ``key``,
@@ -288,6 +309,7 @@ def build_trace(items: Iterable[Event | Mapping[str, object]], call_id: str) -> 
     """
     calls: dict[str, dict] = {}
     notifications: dict[str, list[dict]] = {}
+    published_in: dict[str, str] = {}  # notification id -> the call it was published in
     logs: dict[str, list[dict]] = {}
     for item in items:
         record = _as_record(item) if isinstance(item, Event) else item
@@ -302,6 +324,8 @@ def build_trace(items: Iterable[Event | Mapping[str, object]], call_id: str) -> 
             )
             continue
         if record.get("source") == "notifications" and record.get("parent"):
+            if record.get("notification"):
+                published_in[str(record["notification"])] = str(record["parent"])
             notifications.setdefault(str(record["parent"]), []).append(
                 {
                     "id": record.get("notification"),
@@ -344,7 +368,7 @@ def build_trace(items: Iterable[Event | Mapping[str, object]], call_id: str) -> 
             )
     if call_id not in calls:
         raise KeyError(f"no call {call_id!r} in the trace")
-    root = calls[call_id]
+    top = _climb(calls, published_in, call_id) if root else calls[call_id]
     children: dict[str, list[dict]] = {}
     caused: dict[str, list[dict]] = {}
     for node in calls.values():
@@ -356,18 +380,48 @@ def build_trace(items: Iterable[Event | Mapping[str, object]], call_id: str) -> 
     def by_start(nodes: list[dict]) -> list[dict]:
         return sorted(nodes, key=lambda n: str(n["started"] or n["ended"]))
 
-    def tree(node: dict) -> dict:
+    def tree(node: dict, path: frozenset[str] = frozenset()) -> dict:
+        # ``path`` holds the calls above this one, so cyclic links in a
+        # hand-written or corrupt log end the branch instead of recursing forever.
+        path = path | {str(node["call"])}
+
+        def below(nodes: list[dict]) -> list[dict]:
+            return [tree(n, path) for n in by_start(nodes) if str(n["call"]) not in path]
+
         return {
             **node,
             "logs": sorted(logs.get(node["call"], []), key=lambda r: str(r["ts"])),
             "notifications": [
-                {**n, "triggered": [tree(call) for call in by_start(caused.get(str(n["id"]), []))]}
+                {**n, "triggered": below(caused.get(str(n["id"]), []))}
                 for n in notifications.get(node["call"], [])
             ],
-            "children": [tree(kid) for kid in by_start(children.get(node["call"], []))],
+            "children": below(children.get(node["call"], [])),
         }
 
-    return tree(root)
+    return tree(top)
+
+
+def _climb(calls: Mapping[str, dict], published_in: Mapping[str, str], call_id: str) -> dict:
+    """Return the node of the call ``call_id``'s story started from.
+
+    Follows ``parent``, else ``cause`` through the notification's publishing
+    call, stopping below a long-running call, at a call missing from
+    ``calls``, or at the first repeat.
+    """
+    node = calls[call_id]
+    seen = {call_id}
+    while True:
+        if node["parent"]:
+            up = str(node["parent"])
+        elif node["cause"] and str(node["cause"]) in published_in:
+            up = published_in[str(node["cause"])]
+        else:
+            return node
+        above = calls.get(up)
+        if above is None or up in seen or (above["protocol"], above["method"]) in _LONG_RUNNING:
+            return node
+        seen.add(up)
+        node = above
 
 
 def _as_record(event: Event) -> dict:

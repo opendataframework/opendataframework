@@ -1059,6 +1059,161 @@ def test_build_trace_unknown_id():
     assert build_trace(items, "abc1" + "0" * 28)["state"] == "running"
 
 
+# --- traces from the root ------------------------------------------------------
+
+
+def call(
+    cid: str,
+    parent: str | None = None,
+    cause: str | None = None,
+    protocol: str = "TaskProtocol",
+    method: str = "execute",
+    ts: str = "2026-10-31T10:00:00.000+00:00",
+) -> dict:
+    """Return a hand-written ``started`` record of the call ``cid``."""
+    return {
+        "key": f"scope.{cid}",
+        "source": "events",
+        "call": cid,
+        "parent": parent,
+        "cause": cause,
+        "protocol": protocol,
+        "method": method,
+        "state": "started",
+        "ts": ts,
+    }
+
+
+def published(nid: str, parent: str) -> dict:
+    """Return a hand-written record of the notification ``nid``, published in ``parent``."""
+    return {
+        "key": f"scope.{parent}",
+        "source": "notifications",
+        "notification": nid,
+        "parent": parent,
+    }
+
+
+def test_root_false_is_rooted_at_the_call_asked_about():
+    items = [call("a"), call("b", parent="a"), call("c", parent="b")]
+    assert build_trace(items, "c")["call"] == "c"
+    assert build_trace(items, "c", root=False)["call"] == "c"
+
+
+def test_root_climbs_parent_links():
+    items = [call("a"), call("b", parent="a"), call("c", parent="b")]
+    trace = build_trace(items, "c", root=True)
+    assert shape(trace) == (
+        "scope.a",
+        "running",
+        [("scope.b", "running", [("scope.c", "running", [])])],
+    )
+
+
+def test_root_crosses_a_cause_to_the_publishing_call():
+    items = [call("ingest"), published("n1", "ingest"), call("react", cause="n1")]
+    trace = build_trace(items, "react", root=True)
+    assert trace["call"] == "ingest"
+    (notification,) = trace["notifications"]
+    assert [t["call"] for t in notification["triggered"]] == ["react"]
+
+
+def test_root_climbs_a_parent_then_crosses_a_cause():
+    # ingest -> n1 -> the listener's call -> a call inside it -> n2, as
+    # order-desk runs inside Drafting's on_notification()
+    items = [
+        call("ingest"),
+        published("n1", "ingest"),
+        call("drafting", cause="n1", protocol="SubscriberProtocol", method="on_notification"),
+        call("order-desk", parent="drafting", protocol="AgentProtocol", method="invoke"),
+        published("n2", "order-desk"),
+    ]
+    trace = build_trace(items, "order-desk", root=True)
+    assert trace["call"] == "ingest"
+    (drafting,) = trace["notifications"][0]["triggered"]
+    assert [c["call"] for c in drafting["children"]] == ["order-desk"]
+
+
+def test_root_never_climbs_into_a_services_run():
+    items = [
+        call("mailbox", protocol="ServiceProtocol", method="run"),
+        call("ingest", parent="mailbox", protocol="FunctionProtocol", method="__call__"),
+        call("save", parent="ingest"),
+        published("n1", "ingest"),
+        call("react", cause="n1"),
+    ]
+    assert build_trace(items, "save", root=True)["call"] == "ingest"
+    assert build_trace(items, "ingest", root=True)["call"] == "ingest"
+    # across a cause, too: the reaction's story starts at the per-item call
+    assert build_trace(items, "react", root=True)["call"] == "ingest"
+    # asking about run() itself still returns run()
+    assert build_trace(items, "mailbox", root=True)["call"] == "mailbox"
+
+
+def test_root_stops_at_the_listener_for_a_notification_published_directly_in_run():
+    items = [
+        call("poller", protocol="ServiceProtocol", method="run"),
+        published("n1", "poller"),
+        call("react", cause="n1"),
+        call("inner", parent="react"),
+    ]
+    assert build_trace(items, "inner", root=True)["call"] == "react"
+
+
+def test_root_never_climbs_into_a_repositorys_stream():
+    items = [
+        call("readings", protocol="StreamableProtocol", method="stream"),
+        call("calibrate", parent="readings", protocol="FunctionProtocol", method="__call__"),
+    ]
+    assert build_trace(items, "calibrate", root=True)["call"] == "calibrate"
+
+
+def test_root_stops_at_the_listener_when_the_cause_is_not_in_the_records():
+    items = [call("react", cause="lost"), call("inner", parent="react")]
+    assert build_trace(items, "inner", root=True)["call"] == "react"
+
+
+def test_root_stops_at_the_highest_call_found_when_a_parent_is_missing():
+    items = [call("b", parent="rotated-away"), call("c", parent="b")]
+    assert build_trace(items, "c", root=True)["call"] == "b"
+
+
+def test_root_terminates_on_cyclic_parent_links():
+    items = [call("a", parent="c"), call("b", parent="a"), call("c", parent="b")]
+    # the climb stops at the first repeat, and the tree below ends the branch there
+    assert shape(build_trace(items, "c", root=True)) == (
+        "scope.a",
+        "running",
+        [("scope.b", "running", [("scope.c", "running", [])])],
+    )
+    assert shape(build_trace(items, "c")) == (
+        "scope.c",
+        "running",
+        [("scope.a", "running", [("scope.b", "running", [])])],
+    )
+
+
+def test_root_reads_a_generator_once():
+    items = [call("ingest"), published("n1", "ingest"), call("react", cause="n1")]
+    assert build_trace(iter(items), "react", root=True)["call"] == "ingest"
+
+
+def test_root_climbs_live_events_through_parents():
+    NS = make_ns()
+    chain(NS)
+    ctx = Context(namespaces={NS})
+    events = collect(ctx)
+    with ctx:
+        ctx.execute("scope.nightly")
+    fetch = next(e for e in events if e.key == "scope.fetch")
+    assert shape(build_trace(events, fetch.call_id, root=True))[0] == "scope.nightly"
+
+
+def test_root_raises_key_error_for_an_unknown_call():
+    with pytest.raises(KeyError, match="no call 'fff'"):
+        build_trace([call("a")], "fff", root=True)
+
+
 def test_trace_since_skips_files_last_written_before_it(tmp_path):
     NS = make_ns()
     chain(NS)

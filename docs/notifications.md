@@ -386,6 +386,38 @@ arrived" reaches "an agent drafted an order change", across files:
 A notification published inside a reaction has that reaction's call as its
 `parent`, so chains continue: message, draft, notification, reply.
 
+### The Whole Story from Any Call
+
+A UI often knows only a call deep inside the story: a toast for "a draft was
+created" has the call that published it, which ran inside a listener's
+reaction. `context.trace(call_id, root=True)` climbs to the call the story
+started from before building the tree. It follows `parent` links, and across
+a reaction it goes from the listener's call (its `cause`) to the call that
+published the notification, so the trace of the draft's call starts at the
+call that took the message in:
+
+```python
+trace = project.context.trace(draft_call, root=True)
+trace["key"]  # 'function.take-message', the call that published "a message arrived"
+```
+
+The tree's shape is unchanged; the call you asked about is somewhere inside
+it.
+
+The climb stops below a long-running call, a Service's `run()` or a
+Repository's `stream()`, so the root is the per-item call, never the
+component's whole lifetime (see
+[One Call per Inbound Item](service.md#one-call-per-inbound-item)). For the
+same reason, a reaction to a notification published directly in `run()`,
+with no per-item call around it, is its own root. The climb also stops where
+the records do:
+
+* a call made from an [`Events`](events.md) listener has no `cause`, so the
+  climb can't cross it;
+* a notification record dropped by a level threshold, or a call in a file
+  rotated away or skipped by `since=`, ends the climb at the highest call
+  found. Pass a `since` early enough for the root, or none.
+
 For a long-running [Service](service.md) — a mailbox poller, a webhook
 receiver — publish from a `@Function` called once per inbound item, not
 inline in `run()`, so each item gets a trace of its own: see

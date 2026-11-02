@@ -164,6 +164,13 @@ It can only show records that were kept: with `events = "WARNING"`, only
 failed calls appear, so a failure can still be traced back to its root but
 successful steps are missing.
 
+`trace(call_id)` returns the tree *below* the call. To get the whole story a
+call belongs to, pass `root=True`: it climbs first, through `parent` links
+and across [notification causes](notifications.md#ids-and-causes), and
+returns the tree from the top. It never climbs into a Service's `run()` or a
+Repository's `stream()` (see
+[One Call per Inbound Item](service.md#one-call-per-inbound-item)).
+
 ### One call's records
 
 A `Logger` line written inside a protocol call carries that call's id as

@@ -508,6 +508,48 @@ def test_trace_follows_a_notification_into_what_it_triggered(tmp_path):
     assert live["notifications"][0]["triggered"][0]["children"][0]["key"] == "scope.plate"
 
 
+@pytest.mark.parametrize("deliver", ["sync", "background"])
+def test_trace_from_a_reaction_with_root_starts_at_the_publishing_call(tmp_path, deliver):
+    NS = make_ns()
+    publishing_task(NS, topic="messages.received")
+
+    @Publisher("drafts.created")
+    @NS
+    @Function
+    def order_desk(notifications: Notifications) -> None:
+        notifications.publish("drafts.created")
+
+    @Subscriber("messages.received", deliver=deliver)
+    @NS
+    @Component
+    class Drafting:
+        def __init__(self, order_desk: Annotated[Callable[[], None], order_desk]) -> None:
+            self.order_desk = order_desk
+
+        def on_notification(self, notification: Notification) -> None:
+            self.order_desk()
+
+    ctx = Context(namespaces={NS}, log_dir=tmp_path)
+    events: list[Event] = []
+    ctx.events.subscribe(events.append)
+    with ctx:
+        ctx.execute("scope.take-order")
+    # close() drained a background queue before returning
+    take = next(e for e in events if e.key == "scope.take-order")
+    desk = next(e for e in events if e.key == "scope.order-desk")
+    assert desk.parent is not None and desk.cause is None  # a child of Drafting's call
+
+    trace = ctx.trace(desk.call_id, root=True)
+    assert trace["call"] == take.call_id
+    (drafting,) = trace["notifications"][0]["triggered"]
+    assert (drafting["key"], drafting["parent"]) == ("scope.drafting", None)
+    (desk_node,) = drafting["children"]
+    assert desk_node["call"] == desk.call_id
+    assert [n["topic"] for n in desk_node["notifications"]] == ["drafts.created"]
+    # without root, the trace still starts at the call asked about
+    assert ctx.trace(desk.call_id)["call"] == desk.call_id
+
+
 def test_listener_may_publish():
     ctx = Context(namespaces={make_ns()})
     ctx.notifications.subscribe(
