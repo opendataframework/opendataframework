@@ -285,6 +285,21 @@ def parse(key: str) -> str:
     return f"{normalize(namespace)}.{normalize(name)}"
 
 
+def normalize_key(key: str) -> str:
+    """Normalize any publisher key the way key lookups do, without raising.
+
+    ``parse(key)`` when it succeeds — ``"Task.TakeOrders"`` →
+    ``"task.take-orders"`` — else ``normalize(key)`` on the whole key, for a
+    key with no dot (``"Webhooks"`` → ``"webhooks"``) or one ``parse()``
+    rejects because a side of its first dot is empty (``"webhooks."``). So
+    two keys name the same publisher exactly when they normalize alike.
+    """
+    try:
+        return parse(key)
+    except ValueError:
+        return normalize(key)
+
+
 def describe(wrapped: object) -> str:
     """Render ``wrapped`` as ``<kind> '<name>'`` for an error message."""
     kind = "class" if isinstance(wrapped, type) else type(wrapped).__name__

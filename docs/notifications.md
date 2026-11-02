@@ -89,12 +89,13 @@ class TakeOrders:
 `publish()` delivers the notification to every matching subscriber, writes a
 record to the publisher's log, and returns the `Notification`. The record's
 `message` is `notified <topic>: <summary>`, and it carries `topic`,
-`notification_level`, `subject`, `record` and `parent` (the call it was
+`notification_level`, `summary`, `subject`, `record` and `parent` (the call it was
 published during) as fields, but never the `payload` (see
 [Log Format](logger.md#log-format)). It is written at the log level matching
 the notification's `level`: `info` and `success` as `INFO`, `warning` as
 `WARNING`, `error` as `ERROR`. Set `[project.logging] notifications = ...` to
-choose which are kept (see [Levels](logger.md#levels)).
+choose which are kept (see [Levels](logger.md#levels)). The same record is
+also kept in the notification [history](#history).
 
 | Argument | Meaning |
 |---|---|
@@ -104,7 +105,7 @@ choose which are kept (see [Levels](logger.md#levels)).
 | `level` | `"info"` (the default), `"success"`, `"warning"`, or `"error"`. Anything else raises `ValueError`. |
 | `subject` | The component it's about: a class or function, resolved to its key, or a key string such as `"repository.orders"`. |
 | `record` | Id of the record it's about, within `subject`. |
-| `key` | The publisher's key. Filled in by an injected view; required on `context.notifications`. |
+| `key` | The publisher's key. Filled in by an injected view; required on `context.notifications`, where it names a log file, so it can't be empty, contain `/` or `\`, start with `.`, or pass 200 bytes (`ValueError`, before anything is logged or delivered). |
 
 ### `@Publisher` and the Publishing Rules
 
@@ -425,14 +426,73 @@ inline in `run()`, so each item gets a trace of its own: see
 
 ---
 
+## History
+
+A UI shows a notification as it happens. To see what the business said
+earlier — today, yesterday, before a restart — read the history:
+
+```python
+page = project.context.notification_history(summary_only=True, limit=50)
+# → [{"id": "9b1f…", "key": "task.take-orders", "topic": "orders.received",
+#     "level": "info", "summary": "Le Petit: 2 x baguette",
+#     "message": "notified orders.received: Le Petit: 2 x baguette",
+#     "subject": "repository.orders", "record": 7, "parent": "3f9a…",
+#     "ts": "2026-11-02T09:14:03.120+01:00", "cursor": "1742"}, ...]  newest first
+
+older = project.context.notification_history(summary_only=True, limit=50, before=page[-1]["cursor"])
+```
+
+**What's kept, and where.** Every notification logged is also written to
+`<log-dir>/history/notifications.jsonl`, a file that holds nothing else (see
+[Logger](logger.md#the-history-directory)). It keeps what a person reads —
+the summary, topic, level, publisher, and what it's about (`subject`,
+`record`) — never the payload. Reading it back goes through notifications
+alone, never through event records or log lines, so its cost follows the
+number of notifications, not the size of the logs.
+
+**How long.** As long as rotation lets it: `history-max-bytes` ×
+(`history-backups` + 1) of notifications alone (see
+[Rotation](logger.md#rotation)). The busiest topic decides how much time
+that covers. With rotation off (the default), it isn't bounded.
+
+**Since when.** History starts when 0.6.0 started writing it. Notifications
+logged before stay in their components' logs, readable with `tail_logs()`,
+`logs()` and `trace()`, but aren't in the history. Nor are any published
+while file logging was off.
+
+**Thresholds.** A notification a [level threshold](logger.md#levels) drops
+from its component's log isn't kept in the history either.
+
+| Argument | Meaning |
+|---|---|
+| `topic` | A topic filter, as `subscribe()` takes: exact, `"orders.*"`, or a tuple of them. |
+| `key` | Only this publisher's. Any key `publish()` accepts, including the unbound hub's (`"webhooks"`), compared as key lookups compare them, in any casing (`"Task.TakeOrders"` finds `"task.take-orders"`; see `normalize_key`). Rows keep the key as published. |
+| `level` | A notification level, or a tuple of them. |
+| `summary_only` | Only notifications with a summary — the ones a UI shows people. |
+| `before` | A row's `cursor`, for the rows strictly older than it: page with the last row's, with no repeats and no gaps. Or a time (`time.time()` value or `datetime`), for the rows strictly earlier. |
+| `since` | No row older than this time; the read stops there. |
+| `limit` | 1 to 1000 (default 100); anything else raises `ValueError`. |
+
+The cursor is opaque, and exact whatever the clock does. A time (`since`, or
+`before` as a time) is compared with each row's `ts`, so it is exact barring
+wall-clock steps: an NTP correction shifts it by its size.
+
+A bad argument raises `ValueError`, whatever the logging config. With file
+logging off, `notification_history()` raises `LogsUnavailable` (a
+`ValueError`); the text log format is fine, since the history is always
+JSON Lines. With nothing published yet, it returns `[]`.
+
+---
+
 ## When Not to Use It
 
 * **To get a result back.** If the publisher needs an answer, it should
   declare the other component as a dependency and call it. A notification
   doesn't return anything to its publisher.
-* **For durable or cross-process messaging.** Nothing is stored, retried, or
-  sent beyond the process. A subscriber that isn't subscribed yet misses the
-  message. For that, put a broker behind a `@Service`.
+* **For durable or cross-process messaging.** Nothing is retried or sent
+  beyond the process, and the [history](#history) is a record for people to
+  read, not a queue to replay. A subscriber that isn't subscribed yet misses
+  the message. For that, put a broker behind a `@Service`.
 * **To observe the framework.** Use [Events](events.md) for run state,
   timings, and failures.
 

@@ -291,7 +291,8 @@ def build_trace(
         ``elapsed_ms``, ``error``, ``cause``, ``logs`` (each with ``ts``,
         ``level``, ``message`` and ``fields``, oldest first),
         ``notifications`` (each with ``id``, ``key``, ``topic``, ``level``,
-        ``message``, ``subject``, ``record``, ``ts`` and ``triggered``: the
+        ``summary``, ``message``, ``subject``, ``record``, ``ts`` and
+        ``triggered``: the
         subtrees of the calls its listeners made, whose ``cause`` is its
         ``id``) and ``children``, ordered by when they started. So a trace
         follows a reaction across files: from the publishing call, through
@@ -332,6 +333,7 @@ def build_trace(
                     "key": record.get("key"),
                     "topic": record.get("topic"),
                     "level": record.get("notification_level"),
+                    "summary": _summary(record),
                     "message": record.get("message"),
                     "subject": record.get("subject"),
                     "record": record.get("record"),
@@ -439,3 +441,19 @@ def _as_record(event: Event) -> dict:
         "error": event.error,
         "cause": event.cause,
     }
+
+
+def _summary(record: Mapping[str, object]) -> str | None:
+    """Return a notification record's ``summary``.
+
+    A record logged before ``summary`` was written gets it back from its
+    ``message``, ``"notified <topic>: <summary>"``; else ``None``.
+    """
+    if "summary" in record:
+        summary = record["summary"]
+        return None if summary is None else str(summary)
+    message = record.get("message")
+    prefix = f"notified {record.get('topic')}: "
+    if isinstance(message, str) and message.startswith(prefix):
+        return message[len(prefix) :]
+    return None

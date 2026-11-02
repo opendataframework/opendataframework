@@ -33,8 +33,16 @@ from typing import Any, Literal, Protocol, get_args, overload, runtime_checkable
 from uuid import uuid4
 
 from opendataframework.function import Function
-from opendataframework.logger import LogManager, _current_call_id, _no_current_call
-from opendataframework.namespace import C, ClassNamespace, ExecutionType, F, Namespace, describe
+from opendataframework.logger import LogManager, _current_call_id, _no_current_call, check_key
+from opendataframework.namespace import (
+    C,
+    ClassNamespace,
+    ExecutionType,
+    F,
+    Namespace,
+    describe,
+    normalize_key,
+)
 
 Level = Literal["info", "success", "warning", "error"]
 _LEVELS: tuple[str, ...] = get_args(Level)
@@ -190,9 +198,11 @@ class Notifications:
         Listeners run before this returns, with no current call; an exception
         from one is logged and never raised here. Each publish is also logged
         on the publisher's key, as a record with ``message``
-        ``"notified <topic>: <summary>"`` and ``topic``, ``subject``,
-        ``record`` and ``parent`` as fields (never ``payload``), at the log
-        level matching ``level`` (``success`` logs as ``INFO``).
+        ``"notified <topic>: <summary>"`` and ``topic``, ``summary``,
+        ``subject``, ``record`` and ``parent`` as fields (never ``payload``),
+        at the log level matching ``level`` (``success`` logs as ``INFO``),
+        and copied to the notification history — see
+        ``Context.notification_history()``.
 
         Args:
             topic: Dotted name of what happened. Non-empty, with no ``*``.
@@ -206,7 +216,9 @@ class Notifications:
                 function, resolved to its key, or a key string.
             record: Id of the record it is about, within ``subject``.
             key: The publisher's key. Defaults to the key this view is bound
-                to; required on the unbound ``context.notifications``.
+                to; required on the unbound ``context.notifications``, where
+                it names the log file: non-empty, with no ``/`` or ``\\``,
+                not starting with ``.``, and at most 200 bytes.
 
         Returns:
             The ``Notification`` delivered.
@@ -214,8 +226,10 @@ class Notifications:
         Raises:
             TypeError: If no ``key`` is given and this view is unbound, or
                 this view's component or function is not a ``@Publisher``.
-            ValueError: If ``topic`` or ``level`` is invalid, or ``topic`` is
-                not one this view's ``@Publisher`` declares.
+            ValueError: If ``topic``, ``level`` or ``key`` is invalid (see
+                ``key`` above), or ``topic`` is not one this view's
+                ``@Publisher`` declares. Raised before anything is logged or
+                delivered.
             RuntimeError: If this is an injected view and no protocol call
                 is in progress.
             KeyError: If ``subject`` is a class or function that was not
@@ -233,6 +247,7 @@ class Notifications:
         key = key if key is not None else self._key
         if key is None:
             raise TypeError("publish() needs key= on an unbound Notifications")
+        check_key(key)
         notification = Notification(
             key,
             topic,
@@ -245,14 +260,14 @@ class Notifications:
             time.time(),
         )
         message = f"notified {topic}: {summary}" if summary is not None else f"notified {topic}"
-        self._log_manager.write(
+        self._log_manager.write_notification(
             key,
             _LOG_LEVELS[level],
             message,
-            source="notifications",
             extra={
                 "notification": notification.id,
                 "topic": topic,
+                "summary": summary,
                 "notification_level": level,
                 "subject": notification.subject,
                 "record": record,
@@ -593,6 +608,53 @@ def _check_filter(topic: object) -> str:
     if not stem or "*" in stem:
         raise ValueError(f"invalid topic filter {topic!r}")
     return topic
+
+
+def _history_filter(
+    topic: str | tuple[str, ...] | None,
+    key: str | None,
+    level: str | tuple[str, ...] | None,
+    summary_only: bool,
+) -> Callable[[Mapping[str, object]], bool] | None:
+    """Return the predicate ``Context.notification_history()`` filters history records by.
+
+    ``None`` when there is nothing to filter by.
+
+    Raises:
+        ValueError: If ``topic`` is not a topic filter or a non-empty tuple of
+            them, ``key`` isn't one ``publish()`` accepts, ``level`` is not a
+            notification level or a non-empty tuple of them, or
+            ``summary_only`` isn't a bool.
+    """
+    if topic is not None:
+        topics = topic if isinstance(topic, tuple) else (topic,)
+        if not topics:
+            raise ValueError("invalid topic (): pass a topic filter, or a tuple of one or more")
+        for t in topics:
+            _check_filter(t)
+    if key is not None:
+        key = normalize_key(check_key(key))
+    levels: tuple[object, ...] | None = None
+    if level is not None:
+        levels = level if isinstance(level, tuple) else (level,)
+        if not levels or any(lv not in _LEVELS for lv in levels):
+            raise ValueError(f"invalid level {level!r}: must be one of {', '.join(_LEVELS)}")
+    if not isinstance(summary_only, bool):
+        raise ValueError(f"invalid summary_only {summary_only!r}: expected a bool")
+    if topic is None and key is None and levels is None and not summary_only:
+        return None
+
+    def match(record: Mapping[str, object]) -> bool:
+        """Return whether ``record`` passes every filter given."""
+        if topic is not None and not _matches(topic, str(record.get("topic"))):
+            return False
+        if key is not None and normalize_key(str(record.get("key"))) != key:
+            return False
+        if levels is not None and record.get("notification_level") not in levels:
+            return False
+        return not summary_only or record.get("summary") is not None
+
+    return match
 
 
 def _registered_as(target: object) -> type | None:

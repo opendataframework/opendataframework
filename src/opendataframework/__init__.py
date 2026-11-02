@@ -8,8 +8,8 @@ from opendataframework.entity import Entity
 from opendataframework.events import Event, Events
 from opendataframework.function import Function, FunctionProtocol
 from opendataframework.layer import Analytics, Api, Layer, Messaging, Monitoring, Security, Storage
-from opendataframework.logger import Logger
-from opendataframework.namespace import Namespace
+from opendataframework.logger import Logger, LogsUnavailable
+from opendataframework.namespace import Namespace, normalize_key
 from opendataframework.notifications import (
     Notification,
     Notifications,
@@ -68,6 +68,7 @@ __all__ = [
     "Lifecycle",
     "LocationView",
     "Logger",
+    "LogsUnavailable",
     "Messaging",
     "Monitoring",
     "Namespace",
@@ -96,4 +97,5 @@ __all__ = [
     "TimeseriesView",
     "VideoView",
     "WritableProtocol",
+    "normalize_key",
 ]

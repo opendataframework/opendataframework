@@ -123,6 +123,14 @@ Together that makes `<namespace>.<name>` unique, and it is what the
 is named after. `qualified(Task, "loader")` builds a key and `parse("Task.Loader")`
 normalizes one; both live in `opendataframework.namespace`.
 
+`normalize_key(key)` (exported from `opendataframework`) normalizes any
+publisher key without raising: `parse(key)` when it succeeds, else
+`normalize()` on the whole key — so `"Task.TakeOrders"` gives
+`"task.take-orders"`, and a key the unbound notifications hub published
+under, such as `"Webhooks"` or `"webhooks."`, gives `"webhooks"` or
+`"webhooks."`. Two keys name the same publisher exactly when they normalize
+alike; [notification history](notifications.md#history) filters by it.
+
 ---
 
 ## What each decorator accepts

@@ -50,6 +50,20 @@
   publishes; `context.publishers()` lists them, so a UI can draw who publishes what before
   anything has been published. A namespace like `Subscriber`: `Publisher.items()`,
   `Publisher.of(target)`.
+- **Context**: `context.notification_history(topic=, key=, level=, summary_only=,
+  before=, since=, limit=)` returns the latest notifications from every publisher,
+  newest first, paged with each row's opaque `cursor`. Every notification is also written
+  to `<log-dir>/history/notifications.jsonl`, which holds nothing else, so reading it
+  never scans the component logs. The history starts at the upgrade: notifications
+  logged before stay in their components' logs only. Size it with `history-max-bytes`
+  and `history-backups` under `[project.logging]` (defaulting to `max-bytes` and
+  `backups`). `normalize_key()` is exported for comparing publisher keys the same way.
+  See [Notifications](notifications.md#history).
+- **Notifications**: a notification's log record carries its `summary`, and so do a
+  trace's notifications (recovered from `message` for records logged before).
+- **Logger**: `LogsUnavailable`, a `ValueError`, raised by `trace()`, `logs()` and
+  `notification_history()` when records can't be read back (file logging off, or the
+  `text` format for `trace()` and `logs()`), so a caller can tell it from a bad argument.
 - **Docs**: [One Call per Inbound Item](service.md#one-call-per-inbound-item) — route
   each item a long-running service receives through an injected `@Function`, so it gets
   its own call id, log lines, notifications and trace instead of joining `run()`'s.
@@ -78,6 +92,10 @@
 
 - **Events**: `build_trace()` (and so `context.trace()`) no longer recurses forever on
   cyclic `parent` links in a hand-written or corrupt log; the branch ends at the repeat.
+- **Notifications**: an unbound `publish(key=...)` whose key contains `/` or `\`, starts
+  with `.`, is empty, or is too long for a file name now raises `ValueError`, before
+  anything is logged or delivered, instead of writing a file outside the log directory
+  (or failing with an `OSError`).
 
 ## 0.5.0
 

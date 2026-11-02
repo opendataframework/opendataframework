@@ -30,10 +30,12 @@ from opendataframework.function import Function, FunctionProtocol, bind, string_
 from opendataframework.logger import Logger, LogManager
 from opendataframework.namespace import Namespace, parse, qualified
 from opendataframework.notifications import (
+    Level,
     Notifications,
     Publisher,
     Subscriber,
     SubscriberProtocol,
+    _history_filter,
 )
 from opendataframework.pipeline import Pipeline, PipelineProtocol
 from opendataframework.repository import (
@@ -1448,8 +1450,8 @@ class Context:
 
         Raises:
             KeyError: If no call in the ``.jsonl`` logs has the id ``call_id``.
-            ValueError: If file logging is off, or the configured log format
-                is ``text``.
+            LogsUnavailable: If file logging is off, or the configured log
+                format is ``text``. A ``ValueError``.
 
         Example:
             >>> logged = context.tail_logs("task.ship-orders")
@@ -1475,14 +1477,90 @@ class Context:
                 ``call``.
 
         Raises:
-            ValueError: If file logging is off, or the configured log format
-                is ``text``.
+            LogsUnavailable: If file logging is off, or the configured log
+                format is ``text``. A ``ValueError``.
 
         Example:
             >>> [r["message"] for r in context.logs(call_id)]
             ['execute() started', 'order taken', 'execute() completed in 2.1ms']
         """
         return self._log_manager.for_call(call_id)
+
+    def notification_history(
+        self,
+        *,
+        topic: str | tuple[str, ...] | None = None,
+        key: str | None = None,
+        level: Level | tuple[Level, ...] | None = None,
+        summary_only: bool = False,
+        before: str | float | datetime | None = None,
+        since: float | datetime | None = None,
+        limit: int = 100,
+    ) -> list[dict]:
+        """Return the latest notifications, newest first, from the notification history.
+
+        Every notification logged is also written to
+        ``<log_dir>/history/notifications.jsonl``, which holds nothing else,
+        so this reads back through notifications alone — never through
+        event records or log lines — until it has ``limit`` matches. A
+        filter that matches rarely reads further. The payload isn't kept:
+        only what a person reads.
+
+        Things to know:
+
+        * History starts when this version started writing it:
+          notifications logged before (by 0.5.0, or an earlier 0.6.0 build)
+          stay in their components' logs, readable with ``tail_logs()``,
+          ``logs()`` and ``trace()``, but aren't here. Nor are any published
+          while file logging was off.
+        * A notification a level threshold dropped from its component's log
+          isn't kept here either, and what rotation drops is gone. The
+          history holds ``history-max-bytes`` × (``history-backups`` + 1) of
+          notifications alone, and the busiest topic decides how much time
+          that covers. With rotation off (the default) it isn't bounded.
+        * ``since`` and a time ``before`` compare ``ts``, so a wall-clock
+          step can shift them by its size; paging by ``cursor`` uses a
+          sequence number and is exact.
+
+        Args:
+            topic: A topic filter as ``Notifications.subscribe()`` takes one
+                — exact, or ``"orders.*"`` — or a tuple of them.
+            key: Only this publisher's: any key ``publish()`` accepts,
+                including the unbound hub's (``"webhooks"``). Compared as key
+                lookups compare keys, in any casing — see
+                ``namespace.normalize_key``. Rows keep the key as published.
+            level: A notification level (``"info"``, ``"success"``,
+                ``"warning"``, ``"error"``), or a tuple of them.
+            summary_only: Only notifications with a summary — the ones a UI
+                shows people.
+            before: A row's ``cursor``, for the rows strictly older than it:
+                page with the last row's, with no repeats and no gaps. Or a
+                ``time.time()`` value or ``datetime``, for the rows strictly
+                earlier.
+            since: No row older than this time; the read stops there.
+            limit: At most this many rows, 1 to 1000.
+
+        Returns:
+            JSON-ready dicts with ``id``, ``key``, ``topic``, ``level`` (the
+            notification's own level, not the log level), ``summary``,
+            ``message``, ``subject``, ``record``, ``parent``, ``ts`` (ISO
+            8601) and ``cursor`` (opaque). ``[]`` when nothing was published.
+
+        Raises:
+            ValueError: If an argument is invalid — checked first, whatever
+                the logging config.
+            LogsUnavailable: If file logging is off. A ``ValueError``.
+
+        Example:
+            >>> page = context.notification_history(topic="orders.*", summary_only=True)
+            >>> older = context.notification_history(
+            ...     topic="orders.*", summary_only=True, before=page[-1]["cursor"]
+            ... )
+        """
+        match = _history_filter(topic, key, level, summary_only)
+        return self._log_manager.notification_history(
+            match, before=before, since=since, limit=limit
+        )
 
     def tail_logs(self, key: str, lines: int = 300) -> list[dict]:
         """Return the last ``lines`` log entries for a resolved class or function.

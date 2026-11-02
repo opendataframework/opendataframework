@@ -104,7 +104,7 @@ one JSON object per line:
 | `source` | every record | `"events"`, `"notifications"`, or `null` for anything else |
 | `message` | every record | Human-readable text |
 | `call`, `parent`, `protocol`, `method`, `state`, `elapsed_ms`, `error` | protocol-call records | The [Event](events.md#the-event)'s fields, with full ids |
-| `topic`, `notification_level`, `subject`, `record`, `parent` | notification records | The [Notification](notifications.md#the-notification)'s fields, without its `payload` |
+| `notification`, `topic`, `notification_level`, `summary`, `subject`, `record`, `parent` | notification records | The [Notification](notifications.md#the-notification)'s fields (its `id` as `notification`), without its `payload` |
 | `fields` | records with user fields | The keyword arguments of a `Logger` call |
 | `parent` | records written during a protocol call | The `call` of the call in progress when a `Logger` line (or any other record) was written. Absent outside any call, e.g. in `__init__` |
 
@@ -155,10 +155,16 @@ configured format, never what happens to be on disk:
 * With `format = "json"` (the default), it reads the `.jsonl` files only.
   `.log` files left over from an earlier `text` setup are ignored, so their
   calls aren't found (`KeyError`).
-* With `format = "text"`, it raises `ValueError`: text lines read back as
-  only `ts`, `level` and `message`, with no call structure to rebuild a tree
-  from.
-* With file logging off (no `log_dir`), it raises `ValueError` too.
+* With `format = "text"`, it raises `LogsUnavailable`: text lines read back
+  as only `ts`, `level` and `message`, with no call structure to rebuild a
+  tree from.
+* With file logging off (no `log_dir`), it raises `LogsUnavailable` too.
+
+`LogsUnavailable` (from `opendataframework`) is a `ValueError`, so code that
+catches `ValueError` keeps working; catch it first to tell "this can't be
+read here" from a bad argument. `context.logs()` raises it in the same
+cases. A trace's notifications carry their `summary` as well as their
+`message`.
 
 It can only show records that were kept: with `events = "WARNING"`, only
 failed calls appear, so a failure can still be traced back to its root but
@@ -337,6 +343,20 @@ those three are all that come back.
 backups only if it needs more, so polling it stays cheap however large the
 file has grown.
 
+Notifications have a history of their own, read with
+`context.notification_history()`: see
+[Notifications — History](notifications.md#history).
+
+### The `history/` directory
+
+Every notification record is also written to
+`<log-dir>/history/notifications.jsonl`, which holds nothing else, each line
+with a sequence number, `seq`. The directory is created on the first
+notification. It is always JSON Lines, whatever `format` says, and a record
+is written there only if it passes its component's threshold. `tail_logs()`,
+`context.logs()` and `context.trace()` never read it, so they never see a
+notification twice.
+
 ---
 
 ## Rotation
@@ -345,8 +365,10 @@ By default a log file grows without limit. Set `max-bytes` to rotate it:
 
 ```toml
 [project.logging]
-max-bytes = 10_000_000   # off by default
-backups = 5              # the default
+max-bytes = 10_000_000          # off by default
+backups = 5                     # the default
+history-max-bytes = 20_000_000  # the notification history; defaults to max-bytes
+history-backups = 5             # defaults to backups
 ```
 
 Before a record would grow `task.load.jsonl` past `max-bytes`, the file
@@ -362,10 +384,21 @@ trace. `context.trace(call_id, since=...)` skips files last written before
 `since` (a `time.time()` value or a `datetime`), so passing a call's start
 time keeps tracing a recent call cheap with many backups.
 
+The notification history (`history/notifications.jsonl`) rotates the same
+way, by `history-max-bytes` and `history-backups`, which default to
+`max-bytes` and `backups`. Size it on its own: the busiest topic decides
+how far back it reaches, so with the component sizes a rare notice would
+rotate out at the pace of the noisiest one. With neither `max-bytes` nor
+`history-max-bytes` set, nothing rotates; `history-max-bytes` alone rotates
+only the history. They are flat keys rather than a `[project.logging.history]`
+table, which would be a level table for a namespace named `history`.
+
 !!! warning "One process per log directory"
     Rotation is coordinated within one process. Two processes writing the
     same log directory, each rotating on its own, would clobber each other's
-    backups — give each its own `log-dir`.
+    backups — give each its own `log-dir`. Reading the notification
+    history back while it rotates is POSIX-only: on Windows a rotation fails
+    while a reader has the file open.
 
 !!! tip "Seeing it in practice"
     The sibling [`odf`](https://opendataframework.github.io/odf/) package's
