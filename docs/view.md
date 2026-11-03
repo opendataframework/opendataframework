@@ -351,6 +351,99 @@ opens inline or downloads — is the consumer's job.
 
 ---
 
+## Conversations — records as messages in threads
+
+A repository whose records are messages — what customers send by messenger
+or email, say — may separately implement `conversation()` to say how they
+read as a chat: which thread each record is in, when it was sent, what it
+says, and which side it's on. Like `field()`, it's declared *beside* the
+view, not as one: the repository keeps its `data_view()` (a table, by
+default), and a consumer can show the same records both ways.
+
+A conversation can span repositories. Every repository naming the same
+`channel` merges into it, its records in the same threads. Here a bakery's
+incoming messages and its agents' drafted replies share one thread per
+restaurant:
+
+```python
+from opendataframework import Conversation, Repository
+
+
+@Repository(Message)
+class Messages:
+    def all(self) -> list[Message]: ...
+
+    def conversation(self) -> Conversation:
+        return Conversation(
+            channel="restaurants",
+            thread="restaurant",
+            time="received_at",
+            text="text",
+            direction="direction",
+            sender="sender",
+        )
+
+
+@Repository(Draft)
+class Drafts:
+    def all(self) -> list[Draft]: ...
+
+    def conversation(self) -> Conversation:
+        return Conversation(
+            channel="restaurants",
+            thread="restaurant",
+            time="created_at",
+            text="body",
+        )
+```
+
+`Messages` has a `direction`, so its records are messages, each on the side
+its `direction` field says (`"in"` or `"out"`). `Drafts` has none, so its
+records are **cards**: each one is shown with the functions that take it,
+found through the [`Record`](repository.md#record-arguments) marker on their
+arguments. A `confirm_draft(draft_id: Annotated[int, Record(Drafts)], ...)`
+becomes a Send button on every draft's card.
+
+Every attribute but `channel` names an entity field by its role:
+
+| Attribute | Meaning |
+|---|---|
+| `channel: str` | the conversation it belongs to; repositories naming the same one merge |
+| `thread: str` | the field whose value is the thread a record is in |
+| `time: str` | the field records are ordered by |
+| `text: str` | the field shown as the record's text |
+| `direction: str \| None` | a field holding `"in"` or `"out"`; `None` makes the records cards |
+| `sender: str \| None` | the field naming who sent it; `None` shows no sender |
+
+Merging a channel has requirements, and rules for how records are placed.
+This package checks none of them (it has no entity to check them against),
+the consumer does:
+
+* **Threads match by value.** Repositories in one channel use the same values
+  for `thread`: the same restaurant key in `Message.restaurant` and
+  `Draft.restaurant`.
+* **Times compare.** Their `time` fields hold values that compare with each
+  other: all `datetime`, say, not a mix of `datetime` and `str`.
+* **No thread, no place.** A record whose `thread` field is `None` isn't in
+  any thread: a message from a sender who isn't a restaurant, say.
+* **No direction, cards.** `direction=None` makes the records cards, with
+  their actions from `Record`. One field says both which side a message is on
+  and whether records are messages at all.
+
+`conversation()` is detected structurally via `ConversationProtocol`
+(`opendataframework.view.ConversationProtocol`, `@runtime_checkable`) — no
+base class or decorator required, mirroring `DataViewProtocol`:
+
+```python
+class ConversationProtocol(Protocol):
+    def conversation(self) -> Conversation: ...
+```
+
+A repository with no `conversation()` declares nothing, and isn't part of
+any channel.
+
+---
+
 ## What a `data_view()` is not
 
 * **Not UI code.** `opendataframework` has zero third-party dependencies and

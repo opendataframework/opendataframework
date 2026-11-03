@@ -4,6 +4,16 @@
 
 ### Added
 
+- **View**, **Repository**: `Conversation` and `Record`, two declarations for showing
+  records as chat threads. A repository's `conversation()` (`ConversationProtocol`)
+  declares, beside its data view, how its records read as messages: a `channel` that
+  repositories naming the same one merge into, and the fields for `thread`, `time`,
+  `text`, and optionally `direction` and `sender`. With no `direction`, its records are
+  cards rather than messages. `Annotated[int, Record(Drafts)]` marks a function argument
+  as one of a repository's records, by `field` (default `"id"`), so a consumer can show
+  the function as an action on each record, such as a card's Send button. Both are
+  declarations only: nothing here looks a record up or checks a field, and the `Context`
+  never injects a `Record` argument.
 - **Logger**: a record written while a protocol call is in progress — a `logger.info()`
   inside `execute()`, say — carries that call's id as `parent`, so every log line says
   which call wrote it. A line written by a function belongs to the function's call, not

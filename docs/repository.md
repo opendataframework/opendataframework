@@ -355,6 +355,67 @@ class MetricsFetcher:
 
 ---
 
+## Record arguments
+
+A function that takes one of a repository's records usually takes its key: a
+`confirm_draft(draft_id: int, ...)`. To a type checker, and to anything
+inspecting the signature, that's just an `int`. `Record` says which
+repository's records it names:
+
+```python
+from typing import Annotated
+
+from opendataframework import Function, Record
+
+
+@Function
+def confirm_draft(
+    draft_id: Annotated[int, Record(Drafts)],
+    drafts: Drafts,
+    reply: str | None = None,
+) -> None: ...
+```
+
+`Record(Drafts)` marks `draft_id` as the `id` of one of `Drafts`'s records.
+When the argument holds another field, name it:
+`Annotated[str, Record(Drafts, field="ref")]`.
+
+It's a declaration only. Nothing here looks the record up, and neither the
+repository nor the field is checked. The `Context` never injects a `Record`
+argument (only a registered class or function is a dependency), so
+`draft_id` stays one the caller passes, through
+`context.call("function.confirm-draft", draft_id=7)` or directly. What a
+consumer may do with it:
+
+* **Act on a record.** Show the function as an action on each of the
+  repository's records, passing the record's `field` as the argument. That's
+  how a draft's card in a [conversation](view.md#conversations-records-as-messages-in-threads)
+  gets its Send button. A consumer may prefill the function's other
+  parameters that share a name with the record's fields (`reply` from
+  `Draft.reply`).
+* **Pick a record.** Offer the argument in a form as a pick from the
+  repository's records, rather than a bare number field.
+* **Describe the argument.** Tell a model calling the function, over MCP say,
+  which records the argument refers to.
+
+A consumer reads it from the signature, with `context.parameters(func)` or
+`typing.get_type_hints(func, include_extras=True)`.
+
+`Record(Drafts)` pairs with a [notification](notifications.md) published
+with `subject=Drafts, record=draft.id`. A consumer can keep what it shows of
+a record (a card) up to date from the notifications stream, by matching
+`notification.subject` against the repository's key and
+`notification.record` against the record's `field`. Two caveats:
+
+* `Notification.subject` holds the resolved key (`"repository.drafts"`),
+  not the class, so compare keys, never `notification.subject is Drafts`.
+* `Notification.record` is whatever the publisher passed, so the pairing
+  holds only when the publisher passes the field `Record` names
+  (`record=draft.ref` for `Record(Drafts, field="ref")`). That's a
+  convention, not something enforced.
+
+---
+
 ## Events
 
 `on_start()`/`on_stop()` and every `open_stream()`/`stream()`/`close_stream()`

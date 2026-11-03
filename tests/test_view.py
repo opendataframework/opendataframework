@@ -1,9 +1,13 @@
 from dataclasses import dataclass
 
+from opendataframework.entity import Entity
+from opendataframework.repository import Repository
 from opendataframework.view import (
     AudioView,
     ContentMetadata,
     ContentMetadataProtocol,
+    Conversation,
+    ConversationProtocol,
     DataViewProtocol,
     DocumentView,
     ImageView,
@@ -149,3 +153,62 @@ def test_content_metadata_can_be_derived_without_entity_fields():
     assert Photos().content_metadata(Photo(id=7, data=b"")) == ContentMetadata(
         filename="7.png", content_type="image/png"
     )
+
+
+def test_conversation_defaults_to_cards_with_no_sender():
+    conversation = Conversation(
+        channel="restaurants", thread="restaurant", time="created_at", text="body"
+    )
+
+    assert conversation.direction is None
+    assert conversation.sender is None
+
+
+def test_conversation_holds_message_fields():
+    conversation = Conversation(
+        channel="restaurants",
+        thread="restaurant",
+        time="received_at",
+        text="text",
+        direction="direction",
+        sender="sender",
+    )
+
+    assert conversation.direction == "direction"
+    assert conversation.sender == "sender"
+
+
+def test_conversation_protocol_holds_beside_data_view_protocol():
+    @Entity
+    @dataclass
+    class Message:
+        id: int
+        restaurant: str
+        received_at: str
+        text: str
+
+    @Repository(Message)
+    class Messages:
+        def all(self):
+            return []
+
+        def data_view(self):
+            return TableView()
+
+        def conversation(self):
+            return Conversation(
+                channel="restaurants", thread="restaurant", time="received_at", text="text"
+            )
+
+    messages = Messages()
+
+    assert isinstance(messages, DataViewProtocol)
+    assert isinstance(messages, ConversationProtocol)
+
+
+def test_conversation_protocol_rejects_repository_without_conversation():
+    class Unthreaded:
+        def data_view(self):
+            return TableView()
+
+    assert not isinstance(Unthreaded(), ConversationProtocol)

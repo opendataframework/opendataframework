@@ -21,6 +21,7 @@ from opendataframework.pipeline import Pipeline, PipelineProtocol
 from opendataframework.project import Project
 from opendataframework.repository import (
     ReadableProtocol,
+    Record,
     Repository,
     StreamableProtocol,
     WritableProtocol,
@@ -31,6 +32,8 @@ from opendataframework.view import (
     AudioView,
     ContentMetadata,
     ContentMetadataProtocol,
+    Conversation,
+    ConversationProtocol,
     DataView,
     DataViewProtocol,
     DocumentView,
@@ -55,6 +58,8 @@ __all__ = [
     "ContentMetadata",
     "ContentMetadataProtocol",
     "Context",
+    "Conversation",
+    "ConversationProtocol",
     "DataView",
     "DataViewProtocol",
     "DocumentView",
@@ -79,6 +84,7 @@ __all__ = [
     "Project",
     "Publisher",
     "ReadableProtocol",
+    "Record",
     "ReplayProtocol",
     "Repository",
     "Resolver",

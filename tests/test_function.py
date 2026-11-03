@@ -1,10 +1,16 @@
 import functools
 import inspect
+import typing
+from dataclasses import dataclass
+from typing import Annotated
 
 import pytest
 
+from opendataframework.context import Context
+from opendataframework.entity import Entity
 from opendataframework.function import Function, bind
 from opendataframework.namespace import Namespace
+from opendataframework.repository import Record, Repository
 
 
 def test_function_is_namespace_subclass():
@@ -217,3 +223,76 @@ def test_bind_missing_argument_without_string_annotation_has_no_hint():
         bind(load, {})("data.csv")
 
     assert "String annotation" not in str(excinfo.value)
+
+
+# --- Record arguments ---------------------------------------------------------
+
+
+def _drafts() -> type:
+    """Return a registered ``Drafts`` repository for ``Record`` to name."""
+
+    @Entity
+    @dataclass
+    class Draft:
+        id: int
+        ref: str
+
+    @Repository(Draft)
+    class Drafts: ...
+
+    return Drafts
+
+
+def test_record_defaults_to_the_id_field():
+    Drafts = _drafts()
+
+    assert Record(Drafts).field == "id"
+    assert Record(Drafts, field="ref").field == "ref"
+
+
+def test_record_is_hashable():
+    Drafts = _drafts()
+
+    assert hash(Record(Drafts)) == hash(Record(Drafts))
+    assert Record(Drafts) == Record(Drafts)
+
+
+def test_record_argument_is_left_for_the_caller():
+    Drafts = _drafts()
+
+    @Function
+    def confirm_draft(draft_id: Annotated[int, Record(Drafts)]):
+        return draft_id
+
+    with Context(namespaces={Function}) as ctx:
+        assert list(ctx.parameters(confirm_draft)) == ["draft_id"]
+        assert ctx.call("function.confirm-draft", draft_id=1) == 1
+
+
+def test_record_survives_in_type_hints():
+    Drafts = _drafts()
+
+    def confirm_draft(draft_id: Annotated[int, Record(Drafts, field="ref")]): ...
+
+    hint = typing.get_type_hints(confirm_draft, include_extras=True)["draft_id"]
+
+    assert hint.__metadata__ == (Record(Drafts, field="ref"),)
+
+
+def test_record_does_not_stop_a_function_in_the_same_annotation_being_injected():
+    # No one would write this annotation. It only pins that a Record in
+    # Annotated metadata doesn't stop _dependency() scanning the rest of it,
+    # so the rule is "a Record is skipped", not "any metadata is skipped".
+    Drafts = _drafts()
+
+    @Function
+    def load_draft():
+        return "draft"
+
+    @Function
+    def confirm_draft(draft: Annotated[int, Record(Drafts), load_draft]):
+        return draft()
+
+    with Context(namespaces={Function}) as ctx:
+        assert list(ctx.parameters(confirm_draft)) == []
+        assert ctx.call("function.confirm-draft") == "draft"
