@@ -330,7 +330,11 @@ def test_rows_are_newest_first_with_every_field(tmp_path):
 
         def execute(self) -> None:
             self.notifications.publish(
-                "orders.received", {"secret": 1}, summary="2 baguettes", subject=HistoryOrders, record=7
+                "orders.received",
+                {"secret": 1},
+                summary="2 baguettes",
+                subject=HistoryOrders,
+                record=7,
             )
 
     with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
@@ -467,9 +471,7 @@ def test_before_a_time_returns_only_older_rows(tmp_path):
     assert seqs(manager.notification_history(before=now - 15)) == [1]
 
 
-def test_since_stops_the_read_and_skips_backups_last_written_well_before_it(
-    tmp_path, monkeypatch
-):
+def test_since_stops_the_read_and_skips_backups_last_written_well_before_it(tmp_path, monkeypatch):
     since = time.time()
     handwrite(
         history_path(tmp_path),
