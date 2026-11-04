@@ -77,6 +77,9 @@
 - **Docs**: [One Call per Inbound Item](service.md#one-call-per-inbound-item) — route
   each item a long-running service receives through an injected `@Function`, so it gets
   its own call id, log lines, notifications and trace instead of joining `run()`'s.
+- **Docs**: the site wears the odf UI's `ink` theme, the same as the `odf` docs: black
+  and white with grey hairlines and rounded panels, and its stacked-layers tile as the
+  logo and favicon, in a light and a dark variant.
 - **Examples**: `examples/11-notifications/` uses `@Publisher` and `@Subscriber` (one
   sync, one background) and prints the trace from the publishing call to every reaction.
 

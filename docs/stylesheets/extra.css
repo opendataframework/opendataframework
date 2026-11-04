@@ -1,110 +1,143 @@
-/* Monochrome light/dark theme, shared with the odf docs site: light mode's
-   palette is docs/images/light.svg (light grey field, dark blocks), dark
-   mode's is docs/images/dark.svg (graphite field, light blocks), and each
-   mode shows its own one as the logo and favicon. System/mono fonts
-   instead of a web font, thin hairline borders instead of shadows. */
+/* Light/dark theme taken from the odf UI's built-in `ink` theme
+   (src/odf/ui/static/themes/ink/theme.css in the sibling odf repo), kept
+   in step with odf's docs/stylesheets/extra.css: pure black and near-white with
+   grey hairlines, no brand hue (everything interactive is plain black in
+   light mode, plain white in dark mode), 8px panels and 6px buttons. Each
+   mode shows its own variant of ink's stacked-layers tile as the logo and
+   favicon: docs/images/secondary-light.svg and secondary-dark.svg. */
 
-/* --- Fonts (no web fonts — same stacks as the odf docs) ------- */
+/* --- Fonts (no web fonts — the same stacks as the ink theme) ----------- */
 
 :root {
-  --md-text-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --md-text-font: Inter, "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --md-code-font: 'SF Mono', 'IBM Plex Mono', 'JetBrains Mono', Consolas, 'Courier New', monospace;
 }
 
+body {
+  -webkit-font-smoothing: antialiased;
+}
+
 /* Repo version pill in the header reads as a data/label, not prose — keep
-   it in the mono stack, matching odf's convention for chrome
+   it in the mono stack, matching the odf topology UI's convention for chrome
    labels (--md-source doesn't inherit --md-code-font-family on its own,
    since that's only composed onto actual code/pre/kbd elements). */
 .md-source {
   font-family: var(--md-code-font-family);
 }
 
-/* --- Palette: light -------------------------------------------------- */
+/* --- Palette: light (ink's [data-theme="light"]) ------------------------ */
 
 [data-md-color-scheme="default"] {
-  --md-default-bg-color: #f2f3f4;
+  --md-default-bg-color: #fafafa;
   --md-default-bg-color--light: #ffffff;
-  --md-default-bg-color--lighter: #e6e8eb;
-  --md-default-bg-color--lightest: #d8dade;
+  --md-default-bg-color--lighter: #f2f2f2;
+  --md-default-bg-color--lightest: #eaeaea;
 
-  --md-default-fg-color: #14161a;
-  --md-default-fg-color--light: #4a5058;
-  --md-default-fg-color--lighter: #7d838c;
-  --md-default-fg-color--lightest: rgba(20, 22, 26, 0.12);
+  --md-default-fg-color: #0a0a0a;
+  --md-default-fg-color--light: #666666;
+  --md-default-fg-color--lighter: #a1a1a1;
+  --md-default-fg-color--lightest: rgba(10, 10, 10, 0.08);
 
-  --md-code-fg-color: #14161a;
+  --md-code-fg-color: #0a0a0a;
   --md-code-bg-color: #ffffff;
-  --md-code-bg-color--light: #e6e8eb;
-  --md-code-bg-color--lighter: #d8dade;
+  --md-code-bg-color--light: #f2f2f2;
+  --md-code-bg-color--lighter: #eaeaea;
 
-  --panel-border: #d8dade;
-  --panel-border-strong: #a9adb3;
+  --panel-border: #eaeaea;
+  --panel-border-strong: #d4d4d4;
 
   --md-footer-bg-color: #ffffff;
-  --md-footer-bg-color--dark: #e6e8eb;
-  --md-footer-fg-color: #14161a;
-  --md-footer-fg-color--light: #4a5058;
-  --md-footer-fg-color--lighter: #7d838c;
+  --md-footer-bg-color--dark: #fafafa;
+  --md-footer-fg-color: #0a0a0a;
+  --md-footer-fg-color--light: #666666;
+  --md-footer-fg-color--lighter: #a1a1a1;
 
-  --md-primary-fg-color: #d8dade;
-  --md-primary-fg-color--light: #e6e8eb;
-  --md-primary-fg-color--dark: #a9adb3;
-  --md-primary-bg-color: #14161a;
-  --md-primary-bg-color--light: #4a5058;
+  --md-primary-fg-color: #ffffff;
+  --md-primary-fg-color--light: #f2f2f2;
+  --md-primary-fg-color--dark: #eaeaea;
+  --md-primary-bg-color: #0a0a0a;
+  --md-primary-bg-color--light: #666666;
 
-  --md-accent-fg-color: #2c3138;
-  --md-accent-fg-color--transparent: color-mix(in srgb, #2c3138 10%, transparent);
+  --md-accent-fg-color: #000000;
+  --md-accent-fg-color--transparent: color-mix(in srgb, #000000 6%, transparent);
   --md-accent-bg-color: #ffffff;
-  --md-typeset-a-color: #2c3138;
+  --md-typeset-a-color: #000000;
 
-  --panel-inset-highlight: inset 0 1px 0 rgba(15, 16, 20, 0.02);
-  --panel-elevated-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  --panel-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --popover-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 
-/* --- Palette: dark ----------------------------------------------------- */
+/* --- Palette: dark (ink's :root / [data-theme="dark"]) ------------------ */
 
 [data-md-color-scheme="slate"] {
-  --md-default-bg-color: #0d0f11;
-  --md-default-bg-color--light: #1c1f23;
-  --md-default-bg-color--lighter: #30343a;
-  --md-default-bg-color--lightest: #454a51;
+  --md-default-bg-color: #000000;
+  --md-default-bg-color--light: #0a0a0a;
+  --md-default-bg-color--lighter: #141414;
+  --md-default-bg-color--lightest: #1f1f1f;
 
-  --md-default-fg-color: #eef0f3;
-  --md-default-fg-color--light: #c0c5cc;
-  --md-default-fg-color--lighter: #8a9199;
-  --md-default-fg-color--lightest: rgba(238, 240, 243, 0.12);
+  --md-default-fg-color: #ededed;
+  --md-default-fg-color--light: #a1a1a1;
+  --md-default-fg-color--lighter: #666666;
+  --md-default-fg-color--lightest: rgba(237, 237, 237, 0.08);
 
-  --md-code-fg-color: #eef0f3;
-  --md-code-bg-color: #1c1f23;
-  --md-code-bg-color--light: #30343a;
-  --md-code-bg-color--lighter: #454a51;
+  --md-code-fg-color: #ededed;
+  --md-code-bg-color: #0a0a0a;
+  --md-code-bg-color--light: #141414;
+  --md-code-bg-color--lighter: #1f1f1f;
 
-  --panel-border: #30343a;
-  --panel-border-strong: #454a51;
+  --panel-border: #1f1f1f;
+  --panel-border-strong: #333333;
 
-  --md-footer-bg-color: #1c1f23;
-  --md-footer-bg-color--dark: #0d0f11;
-  --md-footer-fg-color: #eef0f3;
-  --md-footer-fg-color--light: #c0c5cc;
-  --md-footer-fg-color--lighter: #8a9199;
+  --md-footer-bg-color: #0a0a0a;
+  --md-footer-bg-color--dark: #000000;
+  --md-footer-fg-color: #ededed;
+  --md-footer-fg-color--light: #a1a1a1;
+  --md-footer-fg-color--lighter: #666666;
 
-  --md-primary-fg-color: #30343a;
-  --md-primary-fg-color--light: #454a51;
-  --md-primary-fg-color--dark: #1c1f23;
-  --md-primary-bg-color: #eef0f3;
-  --md-primary-bg-color--light: #c0c5cc;
+  --md-primary-fg-color: #000000;
+  --md-primary-fg-color--light: #141414;
+  --md-primary-fg-color--dark: #0a0a0a;
+  --md-primary-bg-color: #ededed;
+  --md-primary-bg-color--light: #a1a1a1;
 
-  --md-accent-fg-color: #eef0f3;
-  --md-accent-fg-color--transparent: color-mix(in srgb, #eef0f3 10%, transparent);
-  --md-accent-bg-color: #0d0f11;
-  --md-typeset-a-color: #eef0f3;
+  --md-accent-fg-color: #ffffff;
+  --md-accent-fg-color--transparent: color-mix(in srgb, #ffffff 8%, transparent);
+  --md-accent-bg-color: #000000;
+  --md-typeset-a-color: #ffffff;
 
-  --panel-inset-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.02);
-  --panel-elevated-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+  --panel-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --popover-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+}
+
+/* --- Header ---------------------------------------------------------------
+   The header is the page's own color, so a hairline sets it apart instead
+   of material's drop shadow, and it carries the ink UI's 3px top bar: the
+   accent fading out to the right. */
+
+.md-header {
+  border-bottom: 1px solid var(--panel-border);
+  box-shadow: none;
+}
+
+.md-header[data-md-state="shadow"],
+.md-header--shadow {
+  box-shadow: none;
+}
+
+.md-header::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--md-accent-fg-color), transparent 85%);
+  opacity: 0.8;
+  pointer-events: none;
 }
 
 /* --- Links ----------------------------------------------------------------
-   The accent is the logo's block color, close to body text, so links are
+   The accent is plain black/white, the same as body text, so links are
    underlined too: faint at rest, in the accent on hover. */
 
 .md-typeset a {
@@ -132,21 +165,14 @@
 
 .md-typeset a code {
   padding: 0.1em 0.4em;
-  border-radius: 2px;
   background-color: var(--md-accent-fg-color--transparent);
   color: var(--md-accent-fg-color);
 }
 
 /* --- Logo ---------------------------------------------------------------
    overrides/partials/logo.html renders both variants; each scheme shows
-   its own, so the right one is there on first paint. The pixel frame's
-   border tracks the scheme's own border color, not a fixed dark hex. */
-.md-header__button.md-logo img,
-.md-header__button.md-logo svg,
-.md-nav__button.md-logo img {
-  border: 1px solid var(--panel-border-strong);
-  border-radius: 0;
-}
+   its own, so the right one is there on first paint. The tile draws its
+   own rounded stroke, so it gets no border here. */
 
 /* Scoped under .md-logo so it outranks material's own
    ".md-header__button.md-logo img { display: block }". */
@@ -156,32 +182,53 @@
 }
 
 /* --- Flat surfaces -------------------------------------------------------
-   Thin hairline border + small radius + a barely-visible inset highlight,
-   matching the odf docs' own surfaces — no offset drop-shadow. */
+   Hairline border, 8px radius and a barely-there shadow, matching the ink
+   UI's own ".panel" surface. */
 
-.md-typeset code,
-.md-typeset kbd,
 .md-typeset table:not([class]),
 .md-content__inner > pre code,
 .md-typeset .admonition,
 .md-typeset details,
 .md-typeset .tabbed-set,
-.md-typeset .tabbed-labels > label,
 .md-typeset .grid.cards > ul > li,
 .md-typeset .grid.cards > ol > li,
 .md-typeset .grid > .card,
-.md-typeset .md-tag,
 .md-typeset .highlight,
 [data-termynal] {
   border: 1px solid var(--panel-border);
-  border-radius: 2px;
-  box-shadow: var(--panel-inset-highlight);
+  border-radius: 8px;
+  box-shadow: var(--panel-shadow);
+}
+
+/* A code block's <pre> and <code> sit inside .highlight's rounded border,
+   so they drop their own and clip to it. */
+.md-typeset .highlight {
+  overflow: hidden;
+}
+
+.md-typeset .highlight pre,
+.md-typeset .highlight code {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Small chips: inline code, keys, tags and tab labels — ink's 4px badges. */
+.md-typeset code,
+.md-typeset kbd,
+.md-typeset .md-tag {
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+.md-typeset .tabbed-labels > label {
+  border-radius: 6px 6px 0 0;
 }
 
 /* --- Elevated surfaces -----------------------------------------------
-   Popovers/overlays get a stronger border plus a real (soft) shadow —
-   the same flat-vs-elevated split the odf docs use for their own
-   popovers, instead of treating every box identically. */
+   Popovers/overlays get a stronger border plus ink's popover shadow — the
+   same flat-vs-elevated split the topology UI uses for its own popovers. */
 
 .md-dialog,
 .md-select__inner,
@@ -191,18 +238,23 @@
 .md-version__list,
 .md-search__form {
   border: 1px solid var(--panel-border-strong);
-  border-radius: 2px;
-  box-shadow: var(--panel-inset-highlight), var(--panel-elevated-shadow);
+  border-radius: 8px;
+  box-shadow: var(--popover-shadow);
+}
+
+.md-search__form {
+  box-shadow: none;
 }
 
 /* --- Buttons -------------------------------------------------------------
-   Transparent fill with a hairline border, matching the odf docs' own
-   button recipe, instead of a filled block. */
+   Transparent fill with a hairline border and a 6px radius, the ink UI's
+   own button recipe (theme toggle, zoom controls, etc.); the primary one
+   is filled in the accent, like the UI's primary actions. */
 
 .md-typeset .md-button {
   background: transparent;
   border: 1px solid var(--panel-border);
-  border-radius: 2px;
+  border-radius: 6px;
   color: var(--md-default-fg-color--light);
   box-shadow: none;
   transition: background 0.12s, color 0.12s, border-color 0.12s;
@@ -216,10 +268,22 @@
   transform: none;
 }
 
+.md-typeset .md-button--primary {
+  background: var(--md-accent-fg-color);
+  border-color: var(--md-accent-fg-color);
+  color: var(--md-accent-bg-color);
+}
+
+.md-typeset .md-button--primary:hover,
+.md-typeset .md-button--primary:active {
+  background: var(--md-default-fg-color--light);
+  border-color: var(--md-default-fg-color--light);
+  color: var(--md-accent-bg-color);
+}
+
 /* --- Section heading accent bar ----------------------------------------
-   A hairline accent bar (not a chunky pixel block) using the muted accent
-   tier — --md-primary-fg-color is now a chrome background color, not a
-   usable bar color, so this must source from --md-accent-fg-color instead. */
+   A 2px accent bar, the same marker the ink UI puts on a selected node in
+   its sidebar. */
 
 .md-typeset h2,
 .md-typeset h3 {
@@ -227,11 +291,12 @@
   padding-left: 0.6rem;
 }
 
-/* Active nav item gets the same hairline accent-bar treatment as headings
-   above — the "you are here" marker in the sidebar/TOC. */
+/* Active nav item gets the same accent bar as headings above — the "you
+   are here" marker in the sidebar/TOC. */
 
 .md-nav__item .md-nav__link--active {
   border-left: 2px solid var(--md-accent-fg-color);
+  border-radius: 0 6px 6px 0;
   padding-left: 0.4rem;
   background-color: var(--md-accent-fg-color--transparent);
 }
@@ -253,12 +318,12 @@
 
 [data-md-color-scheme="default"] [data-termynal] {
   --color-bg: #ffffff;
-  --color-text: #14161a;
-  --color-text-subtle: #4a5058;
+  --color-text: #0a0a0a;
+  --color-text-subtle: #666666;
 }
 
 [data-md-color-scheme="slate"] [data-termynal] {
-  --color-bg: #1c1f23;
-  --color-text: #eef0f3;
-  --color-text-subtle: #c0c5cc;
+  --color-bg: #0a0a0a;
+  --color-text: #ededed;
+  --color-text-subtle: #a1a1a1;
 }
