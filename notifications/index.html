@@ -1,0 +1,1923 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Lightweight dependency-injection framework for data applications.">
+      
+      
+      
+      
+        <link rel="prev" href="../events/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../images/secondary-light.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Notifications - Open Data Framework</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+      <link rel="stylesheet" href="../termynal.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#notifications" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Open Data Framework" class="md-header__button md-logo" aria-label="Open Data Framework" data-md-component="logo">
+      <img class="odf-logo odf-logo--light" src="../images/secondary-light.svg" alt="logo">
+<img class="odf-logo odf-logo--dark" src="../images/secondary-dark.svg" alt="logo">
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Open Data Framework
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Notifications
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/opendataframework/opendataframework" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    opendataframework/opendataframework
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Open Data Framework" class="md-nav__button md-logo" aria-label="Open Data Framework" data-md-component="logo">
+      <img class="odf-logo odf-logo--light" src="../images/secondary-light.svg" alt="logo">
+<img class="odf-logo odf-logo--dark" src="../images/secondary-dark.svg" alt="logo">
+    </a>
+    Open Data Framework
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/opendataframework/opendataframework" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    opendataframework/opendataframework
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../entity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Entity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../repository/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Repository
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../view/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    View
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../component/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Component
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../task/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Task
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../function/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Function
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../layer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Layer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../context/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Context
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../namespace/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Namespace
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../logger/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logger
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../events/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Events
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#events-or-notifications" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Events or Notifications?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#publishing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Publishing
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Publishing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#publisher-and-the-publishing-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        @Publisher and the Publishing Rules
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#subscribing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Subscribing
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Subscribing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#subscriber" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        @Subscriber
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#subscribe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        subscribe()
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-notification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Notification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#delivery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Delivery
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Delivery">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#background-delivery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background Delivery
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ids-and-causes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ids and Causes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Ids and Causes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-whole-story-from-any-call" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Whole Story from Any Call
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#history" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        History
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-not-to-use-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When Not to Use It
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#events-or-notifications" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Events or Notifications?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#publishing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Publishing
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Publishing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#publisher-and-the-publishing-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        @Publisher and the Publishing Rules
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#subscribing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Subscribing
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Subscribing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#subscriber" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        @Subscriber
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#subscribe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        subscribe()
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-notification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Notification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#delivery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Delivery
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Delivery">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#background-delivery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background Delivery
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ids-and-causes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ids and Causes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Ids and Causes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-whole-story-from-any-call" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Whole Story from Any Call
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#history" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        History
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-not-to-use-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When Not to Use It
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="notifications">Notifications<a class="headerlink" href="#notifications" title="Permanent link">&para;</a></h1>
+<p><code>Notifications</code> lets a component announce that something happened (a file
+arrived, a sensor crossed a threshold, a training run finished, an order came
+in) so that others can react without the publisher knowing who they are. Another
+component might draft an order change, and a UI might show a toast. Each
+message is a <code>Notification</code>: a topic, a payload, and an optional
+human-readable summary.</p>
+<p><code>Notifications</code> is the hub, one per <code>Context</code>. A component declared a
+<code>@Publisher</code> publishes; a component declared a <code>@Subscriber</code> reacts, and
+the framework subscribes it while it runs and traces every reaction back to
+the notification that caused it.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nd">@Publisher</span><span class="p">(</span><span class="s2">&quot;messages.received&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nd">@Service</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="k">class</span><span class="w"> </span><span class="nc">Mailbox</span><span class="p">:</span> <span class="o">...</span>  <span class="c1"># publishes, from run()</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="nd">@Subscriber</span><span class="p">(</span><span class="s2">&quot;messages.received&quot;</span><span class="p">,</span> <span class="n">deliver</span><span class="o">=</span><span class="s2">&quot;background&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="nd">@Component</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="k">class</span><span class="w"> </span><span class="nc">Drafting</span><span class="p">:</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">on_notification</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">notification</span><span class="p">:</span> <span class="n">Notification</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+</code></pre></div>
+<hr />
+<h2 id="events-or-notifications">Events or Notifications?<a class="headerlink" href="#events-or-notifications" title="Permanent link">&para;</a></h2>
+<p>They look alike, and they are deliberately separate.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th><a href="../events/"><code>Event</code></a></th>
+<th><code>Notification</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>What it is</td>
+<td>A record of a protocol call the framework made: <code>started</code> / <code>completed</code> / <code>failed</code>, with timing</td>
+<td>A message a component publishes about something it did or saw, with a topic and a payload</td>
+</tr>
+<tr>
+<td>Who emits it</td>
+<td>Only the framework (<code>Context</code>)</td>
+<td>Only component code</td>
+</tr>
+<tr>
+<td>Content</td>
+<td>Key, protocol, method, call id, parent, timing, error. Never arguments or results</td>
+<td>Topic, payload, an optional summary, level, an optional subject and record</td>
+</tr>
+<tr>
+<td>Use it to</td>
+<td>Observe how the app runs: run state, monitoring, failure alerts</td>
+<td>Let others react without the publisher knowing who they are: other components, and people through a UI</td>
+</tr>
+<tr>
+<td>Not for</td>
+<td>Application data</td>
+<td>Getting a result back (call the component directly, through DI), or durable messaging across processes (a broker <code>@Service</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>In short: an Event is the framework reporting how it runs your code; a
+Notification is your code reporting what happened.</p>
+<p>They are two hubs with separate subscriptions, <code>context.events</code> and
+<code>context.notifications</code>, and neither delivers the other's type. A
+notification records the protocol call in progress when it was published as
+its <code>parent</code>, so a consumer can relate the two. For example, "published during
+<code>task.take-orders</code>' <code>execute()</code>".</p>
+<div class="admonition note">
+<p class="admonition-title"><code>Events.notify()</code> is unrelated</p>
+<p><code>Events.notify()</code> is how the framework emits <code>Event</code>s around a protocol
+call. It has nothing to do with <code>Notifications</code>; to publish one, call
+<code>notifications.publish()</code>.</p>
+</div>
+<hr />
+<h2 id="publishing">Publishing<a class="headerlink" href="#publishing" title="Permanent link">&para;</a></h2>
+<p>Declare the class a <code>@Publisher</code> of the topics it publishes, and
+<code>notifications: Notifications</code> in its constructor (or in a
+<a href="../function/">Function</a>'s signature). Like <a href="../logger/">Logger</a>, it is
+special-cased: each consumer receives a view <strong>bound to its own key</strong>, so
+<code>publish()</code> needs no key:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">opendataframework</span><span class="w"> </span><span class="kn">import</span> <span class="n">Notifications</span><span class="p">,</span> <span class="n">Publisher</span><span class="p">,</span> <span class="n">Task</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="nd">@Publisher</span><span class="p">(</span><span class="s2">&quot;orders.received&quot;</span><span class="p">)</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="nd">@Task</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="k">class</span><span class="w"> </span><span class="nc">TakeOrders</span><span class="p">:</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inbox</span><span class="p">:</span> <span class="n">Inbox</span><span class="p">,</span> <span class="n">orders</span><span class="p">:</span> <span class="n">Orders</span><span class="p">,</span> <span class="n">notifications</span><span class="p">:</span> <span class="n">Notifications</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">inbox</span> <span class="o">=</span> <span class="n">inbox</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">orders</span> <span class="o">=</span> <span class="n">orders</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">notifications</span> <span class="o">=</span> <span class="n">notifications</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>        <span class="k">for</span> <span class="n">customer</span><span class="p">,</span> <span class="n">item</span><span class="p">,</span> <span class="n">quantity</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">inbox</span><span class="o">.</span><span class="n">drain</span><span class="p">():</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>            <span class="n">order</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">orders</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">Order</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">customer</span><span class="p">,</span> <span class="n">item</span><span class="p">,</span> <span class="n">quantity</span><span class="p">))</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">notifications</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>                <span class="s2">&quot;orders.received&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>                <span class="p">{</span><span class="s2">&quot;customer&quot;</span><span class="p">:</span> <span class="n">customer</span><span class="p">,</span> <span class="s2">&quot;item&quot;</span><span class="p">:</span> <span class="n">item</span><span class="p">,</span> <span class="s2">&quot;quantity&quot;</span><span class="p">:</span> <span class="n">quantity</span><span class="p">},</span>
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>                <span class="n">summary</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">customer</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">quantity</span><span class="si">}</span><span class="s2"> x </span><span class="si">{</span><span class="n">item</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>                <span class="n">subject</span><span class="o">=</span><span class="n">Orders</span><span class="p">,</span>
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>                <span class="n">record</span><span class="o">=</span><span class="n">order</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>            <span class="p">)</span>
+</code></pre></div>
+<p><code>publish()</code> delivers the notification to every matching subscriber, writes a
+record to the publisher's log, and returns the <code>Notification</code>. The record's
+<code>message</code> is <code>notified &lt;topic&gt;: &lt;summary&gt;</code>, and it carries <code>topic</code>,
+<code>notification_level</code>, <code>summary</code>, <code>subject</code>, <code>record</code> and <code>parent</code> (the call it was
+published during) as fields, but never the <code>payload</code> (see
+<a href="../logger/#log-format">Log Format</a>). It is written at the log level matching
+the notification's <code>level</code>: <code>info</code> and <code>success</code> as <code>INFO</code>, <code>warning</code> as
+<code>WARNING</code>, <code>error</code> as <code>ERROR</code>. Set <code>[project.logging] notifications = ...</code> to
+choose which are kept (see <a href="../logger/#levels">Levels</a>). The same record is
+also kept in the notification <a href="#history">history</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Argument</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>topic</code></td>
+<td>Dotted name of what happened, e.g. <code>"orders.received"</code>. Non-empty, with no <code>*</code>.</td>
+</tr>
+<tr>
+<td><code>payload</code></td>
+<td>Data for subscribers. Keep it JSON-serialisable, so a UI can show it. Its containers are copied and delivered read-only all the way down: nested mappings arrive as read-only mappings, lists and tuples as tuples, sets as frozensets. Other values are passed as they are, never copied.</td>
+</tr>
+<tr>
+<td><code>summary</code></td>
+<td>One human-readable line. A UI shows only notifications that have one.</td>
+</tr>
+<tr>
+<td><code>level</code></td>
+<td><code>"info"</code> (the default), <code>"success"</code>, <code>"warning"</code>, or <code>"error"</code>. Anything else raises <code>ValueError</code>.</td>
+</tr>
+<tr>
+<td><code>subject</code></td>
+<td>The component it's about: a class or function, resolved to its key, or a key string such as <code>"repository.orders"</code>.</td>
+</tr>
+<tr>
+<td><code>record</code></td>
+<td>Id of the record it's about, within <code>subject</code>.</td>
+</tr>
+<tr>
+<td><code>key</code></td>
+<td>The publisher's key. Filled in by an injected view; required on <code>context.notifications</code>, where it names a log file, so it can't be empty, contain <code>/</code> or <code>\</code>, start with <code>.</code>, or pass 200 bytes (<code>ValueError</code>, before anything is logged or delivered).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="publisher-and-the-publishing-rules"><code>@Publisher</code> and the Publishing Rules<a class="headerlink" href="#publisher-and-the-publishing-rules" title="Permanent link">&para;</a></h3>
+<p><code>@Publisher(*topics)</code> goes on top of the class's execution type
+(<code>@Component</code>, <code>@Service</code>, <code>@Task</code>, <code>@Agent</code>, ...) or on top of
+<code>@Function</code>, the way a <a href="../layer/">layer</a> does. Each topic is exact, or
+<code>"x.*"</code> to allow every topic under <code>x</code>. It has no protocol method: publishing
+is started by your own code, at moments only it knows, so the framework has
+nothing to call. What it does is make three rules hold for an injected view:</p>
+<ol>
+<li><strong>Only a <code>@Publisher</code> publishes.</strong> Publishing without one raises
+   <code>TypeError</code>, so the framework knows every publisher: <code>context.publishers()</code>
+   lists them, and a UI can draw who publishes what before anything has been
+   published.</li>
+<li><strong>Only declared topics.</strong> Publishing a topic the <code>@Publisher</code> doesn't
+   declare raises <code>ValueError</code>.</li>
+<li><strong>Only inside a protocol call.</strong> Publishing with no call in progress raises
+   <code>RuntimeError</code>, because the notification would have no <code>parent</code> and
+   couldn't be traced. Publish from <code>execute()</code>, <code>run()</code>, <code>on_start()</code>,
+   <code>on_notification()</code>, <code>invoke()</code>, a <code>@Function</code> call, ... never from
+   <code>__init__</code> or from a thread you started yourself.</li>
+</ol>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">context</span><span class="o">.</span><span class="n">publishers</span><span class="p">()</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># [{&quot;key&quot;: &quot;task.take-orders&quot;, &quot;topics&quot;: [&quot;orders.received&quot;]}]</span>
+</code></pre></div>
+<p><code>Publisher</code> is a <a href="../namespace/">namespace</a>, like a <a href="../layer/">layer</a>:
+<code>Publisher.items()</code> lists every publisher by name, and <code>Publisher.of(target)</code>
+returns what one declares (or <code>None</code>). Nothing is written onto your class or
+function, and a subclass of a publisher isn't one. It registers by name, so
+a publishing class and a publishing function with the same name clash —
+give one a name: <code>@Publisher("orders.priced", name="price-function")</code>.</p>
+<p>Code that holds the <code>Context</code> (a script, a test, the sibling
+<a href="https://opendataframework.github.io/odf/"><code>odf</code></a> package's UI server) uses the
+unbound hub, <code>context.notifications</code>, and passes the key itself. The unbound
+hub is exempt from all three rules:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">project</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">notifications</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="s2">&quot;orders.imported&quot;</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="s2">&quot;task.import-orders&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p>A <code>subject</code> given as a class or function is resolved through the <code>Context</code>,
+so it only works once <code>open()</code> has resolved it. Before that, or for a
+component the <code>Context</code> doesn't know, it raises <code>KeyError</code>; pass the key
+string instead.</p>
+<hr />
+<h2 id="subscribing">Subscribing<a class="headerlink" href="#subscribing" title="Permanent link">&para;</a></h2>
+<h3 id="subscriber"><code>@Subscriber</code><a class="headerlink" href="#subscriber" title="Permanent link">&para;</a></h3>
+<p>A component reacts to notifications by declaring itself a <code>@Subscriber</code>
+and defining <code>on_notification()</code> (<code>SubscriberProtocol</code>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">opendataframework</span><span class="w"> </span><span class="kn">import</span> <span class="n">Component</span><span class="p">,</span> <span class="n">Notification</span><span class="p">,</span> <span class="n">Subscriber</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="nd">@Subscriber</span><span class="p">(</span><span class="s2">&quot;orders.received&quot;</span><span class="p">)</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="nd">@Component</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="k">class</span><span class="w"> </span><span class="nc">Kitchen</span><span class="p">:</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bakery</span><span class="p">:</span> <span class="n">Bakery</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">bakery</span> <span class="o">=</span> <span class="n">bakery</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">on_notification</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">notification</span><span class="p">:</span> <span class="n">Notification</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">bakery</span><span class="o">.</span><span class="n">schedule</span><span class="p">(</span><span class="n">order_id</span><span class="o">=</span><span class="n">notification</span><span class="o">.</span><span class="n">record</span><span class="p">)</span>
+</code></pre></div>
+<p><code>@Subscriber(*topics, deliver="sync")</code> goes on top of the execution type,
+like <code>@Publisher</code>. Topics are filters, as below; a notification matching
+several is delivered once. A class without <code>on_notification()</code>, or with an
+<code>async</code> one, raises <code>TypeError</code>.</p>
+<ul>
+<li><strong>Managed.</strong> The <code>Context</code> subscribes <code>on_notification()</code> right after the
+  component starts (after its <code>on_start()</code>, or a service's <code>setup()</code>) and
+  unsubscribes it right before it stops. A component never receives a
+  notification before it started or after it stopped, and a service stopped
+  with <code>context.stop(key)</code> receives nothing until it starts again. The flip
+  side: what was published before the component started — during an
+  earlier component's <code>on_start()</code>, say — it doesn't see.</li>
+<li><strong>Instrumented.</strong> Each delivery is a protocol call, reported to
+  <a href="../events/">Events</a> as <code>SubscriberProtocol</code> / <code>on_notification</code>, written to
+  the component's log, and linked to the notification by its <code>cause</code> (see
+  <a href="#ids-and-causes">Ids and Causes</a>). If it raises, the call's <code>failed</code>
+  record says so; the exception never reaches the publisher.</li>
+<li><strong>Sync or background.</strong> With <code>deliver="sync"</code> (the default),
+  <code>on_notification()</code> runs inside <code>publish()</code>, in the publisher's thread. With
+  <code>deliver="background"</code>, <code>publish()</code> only queues the delivery and returns;
+  see <a href="#background-delivery">Background Delivery</a>.</li>
+<li><strong>Visible.</strong> <code>context.subscribers()</code> lists every subscriber:</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">context</span><span class="o">.</span><span class="n">subscribers</span><span class="p">()</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># [{&quot;key&quot;: &quot;component.kitchen&quot;, &quot;topics&quot;: [&quot;orders.received&quot;], &quot;deliver&quot;: &quot;sync&quot;}]</span>
+</code></pre></div>
+<p>Like <code>Publisher</code>, <code>Subscriber</code> is a namespace: <code>Subscriber.items()</code> lists
+  every subscriber class, and <code>Subscriber.of(Kitchen)</code> returns its
+  <code>Subscription(topics, deliver)</code>. The declaration is kept by the namespace,
+  not written onto the class, so a subclass of a subscriber isn't one.</p>
+<p>Keep <strong>one reaction per component</strong>. Two reactions to different topics are
+two subscribers, each with its own node in a topology, its own delivery
+mode and its own trace. What they share (state, a model client, an order
+desk) belongs in a plain component they both depend on, not in a
+subscriber that branches on <code>notification.topic</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nd">@Component</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">OrderDesk</span><span class="p">:</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">draft_change</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">file_invoice</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">invoice_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="nd">@Subscriber</span><span class="p">(</span><span class="s2">&quot;messages.received&quot;</span><span class="p">)</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="nd">@Component</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="k">class</span><span class="w"> </span><span class="nc">MessageDrafter</span><span class="p">:</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">desk</span><span class="p">:</span> <span class="n">OrderDesk</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">desk</span> <span class="o">=</span> <span class="n">desk</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">on_notification</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">notification</span><span class="p">:</span> <span class="n">Notification</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">desk</span><span class="o">.</span><span class="n">draft_change</span><span class="p">(</span><span class="n">notification</span><span class="o">.</span><span class="n">record</span><span class="p">)</span>
+<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>
+<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>
+<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="nd">@Subscriber</span><span class="p">(</span><span class="s2">&quot;invoices.*&quot;</span><span class="p">)</span>
+<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="nd">@Component</span>
+<a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="k">class</span><span class="w"> </span><span class="nc">InvoiceFiler</span><span class="p">:</span>
+<a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">desk</span><span class="p">:</span> <span class="n">OrderDesk</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">desk</span> <span class="o">=</span> <span class="n">desk</span>
+<a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a>
+<a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">on_notification</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">notification</span><span class="p">:</span> <span class="n">Notification</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">desk</span><span class="o">.</span><span class="n">file_invoice</span><span class="p">(</span><span class="n">notification</span><span class="o">.</span><span class="n">record</span><span class="p">)</span>
+</code></pre></div>
+<p>A subscriber that also publishes is a <code>@Publisher</code> too; it publishes from
+<code>on_notification()</code>, which is a protocol call, so the new notification's
+<code>parent</code> is the reaction and chains continue.</p>
+<h3 id="subscribe"><code>subscribe()</code><a class="headerlink" href="#subscribe" title="Permanent link">&para;</a></h3>
+<p>For code outside components, and for dynamic cases, subscribe directly:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">unsubscribe</span> <span class="o">=</span> <span class="n">notifications</span><span class="o">.</span><span class="n">subscribe</span><span class="p">(</span><span class="n">listener</span><span class="p">)</span>  <span class="c1"># every notification</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">unsubscribe</span> <span class="o">=</span> <span class="n">notifications</span><span class="o">.</span><span class="n">subscribe</span><span class="p">(</span><span class="n">listener</span><span class="p">,</span> <span class="n">topic</span><span class="o">=</span><span class="s2">&quot;orders.received&quot;</span><span class="p">)</span>  <span class="c1"># exactly this topic</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">unsubscribe</span> <span class="o">=</span> <span class="n">notifications</span><span class="o">.</span><span class="n">subscribe</span><span class="p">(</span><span class="n">listener</span><span class="p">,</span> <span class="n">topic</span><span class="o">=</span><span class="s2">&quot;orders.*&quot;</span><span class="p">)</span>  <span class="c1"># by prefix</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">unsubscribe</span><span class="p">()</span>  <span class="c1"># stop; safe to call twice</span>
+</code></pre></div>
+<p><code>"orders.*"</code> matches <code>orders.received</code> and <code>orders.received.late</code>, but not
+<code>orders</code> itself. A <code>*</code> anywhere other than a trailing <code>.*</code> raises <code>ValueError</code>.</p>
+<p>A listener subscribed this way isn't managed or instrumented: you
+unsubscribe it yourself, and its own run emits no events (the calls it makes
+still record the notification as their <code>cause</code>). Prefer <code>@Subscriber</code> in a
+component.</p>
+<p>See <a href="../examples/"><code>examples/11-notifications/</code></a> for a full runnable project
+built around this.</p>
+<hr />
+<h2 id="the-notification">The Notification<a class="headerlink" href="#the-notification" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>key</code></td>
+<td>The publisher's <code>&lt;namespace&gt;.&lt;name&gt;</code> key, e.g. <code>"task.take-orders"</code>.</td>
+</tr>
+<tr>
+<td><code>topic</code></td>
+<td>e.g. <code>"orders.received"</code>.</td>
+</tr>
+<tr>
+<td><code>payload</code></td>
+<td>Read-only mapping, frozen recursively (nested lists arrive as tuples); <code>{}</code> when none was given.</td>
+</tr>
+<tr>
+<td><code>summary</code></td>
+<td>One human-readable line, or <code>None</code>.</td>
+</tr>
+<tr>
+<td><code>level</code></td>
+<td><code>"info"</code>, <code>"success"</code>, <code>"warning"</code>, or <code>"error"</code>.</td>
+</tr>
+<tr>
+<td><code>subject</code></td>
+<td>Key of the component it's about, or <code>None</code>.</td>
+</tr>
+<tr>
+<td><code>record</code></td>
+<td>Id of the record it's about, or <code>None</code>.</td>
+</tr>
+<tr>
+<td><code>parent</code></td>
+<td><code>call_id</code> of the protocol call in progress when it was published (see <a href="../events/#how-parent-nests">How <code>parent</code> Nests</a>), or <code>None</code>.</td>
+</tr>
+<tr>
+<td><code>ts</code></td>
+<td><code>time.time()</code> when it was published.</td>
+</tr>
+<tr>
+<td><code>id</code></td>
+<td>Unique per publish (<code>uuid4().hex</code>). Logged as the record's <code>notification</code>; see <a href="#ids-and-causes">Ids and Causes</a>.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="delivery">Delivery<a class="headerlink" href="#delivery" title="Permanent link">&para;</a></h2>
+<p>Delivery follows the same contract as <a href="../events/#listeners-run-inline">Events</a>:</p>
+<ul>
+<li><strong>Synchronous, unless declared background.</strong> Every <code>subscribe()</code> listener,
+  and every <code>@Subscriber</code> with the default <code>deliver="sync"</code>, runs inside
+  <code>publish()</code>, in the publisher's thread, before <code>publish()</code> returns. A slow
+  one holds up the publisher — a webhook handler, a mailbox poll — so declare
+  it <code>deliver="background"</code> (below).</li>
+<li><strong>Thread-safe listeners.</strong> Publishers can be on several threads (a
+  service's <code>run()</code>, a stream), so listeners can be called from several
+  threads.</li>
+<li><strong>Exceptions are contained.</strong> If a listener raises, the exception never
+  reaches the publisher or other listeners. A <code>@Subscriber</code>'s failure is its
+  <code>on_notification()</code> call's <code>failed</code> record. A <code>subscribe()</code> listener's is
+  logged as a <code>WARNING</code> (<code>listener of &lt;topic&gt; raised ...</code>), on the
+  subscriber's key when it subscribed through an injected view, and on the
+  publisher's key when it subscribed through <code>context.notifications</code>.</li>
+<li><strong>Listeners run with no current call.</strong> A <code>@Subscriber</code>'s
+  <code>on_notification()</code>, or the first call a <code>subscribe()</code> listener makes, is
+  top-level (<code>parent=None</code>), not a child of the publisher's call. The
+  reaction is linked to what caused it through its <code>cause</code>, the
+  notification's <code>id</code> — see <a href="#ids-and-causes">Ids and Causes</a>.</li>
+<li><strong>A reaction may publish.</strong> A <code>@Subscriber</code> that is also a <code>@Publisher</code>
+  publishes from <code>on_notification()</code>. That publish is delivered right away,
+  before the outer <code>publish()</code> moves on to its next listener. A
+  <code>subscribe()</code> listener isn't inside a call, so it can publish only
+  through the unbound <code>context.notifications</code>. Don't publish a topic you
+  subscribe to.</li>
+</ul>
+<h3 id="background-delivery">Background Delivery<a class="headerlink" href="#background-delivery" title="Permanent link">&para;</a></h3>
+<p>A reaction that calls a model or an external API shouldn't block whatever
+published. Declare it background:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nd">@Subscriber</span><span class="p">(</span><span class="s2">&quot;messages.received&quot;</span><span class="p">,</span> <span class="n">deliver</span><span class="o">=</span><span class="s2">&quot;background&quot;</span><span class="p">)</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="nd">@Component</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="k">class</span><span class="w"> </span><span class="nc">Drafting</span><span class="p">:</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">order_desk</span><span class="p">:</span> <span class="n">OrderDesk</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">order_desk</span> <span class="o">=</span> <span class="n">order_desk</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">on_notification</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">notification</span><span class="p">:</span> <span class="n">Notification</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">order_desk</span><span class="o">.</span><span class="n">invoke</span><span class="p">(</span><span class="n">message_id</span><span class="o">=</span><span class="n">notification</span><span class="o">.</span><span class="n">record</span><span class="p">)</span>  <span class="c1"># tens of seconds</span>
+</code></pre></div>
+<ul>
+<li>Each background subscriber has <strong>its own worker thread and queue</strong>,
+  started when the component starts and stopped when it stops. <code>publish()</code>
+  queues the delivery and returns.</li>
+<li><strong>Publish order is kept</strong> per subscriber. A slow subscriber holds up only
+  itself: a burst of invoices for one never delays another's messages.</li>
+<li>The delivery is the same instrumented <code>on_notification()</code> call, with the
+  same <code>cause</code>, so traces look the same as for a sync subscriber.</li>
+<li><strong>The queue is bounded.</strong> When it is full, <code>publish()</code> blocks until there
+  is room — backpressure, never a silent drop — and the subscriber logs one
+  <code>WARNING</code> per full episode.</li>
+<li><strong>Stopping drains.</strong> Before the component's <code>on_stop()</code> (or a service's
+  <code>stop()</code>), the <code>Context</code> stops queuing, waits for the queue to drain up to
+  <code>drain-timeout</code>, and logs a <code>WARNING</code> with how many deliveries it dropped
+  if it couldn't.</li>
+</ul>
+<p>Both are set under <code>[project.notifications]</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">[project.notifications]</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">queue-size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1000</span><span class="w">     </span><span class="c1"># each background subscriber&#39;s queue bound</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">drain-timeout</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">10</span><span class="w">    </span><span class="c1"># seconds stopping one waits for its queue to drain</span>
+</code></pre></div>
+<hr />
+<h2 id="ids-and-causes">Ids and Causes<a class="headerlink" href="#ids-and-causes" title="Permanent link">&para;</a></h2>
+<p>Every notification has an <code>id</code>, so it can be referred to: a UI can
+deduplicate a stream after reconnecting, and a trace can follow it.</p>
+<p>While a listener runs, the notification is its <em>cause</em>. The first protocol
+call the listener makes — a <code>@Function</code>, an agent's <code>invoke()</code>, a task's
+<code>execute()</code> — records the notification's <code>id</code> as its
+<a href="../events/#the-event"><code>cause</code></a>, with <code>parent=None</code>. Calls nested inside it
+have a <code>parent</code> as usual, so the cause marks the top of the reaction only.</p>
+<p><code>context.trace()</code> follows that link. A notification in a node's
+<code>notifications</code> lists, under <code>triggered</code>, the subtrees of the calls whose
+<code>cause</code> is its <code>id</code> — so the trace of the call that published "a message
+arrived" reaches "an agent drafted an order change", across files:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="p">{</span><span class="s2">&quot;key&quot;</span><span class="p">:</span> <span class="s2">&quot;task.take-orders&quot;</span><span class="p">,</span> <span class="o">...</span><span class="p">,</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a> <span class="s2">&quot;notifications&quot;</span><span class="p">:</span> <span class="p">[</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>     <span class="p">{</span><span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="s2">&quot;9b1f…&quot;</span><span class="p">,</span> <span class="s2">&quot;topic&quot;</span><span class="p">:</span> <span class="s2">&quot;orders.received&quot;</span><span class="p">,</span> <span class="o">...</span><span class="p">,</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>      <span class="s2">&quot;triggered&quot;</span><span class="p">:</span> <span class="p">[{</span><span class="s2">&quot;key&quot;</span><span class="p">:</span> <span class="s2">&quot;function.schedule&quot;</span><span class="p">,</span> <span class="s2">&quot;cause&quot;</span><span class="p">:</span> <span class="s2">&quot;9b1f…&quot;</span><span class="p">,</span> <span class="s2">&quot;parent&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>                     <span class="s2">&quot;children&quot;</span><span class="p">:</span> <span class="p">[</span><span class="o">...</span><span class="p">],</span> <span class="o">...</span><span class="p">}]}],</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a> <span class="s2">&quot;children&quot;</span><span class="p">:</span> <span class="p">[]}</span>
+</code></pre></div>
+<p>A notification published inside a reaction has that reaction's call as its
+<code>parent</code>, so chains continue: message, draft, notification, reply.</p>
+<h3 id="the-whole-story-from-any-call">The Whole Story from Any Call<a class="headerlink" href="#the-whole-story-from-any-call" title="Permanent link">&para;</a></h3>
+<p>A UI often knows only a call deep inside the story: a toast for "a draft was
+created" has the call that published it, which ran inside a listener's
+reaction. <code>context.trace(call_id, root=True)</code> climbs to the call the story
+started from before building the tree. It follows <code>parent</code> links, and across
+a reaction it goes from the listener's call (its <code>cause</code>) to the call that
+published the notification, so the trace of the draft's call starts at the
+call that took the message in:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">trace</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">draft_call</span><span class="p">,</span> <span class="n">root</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">trace</span><span class="p">[</span><span class="s2">&quot;key&quot;</span><span class="p">]</span>  <span class="c1"># &#39;function.take-message&#39;, the call that published &quot;a message arrived&quot;</span>
+</code></pre></div>
+<p>The tree's shape is unchanged; the call you asked about is somewhere inside
+it.</p>
+<p>The climb stops below a long-running call, a Service's <code>run()</code> or a
+Repository's <code>stream()</code>, so the root is the per-item call, never the
+component's whole lifetime (see
+<a href="../service/#one-call-per-inbound-item">One Call per Inbound Item</a>). For the
+same reason, a reaction to a notification published directly in <code>run()</code>,
+with no per-item call around it, is its own root. The climb also stops where
+the records do:</p>
+<ul>
+<li>a call made from an <a href="../events/"><code>Events</code></a> listener has no <code>cause</code>, so the
+  climb can't cross it;</li>
+<li>a notification record dropped by a level threshold, or a call in a file
+  rotated away or skipped by <code>since=</code>, ends the climb at the highest call
+  found. Pass a <code>since</code> early enough for the root, or none.</li>
+</ul>
+<p>For a long-running <a href="../service/">Service</a> — a mailbox poller, a webhook
+receiver — publish from a <code>@Function</code> called once per inbound item, not
+inline in <code>run()</code>, so each item gets a trace of its own: see
+<a href="../service/#one-call-per-inbound-item">One Call per Inbound Item</a>.</p>
+<hr />
+<h2 id="history">History<a class="headerlink" href="#history" title="Permanent link">&para;</a></h2>
+<p>A UI shows a notification as it happens. To see what the business said
+earlier — today, yesterday, before a restart — read the history:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">page</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">notification_history</span><span class="p">(</span><span class="n">summary_only</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="mi">50</span><span class="p">)</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># → [{&quot;id&quot;: &quot;9b1f…&quot;, &quot;key&quot;: &quot;task.take-orders&quot;, &quot;topic&quot;: &quot;orders.received&quot;,</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="c1">#     &quot;level&quot;: &quot;info&quot;, &quot;summary&quot;: &quot;Le Petit: 2 x baguette&quot;,</span>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1">#     &quot;message&quot;: &quot;notified orders.received: Le Petit: 2 x baguette&quot;,</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="c1">#     &quot;subject&quot;: &quot;repository.orders&quot;, &quot;record&quot;: 7, &quot;parent&quot;: &quot;3f9a…&quot;,</span>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="c1">#     &quot;ts&quot;: &quot;2026-11-02T09:14:03.120+01:00&quot;, &quot;cursor&quot;: &quot;1742&quot;}, ...]  newest first</span>
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>
+<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="n">older</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">notification_history</span><span class="p">(</span><span class="n">summary_only</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">before</span><span class="o">=</span><span class="n">page</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">][</span><span class="s2">&quot;cursor&quot;</span><span class="p">])</span>
+</code></pre></div>
+<p><strong>What's kept, and where.</strong> Every notification logged is also written to
+<code>&lt;log-dir&gt;/history/notifications.jsonl</code>, a file that holds nothing else (see
+<a href="../logger/#the-history-directory">Logger</a>). It keeps what a person reads —
+the summary, topic, level, publisher, and what it's about (<code>subject</code>,
+<code>record</code>) — never the payload. Reading it back goes through notifications
+alone, never through event records or log lines, so its cost follows the
+number of notifications, not the size of the logs.</p>
+<p><strong>How long.</strong> As long as rotation lets it: <code>history-max-bytes</code> ×
+(<code>history-backups</code> + 1) of notifications alone (see
+<a href="../logger/#rotation">Rotation</a>). The busiest topic decides how much time
+that covers. With rotation off (the default), it isn't bounded.</p>
+<p><strong>Since when.</strong> History starts when 0.6.0 started writing it. Notifications
+logged before stay in their components' logs, readable with <code>tail_logs()</code>,
+<code>logs()</code> and <code>trace()</code>, but aren't in the history. Nor are any published
+while file logging was off.</p>
+<p><strong>Thresholds.</strong> A notification a <a href="../logger/#levels">level threshold</a> drops
+from its component's log isn't kept in the history either.</p>
+<table>
+<thead>
+<tr>
+<th>Argument</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>topic</code></td>
+<td>A topic filter, as <code>subscribe()</code> takes: exact, <code>"orders.*"</code>, or a tuple of them.</td>
+</tr>
+<tr>
+<td><code>key</code></td>
+<td>Only this publisher's. Any key <code>publish()</code> accepts, including the unbound hub's (<code>"webhooks"</code>), compared as key lookups compare them, in any casing (<code>"Task.TakeOrders"</code> finds <code>"task.take-orders"</code>; see <code>normalize_key</code>). Rows keep the key as published.</td>
+</tr>
+<tr>
+<td><code>level</code></td>
+<td>A notification level, or a tuple of them.</td>
+</tr>
+<tr>
+<td><code>summary_only</code></td>
+<td>Only notifications with a summary — the ones a UI shows people.</td>
+</tr>
+<tr>
+<td><code>before</code></td>
+<td>A row's <code>cursor</code>, for the rows strictly older than it: page with the last row's, with no repeats and no gaps. Or a time (<code>time.time()</code> value or <code>datetime</code>), for the rows strictly earlier.</td>
+</tr>
+<tr>
+<td><code>since</code></td>
+<td>No row older than this time; the read stops there.</td>
+</tr>
+<tr>
+<td><code>limit</code></td>
+<td>1 to 1000 (default 100); anything else raises <code>ValueError</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>The cursor is opaque, and exact whatever the clock does. A time (<code>since</code>, or
+<code>before</code> as a time) is compared with each row's <code>ts</code>, so it is exact barring
+wall-clock steps: an NTP correction shifts it by its size.</p>
+<p>A bad argument raises <code>ValueError</code>, whatever the logging config. With file
+logging off, <code>notification_history()</code> raises <code>LogsUnavailable</code> (a
+<code>ValueError</code>); the text log format is fine, since the history is always
+JSON Lines. With nothing published yet, it returns <code>[]</code>.</p>
+<hr />
+<h2 id="when-not-to-use-it">When Not to Use It<a class="headerlink" href="#when-not-to-use-it" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>To get a result back.</strong> If the publisher needs an answer, it should
+  declare the other component as a dependency and call it. A notification
+  doesn't return anything to its publisher.</li>
+<li><strong>For durable or cross-process messaging.</strong> Nothing is retried or sent
+  beyond the process, and the <a href="#history">history</a> is a record for people to
+  read, not a queue to replay. A subscriber that isn't subscribed yet misses
+  the message. For that, put a broker behind a <code>@Service</code>.</li>
+<li><strong>To observe the framework.</strong> Use <a href="../events/">Events</a> for run state,
+  timings, and failures.</li>
+</ul>
+<p><code>Notifications</code> is per <code>Context</code> too: two <code>Project</code>s in one process never see
+each other's notifications.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../events/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Events">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Events
+              </div>
+            </div>
+          </a>
+        
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.code.copy", "content.code.annotate", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../javascripts/scheme-favicon.js"></script>
+      
+        <script src="../termynal.js"></script>
+      
+    
+  </body>
+</html>
