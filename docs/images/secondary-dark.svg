@@ -1,0 +1,12 @@
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="90" height="90" viewBox="0 0 90 90">
+    <title>odf — ink theme logo</title>
+
+    <!-- rounded black tile -->
+    <rect x="0" y="0" width="90" height="90" rx="20" fill="#000000" />
+    <rect x="0.75" y="0.75" width="88.5" height="88.5" rx="19.25" fill="none" stroke="#333333" stroke-width="1.5" />
+
+    <!-- stacked layers: back layer dimmed, front layer full white -->
+    <rect x="28" y="22" width="44" height="14" rx="5" fill="#ffffff" opacity="0.35" />
+    <rect x="23" y="38" width="44" height="14" rx="5" fill="#ffffff" opacity="0.65" />
+    <rect x="18" y="54" width="44" height="14" rx="5" fill="#ffffff" />
+</svg>

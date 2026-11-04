@@ -256,6 +256,14 @@ def test_reorder():
     assert Reorder(lambda threshold: ["bolts"]).execute() == ["bolts"]
 ```
 
+### Arguments that name a record
+
+`Annotated` metadata that isn't a registered function is left alone. One use
+of that: `Annotated[int, Record(Drafts)]` marks an argument as the key of
+one of `Drafts`'s records. The caller still passes it, and a consumer like
+`odf`'s UI can offer the function as an action on each record. See
+[Repository](repository.md#record-arguments).
+
 ---
 
 ## Full Example

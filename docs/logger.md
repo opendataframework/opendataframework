@@ -104,8 +104,9 @@ one JSON object per line:
 | `source` | every record | `"events"`, `"notifications"`, or `null` for anything else |
 | `message` | every record | Human-readable text |
 | `call`, `parent`, `protocol`, `method`, `state`, `elapsed_ms`, `error` | protocol-call records | The [Event](events.md#the-event)'s fields, with full ids |
-| `topic`, `notification_level`, `subject`, `record`, `parent` | notification records | The [Notification](notifications.md#the-notification)'s fields, without its `payload` |
+| `notification`, `topic`, `notification_level`, `summary`, `subject`, `record`, `parent` | notification records | The [Notification](notifications.md#the-notification)'s fields (its `id` as `notification`), without its `payload` |
 | `fields` | records with user fields | The keyword arguments of a `Logger` call |
+| `parent` | records written during a protocol call | The `call` of the call in progress when a `Logger` line (or any other record) was written. Absent outside any call, e.g. in `__init__` |
 
 The field names are fixed. A namespace never becomes a field name of its own,
 so the schema is the same for every component, custom namespaces included.
@@ -128,6 +129,8 @@ trace = project.context.trace(run["call"])
  "protocol": "PipelineProtocol", "method": "execute", "state": "failed",
  "started": "2026-10-31T10:00:00.120+01:00", "ended": "2026-10-31T10:00:00.124+01:00",
  "elapsed_ms": 4.1, "error": "ValueError('courier unavailable')",
+ "logs": [{"ts": "2026-10-31T10:00:00.121+01:00", "level": "INFO",
+           "message": "shipping", "fields": {"orders": 3}}],
  "notifications": [],
  "children": [
      {"call": "7ceee7cb…", "key": "task.price-orders", "state": "completed", ...,
@@ -139,7 +142,9 @@ trace = project.context.trace(run["call"])
 Each node merges a call's `started` and `completed`/`failed` records, and
 children are ordered by when they started. A call that hasn't ended shows as
 `"running"`. A notification is attached to the call it was published
-during, under `notifications`. The tree is plain, JSON-ready data, so a UI
+during, under `notifications`, and a component's own log lines to the call
+they were written in, under `logs` (each with `ts`, `level`, `message` and
+`fields`). The tree is plain, JSON-ready data, so a UI
 (such as the sibling [`odf`](https://opendataframework.github.io/odf/)
 package's) can draw it as-is.
 
@@ -150,14 +155,51 @@ configured format, never what happens to be on disk:
 * With `format = "json"` (the default), it reads the `.jsonl` files only.
   `.log` files left over from an earlier `text` setup are ignored, so their
   calls aren't found (`KeyError`).
-* With `format = "text"`, it raises `ValueError`: text lines read back as
-  only `ts`, `level` and `message`, with no call structure to rebuild a tree
-  from.
-* With file logging off (no `log_dir`), it raises `ValueError` too.
+* With `format = "text"`, it raises `LogsUnavailable`: text lines read back
+  as only `ts`, `level` and `message`, with no call structure to rebuild a
+  tree from.
+* With file logging off (no `log_dir`), it raises `LogsUnavailable` too.
+
+`LogsUnavailable` (from `opendataframework`) is a `ValueError`, so code that
+catches `ValueError` keeps working; catch it first to tell "this can't be
+read here" from a bad argument. `context.logs()` raises it in the same
+cases. A trace's notifications carry their `summary` as well as their
+`message`.
 
 It can only show records that were kept: with `events = "WARNING"`, only
 failed calls appear, so a failure can still be traced back to its root but
 successful steps are missing.
+
+`trace(call_id)` returns the tree *below* the call. To get the whole story a
+call belongs to, pass `root=True`: it climbs first, through `parent` links
+and across [notification causes](notifications.md#ids-and-causes), and
+returns the tree from the top. It never climbs into a Service's `run()` or a
+Repository's `stream()` (see
+[One Call per Inbound Item](service.md#one-call-per-inbound-item)).
+
+### One call's records
+
+A `Logger` line written inside a protocol call carries that call's id as
+its `parent` — the same field an event record uses for its caller, and a
+notification record for the call it was published during:
+
+```python
+@Task
+class ShipOrders:
+    def __init__(self, logger: Logger) -> None:
+        self.logger = logger
+        logger.info("ready")  # no parent: not inside a call
+
+    def execute(self) -> None:
+        self.logger.info("shipping", orders=3)  # parent = this execute() call
+```
+
+A line written by a function the task calls belongs to the function's call,
+not the task's. `context.logs(call_id)` returns every record of one call
+across files — its own `started`/`completed`, its log lines, its
+notifications, and the start and end of the calls made directly inside it —
+so a logs view can show one run, even while other runs of the same
+component overlap with it. Unlike `trace()`, it doesn't follow nested calls.
 
 To build the same tree from live [Events](events.md) instead, as they
 arrive, use `opendataframework.events.build_trace(events, call_id)`. It takes
@@ -196,11 +238,12 @@ appended as `name=value`:
 2026-10-31 10:00:00.120 INFO     execute() started [call=3f9a1c2e51b04d7c9e8f2a6b3c1d5e70 parent=-]
 2026-10-31 10:00:00.123 INFO     execute() started [call=b71d04aa9c2e4f1d8a3b6c5d7e9f0a1b parent=3f9a1c2e51b04d7c9e8f2a6b3c1d5e70]
 2026-10-31 10:00:00.124 ERROR    execute() failed in 0.2ms: ValueError('courier unavailable') [call=b71d04aa9c2e4f1d8a3b6c5d7e9f0a1b parent=3f9a1c2e51b04d7c9e8f2a6b3c1d5e70]
-2026-10-31 10:00:00.130 INFO     order taken order_id=7 customer='Le Petit'
+2026-10-31 10:00:00.130 INFO     order taken [parent=7ceee7cbd1a04f2e9b8c6d5a4e3f2a10] order_id=7 customer='Le Petit'
 ```
 
-`grep 3f9a1c2e51b04d7c9e8f2a6b3c1d5e70 logs/*.log` then finds a call and everything made directly
-inside it. The text format keeps only `ts`, `level` and `message` when read
+A `Logger` line written inside a call ends with `[parent=<id>]`, before
+its fields. `grep 3f9a1c2e51b04d7c9e8f2a6b3c1d5e70 logs/*.log` then finds a call and
+everything written directly inside it. The text format keeps only `ts`, `level` and `message` when read
 back, and `context.trace()` isn't available. For structure, keep the default.
 
 `opendataframework.logger.render(record)` turns a JSON record into that same
@@ -295,6 +338,67 @@ project.context.tail_logs("service.postgres", lines=100)
 
 Every record has at least `ts`, `level` and `message`. In the text format
 those three are all that come back.
+
+`tail_logs()` reads backwards from the end of the file, and into rotated
+backups only if it needs more, so polling it stays cheap however large the
+file has grown.
+
+Notifications have a history of their own, read with
+`context.notification_history()`: see
+[Notifications — History](notifications.md#history).
+
+### The `history/` directory
+
+Every notification record is also written to
+`<log-dir>/history/notifications.jsonl`, which holds nothing else, each line
+with a sequence number, `seq`. The directory is created on the first
+notification. It is always JSON Lines, whatever `format` says, and a record
+is written there only if it passes its component's threshold. `tail_logs()`,
+`context.logs()` and `context.trace()` never read it, so they never see a
+notification twice.
+
+---
+
+## Rotation
+
+By default a log file grows without limit. Set `max-bytes` to rotate it:
+
+```toml
+[project.logging]
+max-bytes = 10_000_000          # off by default
+backups = 5                     # the default
+history-max-bytes = 20_000_000  # the notification history; defaults to max-bytes
+history-backups = 5             # defaults to backups
+```
+
+Before a record would grow `task.load.jsonl` past `max-bytes`, the file
+becomes `task.load.1.jsonl`, older backups shift up to `task.load.5.jsonl`,
+and the one beyond `backups` is deleted (`.log` files likewise, in the text
+format). A single record larger than `max-bytes` is still written whole.
+
+`tail_logs()`, `context.logs()` and `context.trace()` read the backups as
+well as the current file, so a trace still finds a call that was rotated
+out of the current file — until its backup is deleted. Records rotated
+away are gone: size `max-bytes` and `backups` for how far back you need to
+trace. `context.trace(call_id, since=...)` skips files last written before
+`since` (a `time.time()` value or a `datetime`), so passing a call's start
+time keeps tracing a recent call cheap with many backups.
+
+The notification history (`history/notifications.jsonl`) rotates the same
+way, by `history-max-bytes` and `history-backups`, which default to
+`max-bytes` and `backups`. Size it on its own: the busiest topic decides
+how far back it reaches, so with the component sizes a rare notice would
+rotate out at the pace of the noisiest one. With neither `max-bytes` nor
+`history-max-bytes` set, nothing rotates; `history-max-bytes` alone rotates
+only the history. They are flat keys rather than a `[project.logging.history]`
+table, which would be a level table for a namespace named `history`.
+
+!!! warning "One process per log directory"
+    Rotation is coordinated within one process. Two processes writing the
+    same log directory, each rotating on its own, would clobber each other's
+    backups — give each its own `log-dir`. Reading the notification
+    history back while it rotates is POSIX-only: on Windows a rotation fails
+    while a reader has the file open.
 
 !!! tip "Seeing it in practice"
     The sibling [`odf`](https://opendataframework.github.io/odf/) package's

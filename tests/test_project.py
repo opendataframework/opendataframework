@@ -254,3 +254,11 @@ def test_from_dict_rejects_an_unknown_level_name():
 def test_from_dict_passes_the_log_format_to_the_context():
     project = Project.from_dict({"project": {"logging": {"format": "text"}}})
     assert project.context._log_manager._format == "text"
+
+
+def test_from_dict_passes_project_notifications_to_the_context():
+    config = {"project": {"notifications": {"queue-size": 50, "drain-timeout": 2.5}}}
+    notifications = Project.from_dict(config).context.notifications
+    assert (notifications._queue_size, notifications._drain_timeout) == (50, 2.5)
+    with pytest.raises(ValueError, match="queue-size"):
+        Project.from_dict({"project": {"notifications": {"queue-size": 0}}})

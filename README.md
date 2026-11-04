@@ -268,7 +268,7 @@ class Postgres: ...
 
 The base class underlying every framework decorator — `Entity`,
 `Component`, `Service`, `Task`, `Pipeline`, `Agent`, `Function`,
-`Repository`, and `Layer` are all `Namespace` subclasses, each with its own independent name → class
+`Repository`, `Layer`, `Subscriber`, and `Publisher` are all `Namespace` subclasses, each with its own independent name → class
 mapping. A framework extension point, not something end users subclass
 directly. See
 [Namespace](https://opendataframework.github.io/opendataframework/namespace/).
@@ -294,7 +294,9 @@ other dependency — writes land in that component's own log file with no
 name argument needed. Logs are structured: one JSON record per line by
 default, keyword arguments become fields, and every protocol call the
 framework makes is logged with its call and parent ids, so a run can be
-traced across files.
+traced across files. Files can rotate by size (`max-bytes` and `backups`
+under `[project.logging]`); see
+[Logger](https://opendataframework.github.io/opendataframework/logger/).
 
 ```python
 @Task
@@ -328,9 +330,12 @@ class FailureAlerts:
 
 Lets a component announce that something happened — a file arrived, an
 order came in — so others can react without the publisher knowing who
-they are. Never emitted by the framework itself.
+they are. Never emitted by the framework itself. A publisher declares the
+topics it publishes, and a subscriber the topics it reacts to; each
+reaction is its own traced call.
 
 ```python
+@Publisher("orders.received")
 @Task
 class TakeOrders:
     def __init__(self, notifications: Notifications):
@@ -338,6 +343,13 @@ class TakeOrders:
 
     def execute(self) -> None:
         self.notifications.publish("orders.received", {"id": 7}, summary="Le Petit: 2 x baguette")
+
+
+@Subscriber("orders.*")  # deliver="background" for a slow reaction
+@Component
+class Kitchen:
+    def on_notification(self, notification: Notification) -> None:
+        print("cooking order", notification.payload["id"])
 ```
 
 ## Context

@@ -31,8 +31,8 @@ nav:
 theme:
   name: material
   custom_dir: overrides
-  logo: images/light.svg
-  favicon: images/light.svg
+  logo: images/secondary-light.svg
+  favicon: images/secondary-light.svg
   font: false
   palette:
     - media: "(prefers-color-scheme: light)"

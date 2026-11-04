@@ -20,6 +20,12 @@ A view says nothing about the content itself, though. A repository whose
 view points at content (``ImageView``/``VideoView``/``AudioView``/
 ``DocumentView``) may separately implement ``ContentMetadataProtocol`` to
 declare, per record, what that content is called and which format it's in.
+
+A repository whose records read as messages may also implement
+``ConversationProtocol`` to say how they fall into threads. That's declared
+beside the view, not as one, like ``ReplayProtocol``: the repository still
+picks exactly one view, and a conversation may merge its records with
+another repository's into the same threads.
 """
 
 from dataclasses import dataclass
@@ -250,4 +256,54 @@ class ContentMetadataProtocol(Protocol):
 
     def content_metadata(self, entity: object) -> ContentMetadata:
         """Return the ``ContentMetadata`` describing the given record's content."""
+        ...
+
+
+@dataclass
+class Conversation:
+    """Records read as messages in threads, beside the repository's data view.
+
+    Every attribute but ``channel`` names an entity field by its role in the
+    conversation. Nothing here checks the names against the entity; the
+    consumer does.
+
+    Attributes:
+        channel: Repositories naming the same channel merge into one, their
+            records in the same threads.
+        thread: The field whose value is the thread a record is in. A
+            record whose value is ``None`` isn't in any thread.
+        time: The field records are ordered by.
+        text: The field shown as the record's text.
+        direction: A field holding ``"in"`` or ``"out"``, the side a message
+            is on. ``None``: the records aren't messages but cards, each
+            shown with the functions that take it (see
+            ``opendataframework.repository.Record``).
+        sender: The field naming who sent it. ``None``: not shown.
+    """
+
+    channel: str
+    thread: str
+    time: str
+    text: str
+    direction: str | None = None
+    sender: str | None = None
+
+
+@runtime_checkable
+class ConversationProtocol(Protocol):
+    """Capability interface for a repository's optional conversation declaration.
+
+    Independent of ``DataViewProtocol``: the repository keeps its one view,
+    and ``conversation()`` separately declares how its records read as
+    messages in threads, merged with other repositories naming the same
+    ``channel``. Detected structurally via
+    ``isinstance(instance, ConversationProtocol)`` and called on demand by
+    whatever's inspecting the repository, mirroring ``DataViewProtocol``/
+    ``ReplayProtocol``/``ContentMetadataProtocol`` above. (Today, the sibling
+    ``odf`` package's UI is what shows these as chat threads.) A repository
+    with no ``conversation()`` declares nothing.
+    """
+
+    def conversation(self) -> Conversation:
+        """Return how this repository's records read as a conversation."""
         ...

@@ -7,8 +7,22 @@ component might draft an order change, and a UI might show a toast. Each
 message is a `Notification`: a topic, a payload, and an optional
 human-readable summary.
 
-`Notifications` is the hub, one per `Context`. A component publishes; any
-callable that takes a `Notification` can subscribe.
+`Notifications` is the hub, one per `Context`. A component declared a
+`@Publisher` publishes; a component declared a `@Subscriber` reacts, and
+the framework subscribes it while it runs and traces every reaction back to
+the notification that caused it.
+
+```python
+@Publisher("messages.received")
+@Service
+class Mailbox: ...  # publishes, from run()
+
+
+@Subscriber("messages.received", deliver="background")
+@Component
+class Drafting:
+    def on_notification(self, notification: Notification) -> None: ...
+```
 
 ---
 
@@ -42,15 +56,17 @@ its `parent`, so a consumer can relate the two. For example, "published during
 
 ## Publishing
 
-Declare `notifications: Notifications` in a constructor, or in a
-[Function](function.md)'s signature. Like [Logger](logger.md), it is
+Declare the class a `@Publisher` of the topics it publishes, and
+`notifications: Notifications` in its constructor (or in a
+[Function](function.md)'s signature). Like [Logger](logger.md), it is
 special-cased: each consumer receives a view **bound to its own key**, so
 `publish()` needs no key:
 
 ```python
-from opendataframework import Notifications, Task
+from opendataframework import Notifications, Publisher, Task
 
 
+@Publisher("orders.received")
 @Task
 class TakeOrders:
     def __init__(self, inbox: Inbox, orders: Orders, notifications: Notifications) -> None:
@@ -73,26 +89,61 @@ class TakeOrders:
 `publish()` delivers the notification to every matching subscriber, writes a
 record to the publisher's log, and returns the `Notification`. The record's
 `message` is `notified <topic>: <summary>`, and it carries `topic`,
-`notification_level`, `subject`, `record` and `parent` (the call it was
+`notification_level`, `summary`, `subject`, `record` and `parent` (the call it was
 published during) as fields, but never the `payload` (see
 [Log Format](logger.md#log-format)). It is written at the log level matching
 the notification's `level`: `info` and `success` as `INFO`, `warning` as
 `WARNING`, `error` as `ERROR`. Set `[project.logging] notifications = ...` to
-choose which are kept (see [Levels](logger.md#levels)).
+choose which are kept (see [Levels](logger.md#levels)). The same record is
+also kept in the notification [history](#history).
 
 | Argument | Meaning |
 |---|---|
 | `topic` | Dotted name of what happened, e.g. `"orders.received"`. Non-empty, with no `*`. |
-| `payload` | Data for subscribers. Keep it JSON-serialisable, so a UI can show it. Copied, and delivered read-only. |
+| `payload` | Data for subscribers. Keep it JSON-serialisable, so a UI can show it. Its containers are copied and delivered read-only all the way down: nested mappings arrive as read-only mappings, lists and tuples as tuples, sets as frozensets. Other values are passed as they are, never copied. |
 | `summary` | One human-readable line. A UI shows only notifications that have one. |
 | `level` | `"info"` (the default), `"success"`, `"warning"`, or `"error"`. Anything else raises `ValueError`. |
 | `subject` | The component it's about: a class or function, resolved to its key, or a key string such as `"repository.orders"`. |
 | `record` | Id of the record it's about, within `subject`. |
-| `key` | The publisher's key. Filled in by an injected view; required on `context.notifications`. |
+| `key` | The publisher's key. Filled in by an injected view; required on `context.notifications`, where it names a log file, so it can't be empty, contain `/` or `\`, start with `.`, or pass 200 bytes (`ValueError`, before anything is logged or delivered). |
+
+### `@Publisher` and the Publishing Rules
+
+`@Publisher(*topics)` goes on top of the class's execution type
+(`@Component`, `@Service`, `@Task`, `@Agent`, ...) or on top of
+`@Function`, the way a [layer](layer.md) does. Each topic is exact, or
+`"x.*"` to allow every topic under `x`. It has no protocol method: publishing
+is started by your own code, at moments only it knows, so the framework has
+nothing to call. What it does is make three rules hold for an injected view:
+
+1. **Only a `@Publisher` publishes.** Publishing without one raises
+   `TypeError`, so the framework knows every publisher: `context.publishers()`
+   lists them, and a UI can draw who publishes what before anything has been
+   published.
+2. **Only declared topics.** Publishing a topic the `@Publisher` doesn't
+   declare raises `ValueError`.
+3. **Only inside a protocol call.** Publishing with no call in progress raises
+   `RuntimeError`, because the notification would have no `parent` and
+   couldn't be traced. Publish from `execute()`, `run()`, `on_start()`,
+   `on_notification()`, `invoke()`, a `@Function` call, ... never from
+   `__init__` or from a thread you started yourself.
+
+```python
+context.publishers()
+# [{"key": "task.take-orders", "topics": ["orders.received"]}]
+```
+
+`Publisher` is a [namespace](namespace.md), like a [layer](layer.md):
+`Publisher.items()` lists every publisher by name, and `Publisher.of(target)`
+returns what one declares (or `None`). Nothing is written onto your class or
+function, and a subclass of a publisher isn't one. It registers by name, so
+a publishing class and a publishing function with the same name clash —
+give one a name: `@Publisher("orders.priced", name="price-function")`.
 
 Code that holds the `Context` (a script, a test, the sibling
 [`odf`](https://opendataframework.github.io/odf/) package's UI server) uses the
-unbound hub, `context.notifications`, and passes the key itself:
+unbound hub, `context.notifications`, and passes the key itself. The unbound
+hub is exempt from all three rules:
 
 ```python
 project.context.notifications.publish("orders.imported", key="task.import-orders")
@@ -107,6 +158,99 @@ string instead.
 
 ## Subscribing
 
+### `@Subscriber`
+
+A component reacts to notifications by declaring itself a `@Subscriber`
+and defining `on_notification()` (`SubscriberProtocol`):
+
+```python
+from opendataframework import Component, Notification, Subscriber
+
+
+@Subscriber("orders.received")
+@Component
+class Kitchen:
+    def __init__(self, bakery: Bakery) -> None:
+        self.bakery = bakery
+
+    def on_notification(self, notification: Notification) -> None:
+        self.bakery.schedule(order_id=notification.record)
+```
+
+`@Subscriber(*topics, deliver="sync")` goes on top of the execution type,
+like `@Publisher`. Topics are filters, as below; a notification matching
+several is delivered once. A class without `on_notification()`, or with an
+`async` one, raises `TypeError`.
+
+* **Managed.** The `Context` subscribes `on_notification()` right after the
+  component starts (after its `on_start()`, or a service's `setup()`) and
+  unsubscribes it right before it stops. A component never receives a
+  notification before it started or after it stopped, and a service stopped
+  with `context.stop(key)` receives nothing until it starts again. The flip
+  side: what was published before the component started — during an
+  earlier component's `on_start()`, say — it doesn't see.
+* **Instrumented.** Each delivery is a protocol call, reported to
+  [Events](events.md) as `SubscriberProtocol` / `on_notification`, written to
+  the component's log, and linked to the notification by its `cause` (see
+  [Ids and Causes](#ids-and-causes)). If it raises, the call's `failed`
+  record says so; the exception never reaches the publisher.
+* **Sync or background.** With `deliver="sync"` (the default),
+  `on_notification()` runs inside `publish()`, in the publisher's thread. With
+  `deliver="background"`, `publish()` only queues the delivery and returns;
+  see [Background Delivery](#background-delivery).
+* **Visible.** `context.subscribers()` lists every subscriber:
+
+  ```python
+  context.subscribers()
+  # [{"key": "component.kitchen", "topics": ["orders.received"], "deliver": "sync"}]
+  ```
+
+  Like `Publisher`, `Subscriber` is a namespace: `Subscriber.items()` lists
+  every subscriber class, and `Subscriber.of(Kitchen)` returns its
+  `Subscription(topics, deliver)`. The declaration is kept by the namespace,
+  not written onto the class, so a subclass of a subscriber isn't one.
+
+Keep **one reaction per component**. Two reactions to different topics are
+two subscribers, each with its own node in a topology, its own delivery
+mode and its own trace. What they share (state, a model client, an order
+desk) belongs in a plain component they both depend on, not in a
+subscriber that branches on `notification.topic`:
+
+```python
+@Component
+class OrderDesk:
+    def draft_change(self, message_id: str) -> None: ...
+    def file_invoice(self, invoice_id: str) -> None: ...
+
+
+@Subscriber("messages.received")
+@Component
+class MessageDrafter:
+    def __init__(self, desk: OrderDesk) -> None:
+        self.desk = desk
+
+    def on_notification(self, notification: Notification) -> None:
+        self.desk.draft_change(notification.record)
+
+
+@Subscriber("invoices.*")
+@Component
+class InvoiceFiler:
+    def __init__(self, desk: OrderDesk) -> None:
+        self.desk = desk
+
+    def on_notification(self, notification: Notification) -> None:
+        self.desk.file_invoice(notification.record)
+```
+
+A subscriber that also publishes is a `@Publisher` too; it publishes from
+`on_notification()`, which is a protocol call, so the new notification's
+`parent` is the reaction and chains continue.
+
+### `subscribe()`
+
+For code outside components, and for dynamic cases, subscribe directly:
+
 ```python
 unsubscribe = notifications.subscribe(listener)  # every notification
 unsubscribe = notifications.subscribe(listener, topic="orders.received")  # exactly this topic
@@ -117,32 +261,10 @@ unsubscribe()  # stop; safe to call twice
 `"orders.*"` matches `orders.received` and `orders.received.late`, but not
 `orders` itself. A `*` anywhere other than a trailing `.*` raises `ValueError`.
 
-A component subscribes in its constructor, through the same injected view,
-and unsubscribes in `on_stop()`:
-
-```python
-from collections.abc import Callable
-from typing import Annotated
-
-from opendataframework import Component, Notification, Notifications
-
-
-@Component
-class Kitchen:
-    def __init__(
-        self,
-        notifications: Notifications,
-        schedule: Annotated[Callable[..., str], schedule_bake],
-    ) -> None:
-        self.schedule = schedule
-        self._unsubscribe = notifications.subscribe(self.on_order, topic="orders.received")
-
-    def on_order(self, notification: Notification) -> None:
-        self.schedule(order_id=notification.record)
-
-    def on_stop(self) -> None:
-        self._unsubscribe()
-```
+A listener subscribed this way isn't managed or instrumented: you
+unsubscribe it yourself, and its own run emits no events (the calls it makes
+still record the notification as their `cause`). Prefer `@Subscriber` in a
+component.
 
 See [`examples/11-notifications/`](examples.md) for a full runnable project
 built around this.
@@ -155,13 +277,14 @@ built around this.
 |---|---|
 | `key` | The publisher's `<namespace>.<name>` key, e.g. `"task.take-orders"`. |
 | `topic` | e.g. `"orders.received"`. |
-| `payload` | Read-only mapping; `{}` when none was given. |
+| `payload` | Read-only mapping, frozen recursively (nested lists arrive as tuples); `{}` when none was given. |
 | `summary` | One human-readable line, or `None`. |
 | `level` | `"info"`, `"success"`, `"warning"`, or `"error"`. |
 | `subject` | Key of the component it's about, or `None`. |
 | `record` | Id of the record it's about, or `None`. |
 | `parent` | `call_id` of the protocol call in progress when it was published (see [How `parent` Nests](events.md#how-parent-nests)), or `None`. |
 | `ts` | `time.time()` when it was published. |
+| `id` | Unique per publish (`uuid4().hex`). Logged as the record's `notification`; see [Ids and Causes](#ids-and-causes). |
 
 ---
 
@@ -169,25 +292,195 @@ built around this.
 
 Delivery follows the same contract as [Events](events.md#listeners-run-inline):
 
-* **Synchronous.** Every listener runs inside `publish()`, in the
-  publisher's thread, before `publish()` returns. A slow listener holds up
-  the publisher, so hand slow work to a queue drained by a
-  [Service](service.md).
+* **Synchronous, unless declared background.** Every `subscribe()` listener,
+  and every `@Subscriber` with the default `deliver="sync"`, runs inside
+  `publish()`, in the publisher's thread, before `publish()` returns. A slow
+  one holds up the publisher — a webhook handler, a mailbox poll — so declare
+  it `deliver="background"` (below).
 * **Thread-safe listeners.** Publishers can be on several threads (a
   service's `run()`, a stream), so listeners can be called from several
   threads.
-* **Exceptions are contained.** If a listener raises, the exception is logged
-  as a `WARNING` (`listener of <topic> raised ...`) and never reaches the
-  publisher or other listeners. It is logged on the subscriber's key when the
-  listener subscribed through an injected view, and on the publisher's key
-  when it subscribed through `context.notifications`.
-* **Listeners run with no current call.** A call a listener makes, like
-  `Kitchen`'s `schedule()` above, is top-level (`parent=None`), not a child of
-  the publisher's call. The reaction is linked to what caused it through
-  the notification's own `parent`, not through nesting.
-* **A listener may publish.** That publish is delivered right away, before
-  the outer `publish()` moves on to its next listener. Don't have a listener
-  publish a topic it subscribes to.
+* **Exceptions are contained.** If a listener raises, the exception never
+  reaches the publisher or other listeners. A `@Subscriber`'s failure is its
+  `on_notification()` call's `failed` record. A `subscribe()` listener's is
+  logged as a `WARNING` (`listener of <topic> raised ...`), on the
+  subscriber's key when it subscribed through an injected view, and on the
+  publisher's key when it subscribed through `context.notifications`.
+* **Listeners run with no current call.** A `@Subscriber`'s
+  `on_notification()`, or the first call a `subscribe()` listener makes, is
+  top-level (`parent=None`), not a child of the publisher's call. The
+  reaction is linked to what caused it through its `cause`, the
+  notification's `id` — see [Ids and Causes](#ids-and-causes).
+* **A reaction may publish.** A `@Subscriber` that is also a `@Publisher`
+  publishes from `on_notification()`. That publish is delivered right away,
+  before the outer `publish()` moves on to its next listener. A
+  `subscribe()` listener isn't inside a call, so it can publish only
+  through the unbound `context.notifications`. Don't publish a topic you
+  subscribe to.
+
+### Background Delivery
+
+A reaction that calls a model or an external API shouldn't block whatever
+published. Declare it background:
+
+```python
+@Subscriber("messages.received", deliver="background")
+@Component
+class Drafting:
+    def __init__(self, order_desk: OrderDesk) -> None:
+        self.order_desk = order_desk
+
+    def on_notification(self, notification: Notification) -> None:
+        self.order_desk.invoke(message_id=notification.record)  # tens of seconds
+```
+
+* Each background subscriber has **its own worker thread and queue**,
+  started when the component starts and stopped when it stops. `publish()`
+  queues the delivery and returns.
+* **Publish order is kept** per subscriber. A slow subscriber holds up only
+  itself: a burst of invoices for one never delays another's messages.
+* The delivery is the same instrumented `on_notification()` call, with the
+  same `cause`, so traces look the same as for a sync subscriber.
+* **The queue is bounded.** When it is full, `publish()` blocks until there
+  is room — backpressure, never a silent drop — and the subscriber logs one
+  `WARNING` per full episode.
+* **Stopping drains.** Before the component's `on_stop()` (or a service's
+  `stop()`), the `Context` stops queuing, waits for the queue to drain up to
+  `drain-timeout`, and logs a `WARNING` with how many deliveries it dropped
+  if it couldn't.
+
+Both are set under `[project.notifications]`:
+
+```toml
+[project.notifications]
+queue-size = 1000     # each background subscriber's queue bound
+drain-timeout = 10    # seconds stopping one waits for its queue to drain
+```
+
+---
+
+## Ids and Causes
+
+Every notification has an `id`, so it can be referred to: a UI can
+deduplicate a stream after reconnecting, and a trace can follow it.
+
+While a listener runs, the notification is its *cause*. The first protocol
+call the listener makes — a `@Function`, an agent's `invoke()`, a task's
+`execute()` — records the notification's `id` as its
+[`cause`](events.md#the-event), with `parent=None`. Calls nested inside it
+have a `parent` as usual, so the cause marks the top of the reaction only.
+
+`context.trace()` follows that link. A notification in a node's
+`notifications` lists, under `triggered`, the subtrees of the calls whose
+`cause` is its `id` — so the trace of the call that published "a message
+arrived" reaches "an agent drafted an order change", across files:
+
+```python
+{"key": "task.take-orders", ...,
+ "notifications": [
+     {"id": "9b1f…", "topic": "orders.received", ...,
+      "triggered": [{"key": "function.schedule", "cause": "9b1f…", "parent": None,
+                     "children": [...], ...}]}],
+ "children": []}
+```
+
+A notification published inside a reaction has that reaction's call as its
+`parent`, so chains continue: message, draft, notification, reply.
+
+### The Whole Story from Any Call
+
+A UI often knows only a call deep inside the story: a toast for "a draft was
+created" has the call that published it, which ran inside a listener's
+reaction. `context.trace(call_id, root=True)` climbs to the call the story
+started from before building the tree. It follows `parent` links, and across
+a reaction it goes from the listener's call (its `cause`) to the call that
+published the notification, so the trace of the draft's call starts at the
+call that took the message in:
+
+```python
+trace = project.context.trace(draft_call, root=True)
+trace["key"]  # 'function.take-message', the call that published "a message arrived"
+```
+
+The tree's shape is unchanged; the call you asked about is somewhere inside
+it.
+
+The climb stops below a long-running call, a Service's `run()` or a
+Repository's `stream()`, so the root is the per-item call, never the
+component's whole lifetime (see
+[One Call per Inbound Item](service.md#one-call-per-inbound-item)). For the
+same reason, a reaction to a notification published directly in `run()`,
+with no per-item call around it, is its own root. The climb also stops where
+the records do:
+
+* a call made from an [`Events`](events.md) listener has no `cause`, so the
+  climb can't cross it;
+* a notification record dropped by a level threshold, or a call in a file
+  rotated away or skipped by `since=`, ends the climb at the highest call
+  found. Pass a `since` early enough for the root, or none.
+
+For a long-running [Service](service.md) — a mailbox poller, a webhook
+receiver — publish from a `@Function` called once per inbound item, not
+inline in `run()`, so each item gets a trace of its own: see
+[One Call per Inbound Item](service.md#one-call-per-inbound-item).
+
+---
+
+## History
+
+A UI shows a notification as it happens. To see what the business said
+earlier — today, yesterday, before a restart — read the history:
+
+```python
+page = project.context.notification_history(summary_only=True, limit=50)
+# → [{"id": "9b1f…", "key": "task.take-orders", "topic": "orders.received",
+#     "level": "info", "summary": "Le Petit: 2 x baguette",
+#     "message": "notified orders.received: Le Petit: 2 x baguette",
+#     "subject": "repository.orders", "record": 7, "parent": "3f9a…",
+#     "ts": "2026-11-02T09:14:03.120+01:00", "cursor": "1742"}, ...]  newest first
+
+older = project.context.notification_history(summary_only=True, limit=50, before=page[-1]["cursor"])
+```
+
+**What's kept, and where.** Every notification logged is also written to
+`<log-dir>/history/notifications.jsonl`, a file that holds nothing else (see
+[Logger](logger.md#the-history-directory)). It keeps what a person reads —
+the summary, topic, level, publisher, and what it's about (`subject`,
+`record`) — never the payload. Reading it back goes through notifications
+alone, never through event records or log lines, so its cost follows the
+number of notifications, not the size of the logs.
+
+**How long.** As long as rotation lets it: `history-max-bytes` ×
+(`history-backups` + 1) of notifications alone (see
+[Rotation](logger.md#rotation)). The busiest topic decides how much time
+that covers. With rotation off (the default), it isn't bounded.
+
+**Since when.** History starts when 0.6.0 started writing it. Notifications
+logged before stay in their components' logs, readable with `tail_logs()`,
+`logs()` and `trace()`, but aren't in the history. Nor are any published
+while file logging was off.
+
+**Thresholds.** A notification a [level threshold](logger.md#levels) drops
+from its component's log isn't kept in the history either.
+
+| Argument | Meaning |
+|---|---|
+| `topic` | A topic filter, as `subscribe()` takes: exact, `"orders.*"`, or a tuple of them. |
+| `key` | Only this publisher's. Any key `publish()` accepts, including the unbound hub's (`"webhooks"`), compared as key lookups compare them, in any casing (`"Task.TakeOrders"` finds `"task.take-orders"`; see `normalize_key`). Rows keep the key as published. |
+| `level` | A notification level, or a tuple of them. |
+| `summary_only` | Only notifications with a summary — the ones a UI shows people. |
+| `before` | A row's `cursor`, for the rows strictly older than it: page with the last row's, with no repeats and no gaps. Or a time (`time.time()` value or `datetime`), for the rows strictly earlier. |
+| `since` | No row older than this time; the read stops there. |
+| `limit` | 1 to 1000 (default 100); anything else raises `ValueError`. |
+
+The cursor is opaque, and exact whatever the clock does. A time (`since`, or
+`before` as a time) is compared with each row's `ts`, so it is exact barring
+wall-clock steps: an NTP correction shifts it by its size.
+
+A bad argument raises `ValueError`, whatever the logging config. With file
+logging off, `notification_history()` raises `LogsUnavailable` (a
+`ValueError`); the text log format is fine, since the history is always
+JSON Lines. With nothing published yet, it returns `[]`.
 
 ---
 
@@ -196,9 +489,10 @@ Delivery follows the same contract as [Events](events.md#listeners-run-inline):
 * **To get a result back.** If the publisher needs an answer, it should
   declare the other component as a dependency and call it. A notification
   doesn't return anything to its publisher.
-* **For durable or cross-process messaging.** Nothing is stored, retried, or
-  sent beyond the process. A subscriber that isn't subscribed yet misses the
-  message. For that, put a broker behind a `@Service`.
+* **For durable or cross-process messaging.** Nothing is retried or sent
+  beyond the process, and the [history](#history) is a record for people to
+  read, not a queue to replay. A subscriber that isn't subscribed yet misses
+  the message. For that, put a broker behind a `@Service`.
 * **To observe the framework.** Use [Events](events.md) for run state,
   timings, and failures.
 

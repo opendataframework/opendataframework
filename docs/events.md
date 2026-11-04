@@ -17,6 +17,16 @@ It is the classic Observer pattern. `Events` is the subject, one per
 `Context`; a listener is any callable that takes an `Event`; listeners
 `subscribe`, and the framework notifies them around each protocol call.
 
+!!! note "Events are for observing the framework"
+    Events are a tooling API: what a UI, a monitor or a test uses to watch
+    how your code runs. They aren't how your components react to each
+    other. An Events listener isn't a protocol call, so it is never traced:
+    it has no call id, its log lines have no `parent`, the calls it makes are
+    unlinked top-level calls, and it can't publish through an injected
+    `notifications` (that needs a call in progress). To react to something
+    in your domain, publish a [notification](notifications.md) from a
+    `@Publisher` and react to it in a `@Subscriber`.
+
 ---
 
 ## Declaring it
@@ -81,6 +91,7 @@ have an `execute()`, but `protocol=TaskProtocol` receives only task calls.
 | `ts` | `time.time()` when the event was emitted. |
 | `elapsed_ms` | Duration, on `completed`/`failed` only. |
 | `error` | `repr()` of the exception, on `failed` only. |
+| `cause` | `id` of the [Notification](notifications.md#ids-and-causes) whose listener made this call, on a top-level call started inside a notification listener; `None` otherwise. Written to the record only when set. |
 
 To react to one kind of call, subscribe with `protocol=` and check the rest:
 
@@ -110,6 +121,7 @@ emits events. Nothing else does.**
 | [`TaskProtocol`](task.md) | `execute` | Yes |
 | [`PipelineProtocol`](pipeline.md) | `execute` | Yes |
 | [`AgentProtocol`](agent.md) | `invoke` | Yes |
+| [`SubscriberProtocol`](notifications.md#subscriber) | `on_notification` | Yes, once per delivery to a `@Subscriber`, with the notification's `id` as its `cause` |
 | [`FunctionProtocol`](function.md) | `__call__` | Yes, for calls made through the `Context` (see below) |
 | `OpenStreamProtocol` / `StreamableProtocol` / `CloseStreamProtocol` | `open_stream` / `stream` / `close_stream` | Yes, once per stream start (never per item) |
 | `WritableProtocol` | `save`, `delete` | Not yet, and still undecided. Writes change state and may be worth reacting to, but the framework never calls them itself. |
@@ -182,6 +194,11 @@ started:
 * A call a listener makes is top-level too, because nothing called it. A
   cleanup task a listener starts when it sees a failure isn't a child of the
   call that failed.
+* A call a [notification](notifications.md#ids-and-causes) listener makes
+  is top-level too, but records the notification's `id` as its `cause`.
+  Only the top of the reaction does: a call nested inside it has a `parent`
+  instead. Causation is a separate link, not a fake parent. An Events
+  listener's calls never get a `cause`.
 
 ---
 

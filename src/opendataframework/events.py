@@ -25,40 +25,12 @@ import threading
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager
-from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import uuid4
 
 from opendataframework.function import FunctionProtocol
-from opendataframework.logger import LogManager
-
-# The ``call_id`` of the protocol call in progress in this thread (or task).
-# A ``ContextVar`` holds a separate value per thread, so it is not shared state.
-_current_call: ContextVar[str | None] = ContextVar("opendataframework_call", default=None)
-
-
-def _current_call_id() -> str | None:
-    """Return the ``call_id`` of the protocol call in progress in this thread, if any.
-
-    Shared with ``opendataframework.notifications``, which records it as a
-    notification's ``parent``.
-    """
-    return _current_call.get()
-
-
-@contextmanager
-def _no_current_call() -> Iterator[None]:
-    """Run the block with no current call, so a call made inside it is top-level.
-
-    Used while listeners run — ``Events``' and ``Notifications``' alike — so a
-    call a listener makes is not a child of the call that triggered it.
-    """
-    token = _current_call.set(None)
-    try:
-        yield
-    finally:
-        _current_call.reset(token)
+from opendataframework.logger import LogManager, _current_call, _current_cause, _no_current_call
 
 
 @dataclass(frozen=True)
@@ -81,6 +53,11 @@ class Event:
         ts: ``time.time()`` when the event was emitted.
         elapsed_ms: Duration of the call, on ``completed``/``failed`` only.
         error: ``repr()`` of the exception raised, on ``failed`` only.
+        cause: ``Notification.id`` of the notification whose listener made
+            this call — set only on a top-level call (``parent`` is
+            ``None``) started inside a notification listener. A call nested
+            inside it has a ``parent`` instead: the cause belongs to the top
+            of the reaction. ``None`` otherwise.
     """
 
     key: str
@@ -92,6 +69,7 @@ class Event:
     ts: float
     elapsed_ms: float | None = None
     error: str | None = None
+    cause: str | None = None
 
 
 class Events:
@@ -161,7 +139,9 @@ class Events:
 
         Used by the framework at each place it calls a protocol method; not
         meant for user code. While the call runs, it is the current call, so
-        calls made inside it get it as their ``parent``. An exception from
+        calls made inside it get it as their ``parent``. A top-level call
+        started inside a notification's listener records that notification's
+        id as its ``cause``. An exception from
         the call is re-raised unchanged. Each event is also written to
         ``key``'s log, as a record with ``message`` ``"<method>() started"``
         and the event's ``call``/``parent``/``protocol``/... as fields.
@@ -172,7 +152,10 @@ class Events:
         """
         call_id = uuid4().hex
         parent = _current_call.get()
-        self._emit(Event(key, protocol, method, "started", call_id, parent, time.time()))
+        cause = _current_cause.get() if parent is None else None
+        self._emit(
+            Event(key, protocol, method, "started", call_id, parent, time.time(), cause=cause)
+        )
         token = _current_call.set(call_id)
         start = time.monotonic()
         try:
@@ -190,13 +173,24 @@ class Events:
                     time.time(),
                     elapsed_ms,
                     repr(exc),
+                    cause,
                 )
             )
             raise
         else:
             elapsed_ms = (time.monotonic() - start) * 1000
             self._emit(
-                Event(key, protocol, method, "completed", call_id, parent, time.time(), elapsed_ms)
+                Event(
+                    key,
+                    protocol,
+                    method,
+                    "completed",
+                    call_id,
+                    parent,
+                    time.time(),
+                    elapsed_ms,
+                    cause=cause,
+                )
             )
         finally:
             _current_call.reset(token)
@@ -221,6 +215,8 @@ class Events:
             extra["elapsed_ms"] = round(event.elapsed_ms, 3)
         if event.error is not None:
             extra["error"] = event.error
+        if event.cause is not None:
+            extra["cause"] = event.cause
         level = "ERROR" if event.state == "failed" else "INFO"
         self._log_manager.write(event.key, level, message, source="events", extra=extra)
         self._dispatch(event)
@@ -249,28 +245,58 @@ class Events:
                     self._log_manager.write(event.key, "WARNING", f"listener raised {exc!r}")
 
 
-def build_trace(items: Iterable[Event | Mapping[str, object]], call_id: str) -> dict:
+# Calls that last as long as their component runs: a Service's run(), and the
+# loop StreamManager drives a Repository's stream() in. Their trees grow
+# without bound, so ``build_trace(..., root=True)`` never climbs into one —
+# the story starts at the per-item call below it.
+_LONG_RUNNING = frozenset({("ServiceProtocol", "run"), ("StreamableProtocol", "stream")})
+
+
+def build_trace(
+    items: Iterable[Event | Mapping[str, object]], call_id: str, root: bool = False
+) -> dict:
     """Return the call tree rooted at ``call_id``, built from events or log records.
 
     ``items`` may be live ``Event``\\ s — as a listener receives them — or
     log records, as ``LogManager.records()`` reads them back, in any order
     and mixed. A call's ``started`` and ``completed``/``failed`` are merged
     into one node; a call with no end yet is ``"running"``. Notification
-    records attach to the call they were published during, by ``parent``.
+    records attach to the call they were published during, by ``parent``,
+    and so do component log lines — a ``logger.info()`` written inside the
+    call.
 
     Args:
-        items: Events and/or log records. Records that are neither an
-            event's nor a notification's are ignored.
+        items: Events and/or log records. Records that are not an event's,
+            a notification's, or a log line written inside a call are
+            ignored.
         call_id: The root call's id — ``Event.call_id``, or a record's
             ``call``.
+        root: Climb first from ``call_id`` to the call its story started
+            from, and root the tree there. The climb follows ``parent``
+            links, and crosses a reaction from the call a listener made (its
+            ``cause``) to the call that published the notification, found
+            through the notification's record. It never climbs into a
+            long-running call — a Service's ``run()`` or a Repository's
+            ``stream()`` — so a call made inside one is its own root. It also
+            stops at the highest call it finds when the next one isn't in
+            ``items`` (rotated away, filtered out, or dropped by a level
+            threshold). With live ``Event``\\ s alone only ``parent`` links
+            climb: crossing a ``cause`` needs the notification's record
+            mixed in.
 
     Returns:
         A JSON-ready tree. Each node has ``call``, ``parent``, ``key``,
         ``protocol`` (its name), ``method``, ``state``, ``started`` and
         ``ended`` (ISO 8601, or ``None`` when that record isn't there),
-        ``elapsed_ms``, ``error``, ``notifications`` (each with ``key``,
-        ``topic``, ``level``, ``message``, ``subject``, ``record``, ``ts``)
-        and ``children``, ordered by when they started.
+        ``elapsed_ms``, ``error``, ``cause``, ``logs`` (each with ``ts``,
+        ``level``, ``message`` and ``fields``, oldest first),
+        ``notifications`` (each with ``id``, ``key``, ``topic``, ``level``,
+        ``summary``, ``message``, ``subject``, ``record``, ``ts`` and
+        ``triggered``: the
+        subtrees of the calls its listeners made, whose ``cause`` is its
+        ``id``) and ``children``, ordered by when they started. So a trace
+        follows a reaction across files: from the publishing call, through
+        the notification, into what its listeners did.
 
     Raises:
         KeyError: If no call has the id ``call_id``.
@@ -284,14 +310,30 @@ def build_trace(items: Iterable[Event | Mapping[str, object]], call_id: str) -> 
     """
     calls: dict[str, dict] = {}
     notifications: dict[str, list[dict]] = {}
+    published_in: dict[str, str] = {}  # notification id -> the call it was published in
+    logs: dict[str, list[dict]] = {}
     for item in items:
         record = _as_record(item) if isinstance(item, Event) else item
+        if record.get("source") is None and record.get("parent") and not record.get("call"):
+            logs.setdefault(str(record["parent"]), []).append(
+                {
+                    "ts": record.get("ts"),
+                    "level": record.get("level"),
+                    "message": record.get("message"),
+                    "fields": dict(record.get("fields") or {}),
+                }
+            )
+            continue
         if record.get("source") == "notifications" and record.get("parent"):
+            if record.get("notification"):
+                published_in[str(record["notification"])] = str(record["parent"])
             notifications.setdefault(str(record["parent"]), []).append(
                 {
+                    "id": record.get("notification"),
                     "key": record.get("key"),
                     "topic": record.get("topic"),
                     "level": record.get("notification_level"),
+                    "summary": _summary(record),
                     "message": record.get("message"),
                     "subject": record.get("subject"),
                     "record": record.get("record"),
@@ -314,6 +356,7 @@ def build_trace(items: Iterable[Event | Mapping[str, object]], call_id: str) -> 
                 "ended": None,
                 "elapsed_ms": None,
                 "error": None,
+                "cause": record.get("cause"),
             },
         )
         if record["state"] == "started":
@@ -327,21 +370,60 @@ def build_trace(items: Iterable[Event | Mapping[str, object]], call_id: str) -> 
             )
     if call_id not in calls:
         raise KeyError(f"no call {call_id!r} in the trace")
-    root = calls[call_id]
+    top = _climb(calls, published_in, call_id) if root else calls[call_id]
     children: dict[str, list[dict]] = {}
+    caused: dict[str, list[dict]] = {}
     for node in calls.values():
         if node["parent"]:
             children.setdefault(str(node["parent"]), []).append(node)
+        elif node["cause"]:
+            caused.setdefault(str(node["cause"]), []).append(node)
 
-    def tree(node: dict) -> dict:
-        kids = sorted(children.get(node["call"], []), key=lambda n: str(n["started"] or n["ended"]))
+    def by_start(nodes: list[dict]) -> list[dict]:
+        return sorted(nodes, key=lambda n: str(n["started"] or n["ended"]))
+
+    def tree(node: dict, path: frozenset[str] = frozenset()) -> dict:
+        # ``path`` holds the calls above this one, so cyclic links in a
+        # hand-written or corrupt log end the branch instead of recursing forever.
+        path = path | {str(node["call"])}
+
+        def below(nodes: list[dict]) -> list[dict]:
+            return [tree(n, path) for n in by_start(nodes) if str(n["call"]) not in path]
+
         return {
             **node,
-            "notifications": notifications.get(node["call"], []),
-            "children": [tree(kid) for kid in kids],
+            "logs": sorted(logs.get(node["call"], []), key=lambda r: str(r["ts"])),
+            "notifications": [
+                {**n, "triggered": below(caused.get(str(n["id"]), []))}
+                for n in notifications.get(node["call"], [])
+            ],
+            "children": below(children.get(node["call"], [])),
         }
 
-    return tree(root)
+    return tree(top)
+
+
+def _climb(calls: Mapping[str, dict], published_in: Mapping[str, str], call_id: str) -> dict:
+    """Return the node of the call ``call_id``'s story started from.
+
+    Follows ``parent``, else ``cause`` through the notification's publishing
+    call, stopping below a long-running call, at a call missing from
+    ``calls``, or at the first repeat.
+    """
+    node = calls[call_id]
+    seen = {call_id}
+    while True:
+        if node["parent"]:
+            up = str(node["parent"])
+        elif node["cause"] and str(node["cause"]) in published_in:
+            up = published_in[str(node["cause"])]
+        else:
+            return node
+        above = calls.get(up)
+        if above is None or up in seen or (above["protocol"], above["method"]) in _LONG_RUNNING:
+            return node
+        seen.add(up)
+        node = above
 
 
 def _as_record(event: Event) -> dict:
@@ -357,4 +439,21 @@ def _as_record(event: Event) -> dict:
         "ts": datetime.fromtimestamp(event.ts).astimezone().isoformat(timespec="milliseconds"),
         "elapsed_ms": event.elapsed_ms,
         "error": event.error,
+        "cause": event.cause,
     }
+
+
+def _summary(record: Mapping[str, object]) -> str | None:
+    """Return a notification record's ``summary``.
+
+    A record logged before ``summary`` was written gets it back from its
+    ``message``, ``"notified <topic>: <summary>"``; else ``None``.
+    """
+    if "summary" in record:
+        summary = record["summary"]
+        return None if summary is None else str(summary)
+    message = record.get("message")
+    prefix = f"notified {record.get('topic')}: "
+    if isinstance(message, str) and message.startswith(prefix):
+        return message[len(prefix) :]
+    return None

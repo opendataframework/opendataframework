@@ -1,15 +1,17 @@
 from app.components import Inbox
 from app.entities import Order
 from app.repositories import Orders
-from opendataframework import Notifications, Task
+from opendataframework import Notifications, Publisher, Task
 
 
+@Publisher("orders.received", "orders.large")
 @Task
 class TakeOrders:
     def __init__(self, inbox: Inbox, orders: Orders, notifications: Notifications) -> None:
         self.inbox = inbox
         self.orders = orders
-        # Bound to this task's key, so publish() needs no key.
+        # Bound to this task's key, so publish() needs no key, and allowed
+        # to publish only the topics @Publisher declares.
         self.notifications = notifications
 
     def execute(self) -> int:

@@ -145,6 +145,8 @@ class Project:
         (default ``"logs"``, relative to the current working directory),
         in the format and at the levels set under ``[project.logging]``
         (default: JSON Lines, ``INFO`` and up) — see ``opendataframework.logger.LogManager``.
+        ``[project.notifications]`` sets background delivery's ``queue-size``
+        and ``drain-timeout`` — see ``opendataframework.notifications.Notifications``.
 
         Imports the module named under ``[project] app`` (if present)
         before constructing the ``Context`` — equivalent to writing
@@ -179,5 +181,10 @@ class Project:
             importlib.import_module(app)
         project = config.get("project", {})
         log_dir = project.get("log-dir", "logs")
-        context = Context(config=config, log_dir=log_dir, log_config=project.get("logging"))
+        context = Context(
+            config=config,
+            log_dir=log_dir,
+            log_config=project.get("logging"),
+            notifications_config=project.get("notifications"),
+        )
         return cls(context=context, config=config)

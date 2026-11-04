@@ -6,7 +6,8 @@ under a `name → object` mapping and exposes that mapping for inspection.
 
 [Entity](entity.md), [Component](component.md), [Repository](repository.md),
 [Service](service.md), [Task](task.md), [Pipeline](pipeline.md), [Agent](agent.md) and
-[Layer](layer.md) are all `Namespace` subclasses. [Function](function.md) is one too —
+[Layer](layer.md) are all `Namespace` subclasses, and so are
+[`Subscriber` and `Publisher`](notifications.md#subscriber). [Function](function.md) is one too —
 the one that registers functions rather than classes. Each maintains its own independent
 mapping, and each says what it may be applied to — see
 [What each decorator accepts](#what-each-decorator-accepts).
@@ -122,6 +123,14 @@ Together that makes `<namespace>.<name>` unique, and it is what the
 is named after. `qualified(Task, "loader")` builds a key and `parse("Task.Loader")`
 normalizes one; both live in `opendataframework.namespace`.
 
+`normalize_key(key)` (exported from `opendataframework`) normalizes any
+publisher key without raising: `parse(key)` when it succeeds, else
+`normalize()` on the whole key — so `"Task.TakeOrders"` gives
+`"task.take-orders"`, and a key the unbound notifications hub published
+under, such as `"Webhooks"` or `"webhooks."`, gives `"webhooks"` or
+`"webhooks."`. Two keys name the same publisher exactly when they normalize
+alike; [notification history](notifications.md#history) filters by it.
+
 ---
 
 ## What each decorator accepts
@@ -138,6 +147,8 @@ bare and the factory form — when applied to something else:
 | `@Function` | A function |
 | `@Layer` | A `Namespace` subclass |
 | A layer (`@Storage`, a custom one, ...) | A class or function that is already registered |
+| `@Subscriber(...)` | A class already registered under an execution type, with an `on_notification()` |
+| `@Publisher(...)` | A class or function that is already registered |
 
 Three consequences worth knowing:
 
@@ -157,7 +168,10 @@ class Warehouse: ...  # TypeError — a layer tags what an execution type regist
 
 An execution type says how the `Context` treats a class, so a class carries exactly one.
 A [Layer](layer.md) is an organisational tag on top of that, which is why it goes
-outermost and why it has nothing to tag on a bare class or function.
+outermost and why it has nothing to tag on a bare class or function. `Subscriber` and
+`Publisher` are tags in the same way, and also keep what each target declares (its
+topics), read back with `Subscriber.of()` / `Publisher.of()` — kept by the namespace,
+never written onto the class.
 
 `Component` and `Function` are separate namespaces, so a class `LoadData` and a function
 `load_data` can coexist — each is `load-data` in its own mapping. Tagged with the same

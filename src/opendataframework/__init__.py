@@ -8,13 +8,20 @@ from opendataframework.entity import Entity
 from opendataframework.events import Event, Events
 from opendataframework.function import Function, FunctionProtocol
 from opendataframework.layer import Analytics, Api, Layer, Messaging, Monitoring, Security, Storage
-from opendataframework.logger import Logger
-from opendataframework.namespace import Namespace
-from opendataframework.notifications import Notification, Notifications
+from opendataframework.logger import Logger, LogsUnavailable
+from opendataframework.namespace import Namespace, normalize_key
+from opendataframework.notifications import (
+    Notification,
+    Notifications,
+    Publisher,
+    Subscriber,
+    SubscriberProtocol,
+)
 from opendataframework.pipeline import Pipeline, PipelineProtocol
 from opendataframework.project import Project
 from opendataframework.repository import (
     ReadableProtocol,
+    Record,
     Repository,
     StreamableProtocol,
     WritableProtocol,
@@ -25,6 +32,8 @@ from opendataframework.view import (
     AudioView,
     ContentMetadata,
     ContentMetadataProtocol,
+    Conversation,
+    ConversationProtocol,
     DataView,
     DataViewProtocol,
     DocumentView,
@@ -49,6 +58,8 @@ __all__ = [
     "ContentMetadata",
     "ContentMetadataProtocol",
     "Context",
+    "Conversation",
+    "ConversationProtocol",
     "DataView",
     "DataViewProtocol",
     "DocumentView",
@@ -62,6 +73,7 @@ __all__ = [
     "Lifecycle",
     "LocationView",
     "Logger",
+    "LogsUnavailable",
     "Messaging",
     "Monitoring",
     "Namespace",
@@ -70,7 +82,9 @@ __all__ = [
     "Pipeline",
     "PipelineProtocol",
     "Project",
+    "Publisher",
     "ReadableProtocol",
+    "Record",
     "ReplayProtocol",
     "Repository",
     "Resolver",
@@ -81,10 +95,13 @@ __all__ = [
     "StreamableProtocol",
     "StreamingAudioView",
     "StreamingVideoView",
+    "Subscriber",
+    "SubscriberProtocol",
     "TableView",
     "Task",
     "TaskProtocol",
     "TimeseriesView",
     "VideoView",
     "WritableProtocol",
+    "normalize_key",
 ]

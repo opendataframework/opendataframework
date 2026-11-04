@@ -9,6 +9,7 @@ inheritance.
 """
 
 from collections.abc import Iterator
+from dataclasses import dataclass
 from typing import Any, Protocol, TypeVar, runtime_checkable
 
 from opendataframework.entity import Entity
@@ -239,3 +240,34 @@ class Repository(ExecutionType):
             Repository.entity(Users)  # → User
         """
         return cls._entity_map.get(repository_cls)
+
+
+@dataclass(frozen=True)
+class Record:
+    """Marks a function's argument as one of ``repository``'s records, by ``field``.
+
+    A declaration only: nothing here looks the record up, and neither
+    ``repository`` nor ``field`` is checked. A consumer (today, the sibling
+    ``odf`` package's UI) may offer the argument as a pick from the
+    repository's records, or show the function as an action on a record,
+    passing the record's ``field`` as the argument.
+
+    The ``Context`` never injects an argument marked this way: a ``Record``
+    isn't callable, so ``Annotated`` metadata holding one names no
+    dependency, and the argument stays one the caller passes.
+
+    Attributes:
+        repository: The ``@Repository`` class whose records the argument names.
+        field: The record field the argument holds. Defaults to ``"id"``.
+
+    Example::
+
+        @Function
+        def confirm_draft(draft_id: Annotated[int, Record(Drafts)], drafts: Drafts): ...
+
+        @Function
+        def reopen(ref: Annotated[str, Record(Drafts, field="ref")]): ...
+    """
+
+    repository: type
+    field: str = "id"

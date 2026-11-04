@@ -17,6 +17,7 @@ import functools
 import inspect
 import threading
 from collections.abc import Callable, Hashable, Iterable, Iterator, Mapping
+from datetime import datetime
 from pathlib import Path
 from queue import Empty, Full, Queue
 from typing import Annotated, TypeAliasType, TypeVar, cast, get_origin, overload
@@ -28,7 +29,14 @@ from opendataframework.events import Events, build_trace
 from opendataframework.function import Function, FunctionProtocol, bind, string_hint
 from opendataframework.logger import Logger, LogManager
 from opendataframework.namespace import Namespace, parse, qualified
-from opendataframework.notifications import Notifications
+from opendataframework.notifications import (
+    Level,
+    Notifications,
+    Publisher,
+    Subscriber,
+    SubscriberProtocol,
+    _history_filter,
+)
 from opendataframework.pipeline import Pipeline, PipelineProtocol
 from opendataframework.repository import (
     CloseStreamProtocol,
@@ -498,7 +506,8 @@ class Resolver:
         key (see ``opendataframework.logger.LogManager.logger_for``). One
         annotated exactly as ``Events`` receives the ``Context``'s ``Events``,
         and one annotated exactly as ``Notifications`` a view of the hub bound
-        to ``target``'s key (see ``Notifications.bound_to``). A class is
+        to ``target``'s key and to the topics its ``@Publisher`` declares (see
+        ``Notifications.bound_to``). A class is
         supplied only if already present in ``self._instances``, and a
         function only if already bound — unregistered ones in the signature
         are silently ignored.
@@ -510,7 +519,9 @@ class Resolver:
             elif dep is Events:
                 supplied[name] = self._events
             elif dep is Notifications:
-                supplied[name] = self._notifications.bound_to(self._keys[target])
+                supplied[name] = self._notifications.bound_to(
+                    self._keys[target], Publisher.of(target)
+                )
             elif dep in self._instances:
                 supplied[name] = self._instances[dep]
             elif dep in self._functions:
@@ -539,6 +550,9 @@ class Lifecycle:
             ``LogManager`` (writes become no-ops) when omitted.
         events: Receives an event for every protocol call. Defaults to an
             ``Events`` with no listeners when omitted.
+        notifications: The hub each ``@Subscriber``'s ``on_notification()``
+            is subscribed to while its component runs. Defaults to a
+            ``Notifications`` with no listeners when omitted.
 
     Example:
         >>> lifecycle = Lifecycle(instances={...}, order=[...], keys={...})
@@ -553,6 +567,7 @@ class Lifecycle:
         keys: dict[type, str],
         log_manager: LogManager | None = None,
         events: Events | None = None,
+        notifications: Notifications | None = None,
     ) -> None:
         """See class docstring for ``Args``."""
         self._instances = instances
@@ -560,8 +575,12 @@ class Lifecycle:
         self._keys = keys
         self._log_manager = log_manager if log_manager is not None else LogManager()
         self._events = events if events is not None else Events(self._log_manager)
+        self._notifications = (
+            notifications if notifications is not None else Notifications(self._log_manager)
+        )
         self._threads: list[threading.Thread] = []
         self._running: dict[type, bool] = {}
+        self._detach: dict[type, Callable[[], None]] = {}
 
     def on_start(self) -> None:
         """Activate all instances in dependency order.
@@ -572,7 +591,8 @@ class Lifecycle:
         opting into the lightweight hook documented in ``docs/repository.md``
         — has it called directly (blocking; expected to return quickly, per
         ``docs/project.md``). Instances with neither are skipped — they have
-        no lifecycle contract.
+        no lifecycle contract. A ``@Subscriber`` is subscribed right after
+        its own start, whatever its kind — see ``_attach``.
 
         Example:
             >>> lifecycle.on_start()
@@ -583,8 +603,10 @@ class Lifecycle:
             instance = self._instances[cls]
             if isinstance(instance, ServiceProtocol):
                 self.start_one(cls)
-            elif isinstance(instance, OnStartProtocol):
+                continue
+            if isinstance(instance, OnStartProtocol):
                 self._activate_one(cls, instance)
+            self._attach(cls)
 
     def _activate_one(self, cls: type, instance: object) -> None:
         """Call a non-``Service`` instance's ``on_start()`` hook."""
@@ -617,6 +639,7 @@ class Lifecycle:
         t.start()
         self._threads.append(t)
         self._running[cls] = True
+        self._attach(cls)
 
     def stop_one(self, cls: type) -> None:
         """Stop a single running ``ServiceProtocol`` instance. No-op if not running.
@@ -631,6 +654,7 @@ class Lifecycle:
         """
         if not self._running.get(cls):
             return
+        self._detach_one(cls)
         instance = self._instances[cls]
         name = self._keys[cls]
         with self._events.notify(name, ServiceProtocol, "stop"):
@@ -653,7 +677,7 @@ class Lifecycle:
         instance that defines an ``on_stop()`` method has it called directly
         (blocking; expected to return quickly). Dependents are stopped
         before their dependencies, ensuring nothing is torn down while still
-        in use.
+        in use. A ``@Subscriber`` is unsubscribed right before its own stop.
 
         Example:
             >>> lifecycle.on_stop()
@@ -664,7 +688,9 @@ class Lifecycle:
             instance = self._instances[cls]
             if isinstance(instance, ServiceProtocol):
                 self.stop_one(cls)
-            elif isinstance(instance, OnStopProtocol):
+                continue
+            self._detach_one(cls)
+            if isinstance(instance, OnStopProtocol):
                 self._deactivate_one(cls, instance)
 
     def _deactivate_one(self, cls: type, instance: object) -> None:
@@ -672,6 +698,27 @@ class Lifecycle:
         name = self._keys[cls]
         with self._events.notify(name, OnStopProtocol, "on_stop"):
             instance.on_stop()
+
+    def _attach(self, cls: type) -> None:
+        """Subscribe ``cls``'s ``on_notification()`` if it is a ``@Subscriber``.
+
+        Called right after the component started, so it never receives a
+        notification before then. ``on_notification`` is the instrumented
+        wrapper ``Context._instrument`` set on the instance.
+        """
+        subscription = Subscriber.of(cls)
+        if subscription is None or cls in self._detach:
+            return
+        handler = self._instances[cls].on_notification
+        self._detach[cls] = self._notifications._attach(
+            self._keys[cls], handler, subscription.topics, subscription.deliver
+        )
+
+    def _detach_one(self, cls: type) -> None:
+        """Unsubscribe ``cls``'s ``on_notification()``, if subscribed."""
+        detach = self._detach.pop(cls, None)
+        if detach is not None:
+            detach()
 
 
 def _publish_latest(q: Queue, item: object) -> None:
@@ -883,6 +930,9 @@ class Context:
             ``[project.logging]`` — see ``opendataframework.logger.LogManager``.
             ``None`` writes JSON Lines and keeps ``INFO`` and up. Names of
             namespaces and components in it are checked by ``open()``.
+        notifications_config: Background delivery settings, shaped like
+            ``[project.notifications]`` (``queue-size``, ``drain-timeout``) —
+            see ``opendataframework.notifications.Notifications``.
 
     Attributes:
         instances: Class-to-instance mapping, populated after ``open()`` returns.
@@ -927,12 +977,15 @@ class Context:
         config: dict | None = None,
         log_dir: str | Path | None = None,
         log_config: Mapping[str, object] | None = None,
+        notifications_config: Mapping[str, object] | None = None,
     ) -> None:
         """See class docstring for ``Args``."""
         extra = {Config: Config(config)} if config is not None else {}
         self._log_manager = LogManager(log_dir, log_config)
         self._events = Events(self._log_manager)
-        self._notifications = Notifications(self._log_manager, key_of=self.key)
+        self._notifications = Notifications(
+            self._log_manager, key_of=self.key, config=notifications_config
+        )
         self._resolver = Resolver(
             namespaces if namespaces is not None else _DEFAULT_NAMESPACES,
             extra_instances=extra,
@@ -1077,7 +1130,12 @@ class Context:
         self._functions = self._resolver.functions
         self._stream_manager = StreamManager(keys, self._log_manager, self._events)
         self._lifecycle = Lifecycle(
-            self._resolver.instances, self._resolver.order, keys, self._log_manager, self._events
+            self._resolver.instances,
+            self._resolver.order,
+            keys,
+            self._log_manager,
+            self._events,
+            self._notifications,
         )
         self._lifecycle.on_start()
 
@@ -1301,6 +1359,45 @@ class Context:
             if name not in injected
         }
 
+    def subscribers(self) -> list[dict]:
+        """Return every resolved ``@Subscriber``: what it reacts to, and how.
+
+        Returns:
+            One ``{"key", "topics", "deliver"}`` per subscriber, sorted by
+            key — enough for a UI to draw topic → subscriber links.
+
+        Example:
+            >>> context.subscribers()
+            [{'key': 'component.drafting', 'topics': ['messages.received'], 'deliver': 'sync'}]
+        """
+        found = []
+        for cls in self._resolver.instances:
+            subscription = Subscriber.of(cls)
+            if subscription is not None:
+                found.append(
+                    {
+                        "key": self._resolver.keys[cls],
+                        "topics": list(subscription.topics),
+                        "deliver": subscription.deliver,
+                    }
+                )
+        return sorted(found, key=lambda s: s["key"])
+
+    def publishers(self) -> list[dict]:
+        """Return every resolved ``@Publisher``, class or function, and its topics.
+
+        Returns:
+            One ``{"key", "topics"}`` per publisher, sorted by key — with
+            ``subscribers()``, enough for a UI to draw publisher → topic →
+            subscriber before anything has been published.
+        """
+        found = []
+        for target in [*self._resolver.instances, *self._resolver.functions]:
+            topics = Publisher.of(target)
+            if topics is not None and target in self._resolver.keys:
+                found.append({"key": self._resolver.keys[target], "topics": list(topics)})
+        return sorted(found, key=lambda p: p["key"])
+
     def _resolved(self, key: str) -> tuple[type, object]:
         """Look up a resolved ``(cls, instance)`` pair by ``<namespace>.<name>`` key.
 
@@ -1314,7 +1411,9 @@ class Context:
             raise KeyError(key)
         return cls, instances[cls]
 
-    def trace(self, call_id: str) -> dict:
+    def trace(
+        self, call_id: str, since: float | datetime | None = None, root: bool = False
+    ) -> dict:
         """Return the tree of a protocol call and every call made inside it, from the logs.
 
         Reads every ``.jsonl`` log file once and follows ``parent`` links,
@@ -1329,19 +1428,139 @@ class Context:
         Args:
             call_id: The call's id — ``Event.call_id``, or a record's
                 ``call``.
+            since: Skip log files last written before this time (a
+                ``time.time()`` value or a ``datetime``) — pass the call's
+                start, when known, so old rotated files aren't read. ``None``
+                reads every file. With ``root=True`` the root may have
+                started well before ``call_id``: pass a bound early enough
+                for it, or ``None``. Too late a bound still gives a trace,
+                rooted lower.
+            root: Climb first to the call the story started from, and return
+                its tree. The climb follows ``parent`` links, and across a
+                reaction it goes from the call a listener made (its
+                ``cause``) to the call that published the notification. It
+                never climbs into a long-running call — a Service's
+                ``run()`` or a Repository's ``stream()`` — so a call made
+                inside one is the root, not the component's whole lifetime
+                (see "One Call per Inbound Item" in the Service docs). It
+                can't cross a call made from an ``Events`` listener (those
+                carry no ``cause``), a notification published directly in a
+                long-running call, or a notification record dropped by a
+                level threshold: the climb stops below each.
 
         Raises:
             KeyError: If no call in the ``.jsonl`` logs has the id ``call_id``.
-            ValueError: If file logging is off, or the configured log format
-                is ``text``.
+            LogsUnavailable: If file logging is off, or the configured log
+                format is ``text``. A ``ValueError``.
 
         Example:
             >>> logged = context.tail_logs("task.ship-orders")
             >>> failed = [r for r in logged if r.get("state") == "failed"]
             >>> context.trace(failed[-1]["parent"])["key"]
             'pipeline.nightly-orders'
+            >>> context.trace(reaction_call, root=True)["key"]
+            'function.take-order'
         """
-        return build_trace(self._log_manager.records(), call_id)
+        return build_trace(self._log_manager.records(since), call_id, root=root)
+
+    def logs(self, call_id: str) -> list[dict]:
+        """Return every log record written by or during one protocol call, across files.
+
+        The call's own event records, and every record written while it was
+        the current call: its components' log lines, the notifications it
+        published, and the start and end of the calls made directly inside
+        it — see ``LogManager.for_call``. Unlike ``trace()``, it doesn't
+        follow nested calls; it is what a logs view filters one run by.
+
+        Args:
+            call_id: The call's id — ``Event.call_id``, or a record's
+                ``call``.
+
+        Raises:
+            LogsUnavailable: If file logging is off, or the configured log
+                format is ``text``. A ``ValueError``.
+
+        Example:
+            >>> [r["message"] for r in context.logs(call_id)]
+            ['execute() started', 'order taken', 'execute() completed in 2.1ms']
+        """
+        return self._log_manager.for_call(call_id)
+
+    def notification_history(
+        self,
+        *,
+        topic: str | tuple[str, ...] | None = None,
+        key: str | None = None,
+        level: Level | tuple[Level, ...] | None = None,
+        summary_only: bool = False,
+        before: str | float | datetime | None = None,
+        since: float | datetime | None = None,
+        limit: int = 100,
+    ) -> list[dict]:
+        """Return the latest notifications, newest first, from the notification history.
+
+        Every notification logged is also written to
+        ``<log_dir>/history/notifications.jsonl``, which holds nothing else,
+        so this reads back through notifications alone — never through
+        event records or log lines — until it has ``limit`` matches. A
+        filter that matches rarely reads further. The payload isn't kept:
+        only what a person reads.
+
+        Things to know:
+
+        * History starts when this version started writing it:
+          notifications logged before (by 0.5.0, or an earlier 0.6.0 build)
+          stay in their components' logs, readable with ``tail_logs()``,
+          ``logs()`` and ``trace()``, but aren't here. Nor are any published
+          while file logging was off.
+        * A notification a level threshold dropped from its component's log
+          isn't kept here either, and what rotation drops is gone. The
+          history holds ``history-max-bytes`` × (``history-backups`` + 1) of
+          notifications alone, and the busiest topic decides how much time
+          that covers. With rotation off (the default) it isn't bounded.
+        * ``since`` and a time ``before`` compare ``ts``, so a wall-clock
+          step can shift them by its size; paging by ``cursor`` uses a
+          sequence number and is exact.
+
+        Args:
+            topic: A topic filter as ``Notifications.subscribe()`` takes one
+                — exact, or ``"orders.*"`` — or a tuple of them.
+            key: Only this publisher's: any key ``publish()`` accepts,
+                including the unbound hub's (``"webhooks"``). Compared as key
+                lookups compare keys, in any casing — see
+                ``namespace.normalize_key``. Rows keep the key as published.
+            level: A notification level (``"info"``, ``"success"``,
+                ``"warning"``, ``"error"``), or a tuple of them.
+            summary_only: Only notifications with a summary — the ones a UI
+                shows people.
+            before: A row's ``cursor``, for the rows strictly older than it:
+                page with the last row's, with no repeats and no gaps. Or a
+                ``time.time()`` value or ``datetime``, for the rows strictly
+                earlier.
+            since: No row older than this time; the read stops there.
+            limit: At most this many rows, 1 to 1000.
+
+        Returns:
+            JSON-ready dicts with ``id``, ``key``, ``topic``, ``level`` (the
+            notification's own level, not the log level), ``summary``,
+            ``message``, ``subject``, ``record``, ``parent``, ``ts`` (ISO
+            8601) and ``cursor`` (opaque). ``[]`` when nothing was published.
+
+        Raises:
+            ValueError: If an argument is invalid — checked first, whatever
+                the logging config.
+            LogsUnavailable: If file logging is off. A ``ValueError``.
+
+        Example:
+            >>> page = context.notification_history(topic="orders.*", summary_only=True)
+            >>> older = context.notification_history(
+            ...     topic="orders.*", summary_only=True, before=page[-1]["cursor"]
+            ... )
+        """
+        match = _history_filter(topic, key, level, summary_only)
+        return self._log_manager.notification_history(
+            match, before=before, since=since, limit=limit
+        )
 
     def tail_logs(self, key: str, lines: int = 300) -> list[dict]:
         """Return the last ``lines`` log entries for a resolved class or function.
@@ -1392,6 +1611,8 @@ class Context:
                 methods.append("invoke")
             if cls in repositories:
                 methods.extend(_STREAM_METHODS)
+            if Subscriber.of(cls) is not None:
+                methods.append("on_notification")
             found.extend(
                 f"{cls.__name__}.{method}()"
                 for method in methods
@@ -1405,7 +1626,10 @@ class Context:
             )
 
     def _instrument(self, keys: dict[type, str]) -> None:
-        """Wrap every resolved ``Task``/``Pipeline``'s ``execute()`` and ``Agent``'s ``invoke()``.
+        """Wrap every ``Task``/``Pipeline``'s ``execute()``, ``Agent``'s ``invoke()``, and more.
+
+        Also every ``@Subscriber``'s ``on_notification()``, reported as a
+        ``SubscriberProtocol`` call.
 
         Logs start, completion (with duration), and any exception to that
         component's own log file — with no code changes required in the
@@ -1435,6 +1659,14 @@ class Context:
                     self._events,
                     AgentProtocol,
                     "invoke",
+                )
+            if Subscriber.of(cls) is not None:
+                instance.on_notification = _notified_call(
+                    instance.on_notification,
+                    keys[cls],
+                    self._events,
+                    SubscriberProtocol,
+                    "on_notification",
                 )
 
     def __enter__(self) -> Context:

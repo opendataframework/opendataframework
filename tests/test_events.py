@@ -1,3 +1,4 @@
+import os
 import threading
 import time
 from collections.abc import Callable
@@ -10,8 +11,9 @@ from opendataframework.component import Component, OnStartProtocol, OnStopProtoc
 from opendataframework.context import Context
 from opendataframework.events import Event, Events, build_trace
 from opendataframework.function import Function, FunctionProtocol
+from opendataframework.logger import Logger
 from opendataframework.namespace import Namespace
-from opendataframework.notifications import Notifications
+from opendataframework.notifications import Notifications, Publisher
 from opendataframework.pipeline import Pipeline, PipelineProtocol
 from opendataframework.repository import (
     CloseStreamProtocol,
@@ -893,6 +895,7 @@ def test_trace_keeps_failures_when_only_failures_are_logged(tmp_path):
 def test_trace_attaches_notifications_to_the_publishing_call(tmp_path):
     NS = make_ns()
 
+    @Publisher("orders.received")
     @NS
     @Task
     class Announce:
@@ -911,6 +914,118 @@ def test_trace_attaches_notifications_to_the_publishing_call(tmp_path):
     assert notification["topic"] == "orders.received"
     assert notification["level"] == "warning"
     assert notification["message"] == "notified orders.received: 2 x baguette"
+
+
+def logging_chain(NS):
+    """Register a task that logs in ``__init__`` and ``execute()``, and calls a logging function."""
+
+    @NS
+    @Function
+    def quote(logger: Logger) -> int:
+        logger.info("priced", total=12)
+        return 12
+
+    @NS
+    @Task
+    class Checkout:
+        def __init__(self, quote: Annotated[Callable[..., int], quote], logger: Logger) -> None:
+            self.quote = quote
+            self.logger = logger
+            logger.info("ready")
+
+        def execute(self) -> int:
+            self.logger.info("checking out", basket=3)
+            return self.quote()
+
+    return Checkout
+
+
+def user_lines(ctx: Context, key: str) -> list[dict]:
+    """Return the records in ``key``'s log that no framework source wrote."""
+    return [r for r in ctx.tail_logs(key) if r.get("source") is None]
+
+
+def test_log_lines_carry_the_call_they_were_written_in(tmp_path):
+    NS = make_ns()
+    logging_chain(NS)
+    ctx = Context(namespaces={NS}, log_dir=tmp_path)
+    events = collect(ctx)
+    with ctx:
+        ctx.execute("scope.checkout")
+        checkout = user_lines(ctx, "scope.checkout")
+        quote = user_lines(ctx, "scope.quote")
+
+    task = next(e for e in events if e.key == "scope.checkout")
+    function = next(e for e in events if e.key == "scope.quote")
+    ready = next(r for r in checkout if r["message"] == "ready")
+    assert "parent" not in ready
+    assert next(r for r in checkout if r["message"] == "checking out")["parent"] == task.call_id
+    (priced,) = (r for r in quote if r["message"] == "priced")
+    assert priced["parent"] == function.call_id
+
+
+def test_a_top_level_events_parent_stays_none(tmp_path):
+    NS = make_ns()
+    logging_chain(NS)
+    with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
+        ctx.execute("scope.checkout")
+        started, completed = records(ctx, "scope.checkout")
+    assert started["parent"] is None and completed["parent"] is None
+
+
+def test_text_format_renders_the_parent_of_a_log_line(tmp_path):
+    NS = make_ns()
+    logging_chain(NS)
+    ctx = Context(namespaces={NS}, log_dir=tmp_path, log_config={"format": "text"})
+    events = collect(ctx)
+    with ctx:
+        ctx.execute("scope.checkout")
+        lines = [r["message"] for r in ctx.tail_logs("scope.checkout")]
+    task = next(e for e in events if e.key == "scope.checkout")
+    assert f"checking out [parent={task.call_id}] basket=3" in lines
+    assert "ready" in lines
+
+
+def test_trace_nodes_carry_their_log_lines(tmp_path):
+    NS = make_ns()
+    logging_chain(NS)
+    with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
+        ctx.execute("scope.checkout")
+        (started, _) = records(ctx, "scope.checkout")
+        trace = ctx.trace(started["call"])
+
+    (line,) = trace["logs"]
+    assert (line["level"], line["message"], line["fields"]) == (
+        "INFO",
+        "checking out",
+        {"basket": 3},
+    )
+    assert line["ts"] is not None
+    (function,) = trace["children"]
+    assert [r["message"] for r in function["logs"]] == ["priced"]
+    assert function["logs"][0]["fields"] == {"total": 12}
+
+
+def test_context_logs_returns_one_calls_records_across_files(tmp_path):
+    NS = make_ns()
+    logging_chain(NS)
+    with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
+        ctx.execute("scope.checkout")
+        (started, _) = records(ctx, "scope.checkout")
+        logged = ctx.logs(started["call"])
+
+    by_key: dict[str, list[str]] = {}
+    for record in logged:
+        by_key.setdefault(record["key"], []).append(record["message"])
+    assert by_key["scope.checkout"][0] == "execute() started"
+    assert by_key["scope.checkout"][1] == "checking out"
+    assert by_key["scope.checkout"][2].startswith("execute() completed in ")
+    # the function's own start and end are children of the task's call; its
+    # log line belongs to the function's call, not the task's
+    assert by_key["scope.quote"][0] == "call started"
+    assert by_key["scope.quote"][1].startswith("call completed in ")
+    assert "priced" not in by_key["scope.quote"]
+    assert "ready" not in by_key["scope.checkout"]
 
 
 def test_build_trace_from_live_events_and_running_calls():
@@ -942,6 +1057,174 @@ def test_build_trace_unknown_id():
     with pytest.raises(KeyError, match="no call 'fff'"):
         build_trace(items, "fff")
     assert build_trace(items, "abc1" + "0" * 28)["state"] == "running"
+
+
+# --- traces from the root ------------------------------------------------------
+
+
+def call(
+    cid: str,
+    parent: str | None = None,
+    cause: str | None = None,
+    protocol: str = "TaskProtocol",
+    method: str = "execute",
+    ts: str = "2026-10-31T10:00:00.000+00:00",
+) -> dict:
+    """Return a hand-written ``started`` record of the call ``cid``."""
+    return {
+        "key": f"scope.{cid}",
+        "source": "events",
+        "call": cid,
+        "parent": parent,
+        "cause": cause,
+        "protocol": protocol,
+        "method": method,
+        "state": "started",
+        "ts": ts,
+    }
+
+
+def published(nid: str, parent: str) -> dict:
+    """Return a hand-written record of the notification ``nid``, published in ``parent``."""
+    return {
+        "key": f"scope.{parent}",
+        "source": "notifications",
+        "notification": nid,
+        "parent": parent,
+    }
+
+
+def test_root_false_is_rooted_at_the_call_asked_about():
+    items = [call("a"), call("b", parent="a"), call("c", parent="b")]
+    assert build_trace(items, "c")["call"] == "c"
+    assert build_trace(items, "c", root=False)["call"] == "c"
+
+
+def test_root_climbs_parent_links():
+    items = [call("a"), call("b", parent="a"), call("c", parent="b")]
+    trace = build_trace(items, "c", root=True)
+    assert shape(trace) == (
+        "scope.a",
+        "running",
+        [("scope.b", "running", [("scope.c", "running", [])])],
+    )
+
+
+def test_root_crosses_a_cause_to_the_publishing_call():
+    items = [call("ingest"), published("n1", "ingest"), call("react", cause="n1")]
+    trace = build_trace(items, "react", root=True)
+    assert trace["call"] == "ingest"
+    (notification,) = trace["notifications"]
+    assert [t["call"] for t in notification["triggered"]] == ["react"]
+
+
+def test_root_climbs_a_parent_then_crosses_a_cause():
+    # ingest -> n1 -> the listener's call -> a call inside it -> n2, as
+    # order-desk runs inside Drafting's on_notification()
+    items = [
+        call("ingest"),
+        published("n1", "ingest"),
+        call("drafting", cause="n1", protocol="SubscriberProtocol", method="on_notification"),
+        call("order-desk", parent="drafting", protocol="AgentProtocol", method="invoke"),
+        published("n2", "order-desk"),
+    ]
+    trace = build_trace(items, "order-desk", root=True)
+    assert trace["call"] == "ingest"
+    (drafting,) = trace["notifications"][0]["triggered"]
+    assert [c["call"] for c in drafting["children"]] == ["order-desk"]
+
+
+def test_root_never_climbs_into_a_services_run():
+    items = [
+        call("mailbox", protocol="ServiceProtocol", method="run"),
+        call("ingest", parent="mailbox", protocol="FunctionProtocol", method="__call__"),
+        call("save", parent="ingest"),
+        published("n1", "ingest"),
+        call("react", cause="n1"),
+    ]
+    assert build_trace(items, "save", root=True)["call"] == "ingest"
+    assert build_trace(items, "ingest", root=True)["call"] == "ingest"
+    # across a cause, too: the reaction's story starts at the per-item call
+    assert build_trace(items, "react", root=True)["call"] == "ingest"
+    # asking about run() itself still returns run()
+    assert build_trace(items, "mailbox", root=True)["call"] == "mailbox"
+
+
+def test_root_stops_at_the_listener_for_a_notification_published_directly_in_run():
+    items = [
+        call("poller", protocol="ServiceProtocol", method="run"),
+        published("n1", "poller"),
+        call("react", cause="n1"),
+        call("inner", parent="react"),
+    ]
+    assert build_trace(items, "inner", root=True)["call"] == "react"
+
+
+def test_root_never_climbs_into_a_repositorys_stream():
+    items = [
+        call("readings", protocol="StreamableProtocol", method="stream"),
+        call("calibrate", parent="readings", protocol="FunctionProtocol", method="__call__"),
+    ]
+    assert build_trace(items, "calibrate", root=True)["call"] == "calibrate"
+
+
+def test_root_stops_at_the_listener_when_the_cause_is_not_in_the_records():
+    items = [call("react", cause="lost"), call("inner", parent="react")]
+    assert build_trace(items, "inner", root=True)["call"] == "react"
+
+
+def test_root_stops_at_the_highest_call_found_when_a_parent_is_missing():
+    items = [call("b", parent="rotated-away"), call("c", parent="b")]
+    assert build_trace(items, "c", root=True)["call"] == "b"
+
+
+def test_root_terminates_on_cyclic_parent_links():
+    items = [call("a", parent="c"), call("b", parent="a"), call("c", parent="b")]
+    # the climb stops at the first repeat, and the tree below ends the branch there
+    assert shape(build_trace(items, "c", root=True)) == (
+        "scope.a",
+        "running",
+        [("scope.b", "running", [("scope.c", "running", [])])],
+    )
+    assert shape(build_trace(items, "c")) == (
+        "scope.c",
+        "running",
+        [("scope.a", "running", [("scope.b", "running", [])])],
+    )
+
+
+def test_root_reads_a_generator_once():
+    items = [call("ingest"), published("n1", "ingest"), call("react", cause="n1")]
+    assert build_trace(iter(items), "react", root=True)["call"] == "ingest"
+
+
+def test_root_climbs_live_events_through_parents():
+    NS = make_ns()
+    chain(NS)
+    ctx = Context(namespaces={NS})
+    events = collect(ctx)
+    with ctx:
+        ctx.execute("scope.nightly")
+    fetch = next(e for e in events if e.key == "scope.fetch")
+    assert shape(build_trace(events, fetch.call_id, root=True))[0] == "scope.nightly"
+
+
+def test_root_raises_key_error_for_an_unknown_call():
+    with pytest.raises(KeyError, match="no call 'fff'"):
+        build_trace([call("a")], "fff", root=True)
+
+
+def test_trace_since_skips_files_last_written_before_it(tmp_path):
+    NS = make_ns()
+    chain(NS)
+    with Context(namespaces={NS}, log_dir=tmp_path) as ctx:
+        ctx.execute("scope.nightly")
+        (nightly, _) = records(ctx, "scope.nightly")
+    for path in tmp_path.glob("*.jsonl"):
+        os.utime(path, (1_000_000, 1_000_000))
+    assert ctx.trace(nightly["call"], since=999_999)["key"] == "scope.nightly"
+    with pytest.raises(KeyError):
+        ctx.trace(nightly["call"], since=2_000_000)
 
 
 def test_trace_needs_json_file_logs(tmp_path):

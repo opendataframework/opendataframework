@@ -1,5 +1,115 @@
 # Release Notes
 
+## 0.6.0
+
+### Added
+
+- **View**, **Repository**: `Conversation` and `Record`, two declarations for showing
+  records as chat threads. A repository's `conversation()` (`ConversationProtocol`)
+  declares, beside its data view, how its records read as messages: a `channel` that
+  repositories naming the same one merge into, and the fields for `thread`, `time`,
+  `text`, and optionally `direction` and `sender`. With no `direction`, its records are
+  cards rather than messages. `Annotated[int, Record(Drafts)]` marks a function argument
+  as one of a repository's records, by `field` (default `"id"`), so a consumer can show
+  the function as an action on each record, such as a card's Send button. Both are
+  declarations only: nothing here looks a record up or checks a field, and the `Context`
+  never injects a `Record` argument.
+- **Logger**: a record written while a protocol call is in progress — a `logger.info()`
+  inside `execute()`, say — carries that call's id as `parent`, so every log line says
+  which call wrote it. A line written by a function belongs to the function's call, not
+  its caller's. Records written outside any call (in `__init__`, during resolution) have
+  no `parent`. The text format renders it as `[parent=<id>]`.
+- **Context**: `context.trace()` nodes gain `logs`, the component log lines written inside
+  each call (`ts`, `level`, `message`, `fields`).
+- **Context**: `context.logs(call_id)` (and `LogManager.for_call()`) returns every record
+  written by or during one call, across files, so a logs view can filter one run even
+  when runs of the same component overlap.
+- **Logger**: log rotation, under `[project.logging]`: `max-bytes` (off by default) and
+  `backups` (default 5). A file that a record would grow past `max-bytes` rotates to
+  `<key>.1.jsonl` (`.log` in the text format), shifting older backups. `tail()` now reads
+  backwards from the end, and into backups only if needed, so its cost follows the lines
+  asked for rather than the file's size. `records()` reads each component's backups oldest
+  first, then its current file, and takes `since=` to skip files last written before a
+  time; `context.trace(call_id, since=...)` passes it through.
+- **Notifications**: `Notification.id`, unique per publish and logged as the record's
+  `notification`, so a notification can be deduplicated, acknowledged, or followed.
+- **Events**: `Event.cause`. A top-level call made by a notification listener records the
+  notification's `id` as its `cause` (also on its log records), and keeps
+  `parent=None`. Calls nested inside it have a `parent` instead. In `context.trace()`,
+  each notification gains `id` and `triggered`, the subtrees of the calls it caused, so a
+  trace follows a reaction from the publishing call to what its listeners did, across
+  files. `context.trace(call_id, root=True)` (and `build_trace(..., root=True)`) climbs
+  first, through `parent` links and across causes, and returns the whole story from its
+  top; it never climbs into a Service's `run()` or a Repository's `stream()`.
+- **Notifications**: `@Subscriber(*topics, deliver="sync")` declares that a component
+  reacts to notifications, through its `on_notification(notification)`
+  (`SubscriberProtocol`). The `Context` subscribes it right after the component starts
+  and unsubscribes it right before it stops (including `context.stop(key)` on a service),
+  and each delivery is an instrumented `SubscriberProtocol` call: it emits Events, is
+  logged, records the notification as its `cause`, and a failure is its `failed` record,
+  never the publisher's problem. `context.subscribers()` lists them. Goes on top of the
+  execution type, like a layer: it is a namespace too, so `Subscriber.items()` lists every
+  subscriber and `Subscriber.of(cls)` returns its `Subscription`.
+- **Notifications**: `@Subscriber(..., deliver="background")` runs a slow reaction off the
+  publisher's thread: each background subscriber gets its own worker thread and bounded
+  queue, keeping publish order. A full queue blocks `publish()` (one `WARNING` per
+  episode); stopping the component drains its queue first, up to a timeout, and logs any
+  dropped deliveries. Set under `[project.notifications]`: `queue-size` (default 1000)
+  and `drain-timeout` (seconds, default 10).
+- **Notifications**: `@Publisher(*topics)` declares the topics a component or `@Function`
+  publishes; `context.publishers()` lists them, so a UI can draw who publishes what before
+  anything has been published. A namespace like `Subscriber`: `Publisher.items()`,
+  `Publisher.of(target)`.
+- **Context**: `context.notification_history(topic=, key=, level=, summary_only=,
+  before=, since=, limit=)` returns the latest notifications from every publisher,
+  newest first, paged with each row's opaque `cursor`. Every notification is also written
+  to `<log-dir>/history/notifications.jsonl`, which holds nothing else, so reading it
+  never scans the component logs. The history starts at the upgrade: notifications
+  logged before stay in their components' logs only. Size it with `history-max-bytes`
+  and `history-backups` under `[project.logging]` (defaulting to `max-bytes` and
+  `backups`). `normalize_key()` is exported for comparing publisher keys the same way.
+  See [Notifications](notifications.md#history).
+- **Notifications**: a notification's log record carries its `summary`, and so do a
+  trace's notifications (recovered from `message` for records logged before).
+- **Logger**: `LogsUnavailable`, a `ValueError`, raised by `trace()`, `logs()` and
+  `notification_history()` when records can't be read back (file logging off, or the
+  `text` format for `trace()` and `logs()`), so a caller can tell it from a bad argument.
+- **Docs**: [One Call per Inbound Item](service.md#one-call-per-inbound-item) — route
+  each item a long-running service receives through an injected `@Function`, so it gets
+  its own call id, log lines, notifications and trace instead of joining `run()`'s.
+- **Docs**: the site wears the odf UI's `ink` theme, the same as the `odf` docs: black
+  and white with grey hairlines and rounded panels, and its stacked-layers tile as the
+  logo and favicon, in a light and a dark variant.
+- **Examples**: `examples/11-notifications/` uses `@Publisher` and `@Subscriber` (one
+  sync, one background) and prints the trace from the publishing call to every reaction.
+
+### Changed (breaking)
+
+- **Notifications**: publishing through an injected `notifications: Notifications` now
+  follows three rules: the component or function must be a `@Publisher`
+  (else `TypeError`), the topic must be one it declares (else `ValueError`), and a
+  protocol call must be in progress, never `__init__` or a thread of your own
+  (else `RuntimeError`), so every notification has a `parent` and can be traced. Add
+  `@Publisher("your.topic", ...)` on top of each publisher's execution type. The unbound
+  `context.notifications` is unaffected.
+- **Notifications**: a `subscribe()` listener that published through its injected view
+  now raises, since a listener runs outside any call. Turn it into a `@Subscriber` that is
+  also a `@Publisher`, or publish through `context.notifications`.
+- **Notifications**: a payload is now read-only all the way down, not just at the top
+  level. Nested mappings arrive as read-only mappings, lists and tuples as tuples, and
+  sets as frozensets, all rebuilt so nothing is shared with the publisher or between
+  subscribers. Other values are passed as they are. Code that mutated a nested value, or
+  expected a nested list, needs updating.
+
+### Fixed
+
+- **Events**: `build_trace()` (and so `context.trace()`) no longer recurses forever on
+  cyclic `parent` links in a hand-written or corrupt log; the branch ends at the repeat.
+- **Notifications**: an unbound `publish(key=...)` whose key contains `/` or `\`, starts
+  with `.`, is empty, or is too long for a file name now raises `ValueError`, before
+  anything is logged or delivered, instead of writing a file outside the log directory
+  (or failing with an `OSError`).
+
 ## 0.5.0
 
 ### Added

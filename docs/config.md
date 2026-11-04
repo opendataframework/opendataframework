@@ -232,14 +232,21 @@ exactly as shown, not normalized like the accessors above:
 log-dir = "logs"   # see Logger
 app = "app"        # see Project — imports the app package
 
-[project.logging]  # see Logger — log format and level thresholds
+[project.logging]  # see Logger — log format, level thresholds, rotation
 format = "json"
 level = "INFO"
+max-bytes = 10_000_000
+backups = 5
+
+[project.notifications]  # see Notifications — background delivery
+queue-size = 1000
+drain-timeout = 10
 ```
 
-See [Project](project.md#pointing-at-the-app-package) and
-[Logger](logger.md) (including [Levels](logger.md#levels)) for what each
-key does.
+See [Project](project.md#pointing-at-the-app-package),
+[Logger](logger.md) (including [Levels](logger.md#levels)) and
+[Notifications](notifications.md#background-delivery) for what each key
+does.
 
 ---
 

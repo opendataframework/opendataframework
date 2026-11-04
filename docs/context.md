@@ -394,7 +394,19 @@ project.context.tail_logs("service.postgres", lines=300)
 
 **Traces** — `project.context.trace(call_id)` returns the tree of a protocol
 call and every call made inside it, across components' log files (see
-[Logger](logger.md#tracing-a-call-across-files)).
+[Logger](logger.md#tracing-a-call-across-files)). `trace()` and
+`logs(call_id)` raise `LogsUnavailable`, a `ValueError`, when file logging is
+off or the format is `text`.
+
+**Notification history** — `project.context.notification_history(...)`
+returns the latest notifications, newest first, from every publisher,
+filtered by topic, publisher key, level or summary, and paged with each
+row's `cursor` (see [Notifications](notifications.md#history)):
+
+```python
+project.context.notification_history(topic="orders.*", summary_only=True, limit=20)
+# → [{"id": ..., "key": ..., "topic": ..., "summary": ..., "ts": ..., "cursor": ...}, ...]
+```
 
 **Events** — every protocol call the `Context` makes on a component is reported
 to `context.events`, the same instance a component receives by declaring
